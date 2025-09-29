@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aenea（エイネア）- Autonomous AI Consciousness</title>
+
+    <!-- React and ReactDOM from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #111827;
+            color: #f9fafb;
+            min-height: 100vh;
+        }
+        #root { min-height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div style="display: flex; align-items: center; justify-content: center; height: 100vh;">
+            <div style="text-align: center;">
+                <div style="width: 48px; height: 48px; border: 4px solid #374151; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 24px;"></div>
+                <h2>Loading Aenea Dashboard...</h2>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+
+    <!-- Load React Components -->
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Message component with expand/collapse for long messages
+        const MessageDisplay = ({ message, maxLength = 200 }) => {
+            const [isExpanded, setIsExpanded] = useState(false);
+
+            if (!message || message.length <= maxLength) {
+                return <span>{message || 'No message'}</span>;
+            }
+
+            return (
+                <div>
+                    <span>
+                        {isExpanded ? message : `${message.substring(0, maxLength)}...`}
+                    </span>
+                    <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#60a5fa',
+                            cursor: 'pointer',
+                            marginLeft: '8px',
+                            fontSize: '12px',
+                            textDecoration: 'underline'
+                        }}
+                    >
+                        {isExpanded ? 'Show less' : 'Show more'}
+                    </button>
+                </div>
+            );
+        };
+
+        // Dashboard Component (simplified version with Activity Log)
+        const Dashboard = ({ systemStatus }) => {
+            const [stats, setStats] = useState({
+                systemClock: 0,
+                totalQuestions: 0,
+                totalThoughts: 0,
+                averageConfidence: 0,
+                energyLevel: 100,
+                uptime: 0
+            });
+            const [currentThought, setCurrentThought] = useState('');
+            const [dpdScores, setDpdScores] = useState({
+                empathy: 0.33,
+                coherence: 0.33,
+                dissonance: 0.34,
+                weightedTotal: 0.33
+            });
+            const [dpdWeights, setDpdWeights] = useState({
+                empathy: 0.33,
+                coherence: 0.33,
+                dissonance: 0.34
+            });
+            const [weightHistory, setWeightHistory] = useState([]);
+            const [currentStage, setCurrentStage] = useState(null);
+            const [stageProgress, setStageProgress] = useState([]);
+            const [activityLog, setActivityLog] = useState([]);
+            const [triggerQuestion, setTriggerQuestion] = useState('');
+            const [showGrowthModal, setShowGrowthModal] = useState(false);
+            const [growthData, setGrowthData] = useState(null);
+            const [loadingGrowth, setLoadingGrowth] = useState(false);
+            const [consciousnessState, setConsciousnessState] = useState('stopped'); // 'stopped', 'running', 'paused'
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                // Get initial consciousness statistics and state from SQLite
+                const fetchInitialState = async () => {
+                    try {
+                        // Get statistics
+                        const statsResponse = await fetch('/api/consciousness/statistics');
+                        const statistics = await statsResponse.json();
+                        if (statistics) {
+                            setStats(prev => ({
+                                ...prev,
+                                systemClock: statistics.systemClock || 0,
+                                totalQuestions: statistics.totalQuestions || 0,
+                                totalThoughts: statistics.totalThoughts || 0,
+                                averageConfidence: statistics.averageConfidence || 0,
+                                energyLevel: statistics.energyLevel || 100
+                            }));
+                        }
+
+                        // Get consciousness state to sync buttons
+                        const stateResponse = await fetch('/api/consciousness/state');
+                        const state = await stateResponse.json();
+                        if (state) {
+                            const status = state.isPaused ? 'paused' : (state.isRunning ? 'running' : 'stopped');
+                            setConsciousnessState(status);
+                            console.log('Initial consciousness state:', status);
+                        }
+                    } catch (error) {
+                        console.warn('Failed to fetch initial consciousness state:', error);
+                    }
+                };
+
+                fetchInitialState();
+
+                // Connect to real consciousness backend via EventSource
+                const eventSource = new EventSource('/api/consciousness/events');
+
+                eventSource.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    const eventTimestamp = data.timestamp || Date.now();
+
+                    if (data.type === 'agentThought') {
+                        const fullMessage = data.thought || data.content || data.message || '';
+                        const logItem = {
+                            id: `agent_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'agent_thought',
+                            agent: data.agentName,
+                            message: fullMessage,
+                            thought: fullMessage,
+                            content: fullMessage,
+                            details: {
+                                confidence: data.confidence,
+                                originalData: data // Keep original data for debugging
+                            }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'triggerGenerated') {
+                        const triggerQuestion = data.trigger?.question || data.question || '';
+                        const logItem = {
+                            id: `trigger_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'trigger_generated',
+                            message: `Internal trigger: ${triggerQuestion}`,
+                            content: triggerQuestion,
+                            details: {
+                                source: data.source || 'system',
+                                category: data.trigger?.category || data.category,
+                                importance: data.trigger?.importance || data.importance,
+                                originalData: data
+                            }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'thoughtCycleComplete') {
+                        // Update DPD scores using new data structure
+                        if (data.dpdScores) {
+                            setDpdScores(data.dpdScores);
+                        }
+
+                        // Update DPD weights using new data structure
+                        if (data.dpdWeights) {
+                            setDpdWeights(data.dpdWeights);
+                            // Add to weight history for chart
+                            setWeightHistory(prev => [...prev, {
+                                timestamp: eventTimestamp,
+                                empathy: data.dpdWeights.empathy,
+                                coherence: data.dpdWeights.coherence,
+                                dissonance: data.dpdWeights.dissonance
+                            }].slice(-20)); // Keep last 20 entries
+                        }
+
+                        // Update system statistics
+                        if (data.systemStats) {
+                            setStats(prev => ({
+                                ...prev,
+                                systemClock: data.systemStats.systemClock,
+                                totalQuestions: data.systemStats.totalQuestions,
+                                totalThoughts: data.systemStats.totalThoughts,
+                                averageConfidence: Math.round((data.systemStats.averageConfidence || 0) * 100) // Convert 0-1 to percentage
+                            }));
+                        }
+
+                        // Reset stage progress after completion
+                        setCurrentStage(null);
+                        setStageProgress([]);
+
+                        // Add activity log for cycle completion
+                        const logItem = {
+                            id: `cycle_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'cycle_complete',
+                            message: `Thought cycle completed: DPD=${data.dpdScores?.weightedTotal?.toFixed(3) || 'N/A'}`,
+                            details: {
+                                dpdScores: data.dpdScores,
+                                dpdWeights: data.dpdWeights,
+                                systemStats: data.systemStats
+                            }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'energyUpdated' || data.type === 'energyRecharged' || data.type === 'deepRestPerformed') {
+                        // Update energy display
+                        if (data.energyState) {
+                            setStats(prev => ({
+                                ...prev,
+                                energyLevel: Math.round((data.energyState.available / data.energyState.total) * 100)
+                            }));
+                        }
+
+                        // Only add activity log for manual energy changes, not periodic updates
+                        if (data.type !== 'energyUpdated') {
+                            const actionMessage = data.type === 'energyRecharged' ? 'Manual energy recharge' : 'Deep rest performed';
+                            const logItem = {
+                                id: `energy_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                                timestamp: eventTimestamp,
+                                type: 'energy_event',
+                                message: actionMessage,
+                                details: { source: data.type }
+                            };
+                            setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                        }
+                    } else if (data.type === 'stageCompleted') {
+                        // Update current stage and stage progress for pipeline visualization
+                        setCurrentStage(data.stage);
+                        setStageProgress(prev => [...prev, {
+                            stage: data.stage,
+                            name: data.name,
+                            timestamp: eventTimestamp,
+                            completed: true
+                        }]);
+
+                        // Add activity log for stage completion
+                        const logItem = {
+                            id: `stage_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'stage_progress',
+                            message: `Stage ${data.stage}: ${data.name}`,
+                            details: { stage: data.stage, name: data.name }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'stageChanged') {
+                        // Update current stage for pipeline display
+                        setCurrentStage(data.stage);
+
+                        // Add stage progress item for started stage
+                        setStageProgress(prev => [...prev, {
+                            stage: data.stage,
+                            name: data.name,
+                            timestamp: eventTimestamp,
+                            completed: false,
+                            status: data.status || 'started'
+                        }]);
+
+                        // Add activity log for stage start
+                        const logItem = {
+                            id: `stage_start_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'stage_start',
+                            message: `Starting: ${data.name}`,
+                            details: { stage: data.stage, name: data.name, status: data.status }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'consciousnessStarted') {
+                        setConsciousnessState('running');
+                        const logItem = {
+                            id: `status_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'status_change',
+                            message: 'Consciousness started',
+                            details: { status: 'running' }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'consciousnessStopped') {
+                        setConsciousnessState('stopped');
+                        const logItem = {
+                            id: `status_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'status_change',
+                            message: 'Consciousness stopped',
+                            details: { status: 'stopped' }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'consciousnessPaused') {
+                        setConsciousnessState('paused');
+                        const logItem = {
+                            id: `status_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'status_change',
+                            message: 'Consciousness paused',
+                            details: { status: 'paused' }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'consciousnessResumed') {
+                        setConsciousnessState('running');
+                        const logItem = {
+                            id: `status_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'status_change',
+                            message: 'Consciousness resumed',
+                            details: { status: 'running' }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    }
+                };
+
+                eventSource.onerror = () => {
+                    console.warn('EventSource connection failed, will show system message only');
+                    // Add a single system message instead of continuous mock data
+                    const systemMessage = {
+                        id: `system_${Date.now()}`,
+                        timestamp: Date.now(),
+                        type: 'system_event',
+                        message: 'EventSource connection failed. Start consciousness to see real activity.',
+                        details: { source: 'system' }
+                    };
+                    setActivityLog(prev => [systemMessage, ...prev].slice(0, 30));
+                };
+
+                return () => eventSource.close();
+            }, []);
+
+            const formatActivityTime = (timestamp) => {
+                const now = new Date();
+                const activityTime = new Date(timestamp);
+                const diffMs = now.getTime() - activityTime.getTime();
+                const diffSecs = Math.floor(diffMs / 1000);
+                const diffMins = Math.floor(diffSecs / 60);
+
+                if (diffSecs < 60) return `${diffSecs}s ago`;
+                if (diffMins < 60) return `${diffMins}m ago`;
+                return activityTime.toLocaleTimeString();
+            };
+
+            const handleManualTrigger = async () => {
+                if (!triggerQuestion.trim()) return;
+
+                try {
+                    const response = await fetch('/api/consciousness/trigger', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: triggerQuestion.trim() })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        console.log('Trigger sent successfully:', result);
+                        setTriggerQuestion(''); // Clear input
+                        // Trigger will be shown via SSE event when processed
+                    } else {
+                        console.error('Trigger failed:', result.error);
+                        alert('Failed to send trigger: ' + result.error);
+                    }
+                } catch (error) {
+                    console.error('Trigger error:', error);
+                    alert('Failed to send trigger: ' + error.message);
+                }
+            };
+
+            const handleEnergyRecharge = async () => {
+                try {
+                    const response = await fetch('/api/consciousness/recharge-energy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: 20 })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        console.log('Energy recharged:', result);
+                        // Energy update will come via SSE event
+                    } else {
+                        console.log('Energy recharge note:', result.message);
+                        // Add note to activity log for "already full" case
+                        const noteMessage = {
+                            id: `energy_note_${Date.now()}`,
+                            timestamp: Date.now(),
+                            type: 'energy_event',
+                            message: result.message || 'エネルギーは既に満タンです',
+                            details: { source: 'manual_recharge' }
+                        };
+                        setActivityLog(prev => [noteMessage, ...prev].slice(0, 30));
+                    }
+                } catch (error) {
+                    console.error('Energy recharge error:', error);
+                    alert('Failed to recharge energy: ' + error.message);
+                }
+            };
+
+            const handleDeepRest = async () => {
+                try {
+                    const response = await fetch('/api/consciousness/deep-rest', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        console.log('Deep rest completed:', result);
+                        // Energy update will come via SSE event
+                    } else {
+                        console.log('Deep rest note:', result.message);
+                        // Add note to activity log for failure case
+                        const noteMessage = {
+                            id: `rest_note_${Date.now()}`,
+                            timestamp: Date.now(),
+                            type: 'energy_event',
+                            message: result.message || '深い休息は実行できませんでした',
+                            details: { source: 'deep_rest' }
+                        };
+                        setActivityLog(prev => [noteMessage, ...prev].slice(0, 30));
+                    }
+                } catch (error) {
+                    console.error('Deep rest error:', error);
+                    alert('Failed to perform deep rest: ' + error.message);
+                }
+            };
+
+            const fetchGrowthData = async () => {
+                setLoadingGrowth(true);
+                try {
+                    const response = await fetch('/api/growth/full');
+                    const data = await response.json();
+                    setGrowthData(data);
+                    setShowGrowthModal(true);
+                } catch (error) {
+                    console.error('Failed to fetch growth data:', error);
+                    alert('Failed to load growth data: ' + error.message);
+                } finally {
+                    setLoadingGrowth(false);
+                }
+            };
+
+            const handleStartConsciousness = async () => {
+                setLoading(true);
+                try {
+                    const response = await fetch('/api/consciousness/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        setConsciousnessState('running');
+                        console.log('Consciousness started successfully');
+                    } else {
+                        alert('Failed to start consciousness: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Start consciousness error:', error);
+                    alert('Failed to start consciousness: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handlePauseConsciousness = async () => {
+                setLoading(true);
+                try {
+                    const response = await fetch('/api/consciousness/pause', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        setConsciousnessState('paused');
+                        console.log('Consciousness paused successfully');
+                    } else {
+                        alert('Failed to pause consciousness: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Pause consciousness error:', error);
+                    alert('Failed to pause consciousness: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleResumeConsciousness = async () => {
+                setLoading(true);
+                try {
+                    const response = await fetch('/api/consciousness/resume', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        setConsciousnessState('running');
+                        console.log('Consciousness resumed successfully');
+                    } else {
+                        alert('Failed to resume consciousness: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Resume consciousness error:', error);
+                    alert('Failed to resume consciousness: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleStopConsciousness = async () => {
+                setLoading(true);
+                try {
+                    const response = await fetch('/api/consciousness/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        setConsciousnessState('stopped');
+                        console.log('Consciousness stopped successfully');
+                    } else {
+                        alert('Failed to stop consciousness: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Stop consciousness error:', error);
+                    alert('Failed to stop consciousness: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div style={{
+                    padding: '16px',
+                    background: '#111827',
+                    height: '100vh',
+                    color: '#f9fafb',
+                    overflow: 'hidden'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '16px',
+                        flexShrink: 0
+                    }}>
+                        <h2 style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>
+                            Consciousness Dashboard
+                        </h2>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            {/* Consciousness Control Buttons */}
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                {consciousnessState === 'stopped' && (
+                                    <button
+                                        onClick={handleStartConsciousness}
+                                        disabled={loading}
+                                        style={{
+                                            background: loading ? '#6b7280' : '#10b981',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '10px 20px',
+                                            color: 'white',
+                                            fontWeight: '600',
+                                            cursor: loading ? 'not-allowed' : 'pointer',
+                                            fontSize: '14px'
+                                        }}
+                                    >
+                                        {loading ? 'Starting...' : '▶️ Start'}
+                                    </button>
+                                )}
+
+                                {consciousnessState === 'running' && (
+                                    <>
+                                        <button
+                                            onClick={handlePauseConsciousness}
+                                            disabled={loading}
+                                            style={{
+                                                background: loading ? '#6b7280' : '#f59e0b',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '10px 20px',
+                                                color: 'white',
+                                                fontWeight: '600',
+                                                cursor: loading ? 'not-allowed' : 'pointer',
+                                                fontSize: '14px'
+                                            }}
+                                        >
+                                            {loading ? 'Pausing...' : '⏸️ Pause'}
+                                        </button>
+                                        <button
+                                            onClick={handleStopConsciousness}
+                                            disabled={loading}
+                                            style={{
+                                                background: loading ? '#6b7280' : '#ef4444',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '10px 20px',
+                                                color: 'white',
+                                                fontWeight: '600',
+                                                cursor: loading ? 'not-allowed' : 'pointer',
+                                                fontSize: '14px'
+                                            }}
+                                        >
+                                            {loading ? 'Stopping...' : '⏹️ Stop'}
+                                        </button>
+                                    </>
+                                )}
+
+                                {consciousnessState === 'paused' && (
+                                    <>
+                                        <button
+                                            onClick={handleResumeConsciousness}
+                                            disabled={loading}
+                                            style={{
+                                                background: loading ? '#6b7280' : '#10b981',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '10px 20px',
+                                                color: 'white',
+                                                fontWeight: '600',
+                                                cursor: loading ? 'not-allowed' : 'pointer',
+                                                fontSize: '14px'
+                                            }}
+                                        >
+                                            {loading ? 'Resuming...' : '▶️ Resume'}
+                                        </button>
+                                        <button
+                                            onClick={handleStopConsciousness}
+                                            disabled={loading}
+                                            style={{
+                                                background: loading ? '#6b7280' : '#ef4444',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '10px 20px',
+                                                color: 'white',
+                                                fontWeight: '600',
+                                                cursor: loading ? 'not-allowed' : 'pointer',
+                                                fontSize: '14px'
+                                            }}
+                                        >
+                                            {loading ? 'Stopping...' : '⏹️ Stop'}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={fetchGrowthData}
+                                disabled={loadingGrowth}
+                                style={{
+                                    background: loadingGrowth ? '#6b7280' : '#8b5cf6',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '10px 20px',
+                                    color: 'white',
+                                    fontWeight: '600',
+                                    cursor: loadingGrowth ? 'not-allowed' : 'pointer',
+                                    fontSize: '14px'
+                                }}
+                            >
+                                {loadingGrowth ? 'Loading...' : '📊 Growth'}
+                            </button>
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            color: consciousnessState === 'running' ? '#10b981' :
+                                   consciousnessState === 'paused' ? '#f59e0b' : '#6b7280'
+                        }}>
+                            <span style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '50%',
+                                background: consciousnessState === 'running' ? '#10b981' :
+                                           consciousnessState === 'paused' ? '#f59e0b' : '#6b7280'
+                            }}></span>
+                            {consciousnessState === 'running' ? 'Consciousness Active' :
+                             consciousnessState === 'paused' ? 'Consciousness Paused' :
+                             'Consciousness Stopped'}
+                        </div>
+                    </div>
+
+                    <div style={{
+                        display: 'flex',
+                        gap: '16px',
+                        height: 'calc(100vh - 120px)'
+                    }}>
+                        {/* Left Panel */}
+                        <div style={{
+                            width: '350px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px',
+                            flexShrink: 0
+                        }}>
+                            {/* Manual Trigger */}
+                            <div style={{
+                                background: '#1e3a8a',
+                                border: '1px solid #3b82f6',
+                                borderRadius: '12px',
+                                padding: '24px'
+                            }}>
+                                <h3 style={{ margin: '0 0 16px 0', color: '#f9fafb' }}>
+                                    Manual Trigger
+                                </h3>
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px'
+                                }}>
+                                    <textarea
+                                        placeholder="Enter a question to trigger consciousness..."
+                                        value={triggerQuestion}
+                                        onChange={(e) => setTriggerQuestion(e.target.value)}
+                                        style={{
+                                            background: '#374151',
+                                            border: '1px solid #4b5563',
+                                            borderRadius: '8px',
+                                            padding: '12px',
+                                            color: '#f9fafb',
+                                            fontFamily: 'inherit',
+                                            resize: 'vertical',
+                                            minHeight: '80px'
+                                        }}
+                                        rows={3}
+                                    />
+                                    <button
+                                        onClick={handleManualTrigger}
+                                        disabled={!triggerQuestion.trim()}
+                                        style={{
+                                            background: triggerQuestion.trim() ? '#3b82f6' : '#6b7280',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '12px 16px',
+                                            color: 'white',
+                                            fontWeight: '600',
+                                            cursor: triggerQuestion.trim() ? 'pointer' : 'not-allowed'
+                                        }}
+                                    >
+                                        Generate Thought Cycle
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Energy Management */}
+                            <div style={{
+                                background: '#1e3a8a',
+                                borderRadius: '12px',
+                                padding: '24px',
+                                border: '1px solid #3b82f6'
+                            }}>
+                                <h3 style={{ margin: '0 0 16px 0', color: '#f9fafb' }}>
+                                    Energy Management
+                                </h3>
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px'
+                                }}>
+                                    <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+                                        <div style={{
+                                            fontSize: '28px',
+                                            fontWeight: '700',
+                                            color: '#60a5fa',
+                                            marginBottom: '4px'
+                                        }}>{stats.energyLevel}%</div>
+                                        <div style={{ fontSize: '14px', color: '#cbd5e1' }}>
+                                            Current Energy
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleEnergyRecharge}
+                                        style={{
+                                            background: '#10b981',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '10px 16px',
+                                            color: 'white',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            fontSize: '14px'
+                                        }}
+                                    >
+                                        Manual Recharge (+20)
+                                    </button>
+                                    <button
+                                        onClick={handleDeepRest}
+                                        style={{
+                                            background: '#8b5cf6',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '10px 16px',
+                                            color: 'white',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            fontSize: '14px'
+                                        }}
+                                    >
+                                        Deep Rest (+50)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* DPD Scores */}
+                            <div style={{
+                                background: '#065f46',
+                                borderRadius: '12px',
+                                padding: '24px',
+                                border: '1px solid #059669'
+                            }}>
+                                <h3 style={{ margin: '0 0 16px 0', color: '#f9fafb' }}>
+                                    Dynamic Prime Directive
+                                </h3>
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px'
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        background: '#064e3b',
+                                        padding: '8px 12px',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ color: '#d1fae5' }}>Empathy</span>
+                                        <span style={{ color: '#10b981', fontWeight: '700' }}>
+                                            {(dpdScores.empathy * 100).toFixed(1)}%
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        background: '#064e3b',
+                                        padding: '8px 12px',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ color: '#d1fae5' }}>Coherence</span>
+                                        <span style={{ color: '#10b981', fontWeight: '700' }}>
+                                            {(dpdScores.coherence * 100).toFixed(1)}%
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        background: '#064e3b',
+                                        padding: '8px 12px',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <span style={{ color: '#d1fae5' }}>Dissonance</span>
+                                        <span style={{ color: '#10b981', fontWeight: '700' }}>
+                                            {(dpdScores.dissonance * 100).toFixed(1)}%
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        background: '#047857',
+                                        padding: '12px',
+                                        borderRadius: '8px',
+                                        textAlign: 'center',
+                                        marginTop: '8px'
+                                    }}>
+                                        <div style={{
+                                            fontSize: '20px',
+                                            fontWeight: '700',
+                                            color: '#ecfdf5',
+                                            marginBottom: '4px'
+                                        }}>
+                                            {dpdScores.weightedTotal ? (dpdScores.weightedTotal * 100).toFixed(1) : '0.0'}%
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#a7f3d0' }}>
+                                            Weighted Total
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* System Stats */}
+                            <div style={{
+                                background: '#1f2937',
+                                borderRadius: '12px',
+                                padding: '24px',
+                                border: '1px solid #374151'
+                            }}>
+                                <h3 style={{ margin: '0 0 16px 0' }}>System Statistics</h3>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(2, 1fr)',
+                                    gap: '16px'
+                                }}>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{
+                                            fontSize: '32px',
+                                            fontWeight: '700',
+                                            color: '#3b82f6',
+                                            marginBottom: '4px'
+                                        }}>{stats.systemClock}</div>
+                                        <div style={{ fontSize: '14px', color: '#9ca3af' }}>
+                                            System Clock
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{
+                                            fontSize: '32px',
+                                            fontWeight: '700',
+                                            color: '#3b82f6',
+                                            marginBottom: '4px'
+                                        }}>{stats.totalQuestions}</div>
+                                        <div style={{ fontSize: '14px', color: '#9ca3af' }}>
+                                            Questions
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{
+                                            fontSize: '32px',
+                                            fontWeight: '700',
+                                            color: '#3b82f6',
+                                            marginBottom: '4px'
+                                        }}>{stats.totalThoughts}</div>
+                                        <div style={{ fontSize: '14px', color: '#9ca3af' }}>
+                                            Thought Cycles
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{
+                                            fontSize: '32px',
+                                            fontWeight: '700',
+                                            color: '#3b82f6',
+                                            marginBottom: '4px'
+                                        }}>{stats.averageConfidence}%</div>
+                                        <div style={{ fontSize: '14px', color: '#9ca3af' }}>
+                                            Confidence
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Main Content Area */}
+                        <div style={{
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px',
+                            minHeight: 0
+                        }}>
+                            {/* Stage Progression */}
+                            <div style={{
+                                background: '#1f2937',
+                                borderRadius: '12px',
+                                padding: '24px',
+                                border: '1px solid #374151',
+                                flexShrink: 0
+                            }}>
+                                <h3 style={{ margin: '0 0 16px 0' }}>Consciousness Pipeline</h3>
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '8px',
+                                    alignItems: 'center',
+                                    padding: '12px',
+                                    background: '#374151',
+                                    borderRadius: '8px'
+                                }}>
+                                    {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
+                                        <React.Fragment key={stage}>
+                                            <div style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                minWidth: '40px'
+                                            }}>
+                                                <div style={{
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    borderRadius: '50%',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    background: currentStage === stage ? '#3b82f6' :
+                                                               stageProgress.includes(stage) ? '#10b981' : '#6b7280',
+                                                    color: 'white'
+                                                }}>
+                                                    {stage}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '10px',
+                                                    color: '#9ca3af',
+                                                    marginTop: '4px',
+                                                    textAlign: 'center'
+                                                }}>
+                                                    {stage === 'S0' ? 'Trigger' :
+                                                     stage === 'S1' ? 'Think' :
+                                                     stage === 'S2' ? 'Reflect' :
+                                                     stage === 'S3' ? 'Audit' :
+                                                     stage === 'S4' ? 'DPD' :
+                                                     stage === 'S5' ? 'Compile' :
+                                                     stage === 'S6' ? 'Scribe' :
+                                                     'Weight'}
+                                                </div>
+                                            </div>
+                                            {index < 7 && (
+                                                <div style={{
+                                                    width: '20px',
+                                                    height: '2px',
+                                                    background: stageProgress.includes(stage) ? '#10b981' : '#6b7280'
+                                                }}></div>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* DPD Weight Evolution Chart */}
+                            <div style={{
+                                background: '#1f2937',
+                                borderRadius: '12px',
+                                padding: '24px',
+                                border: '1px solid #374151',
+                                flexShrink: 0,
+                                maxHeight: '300px'
+                            }}>
+                                <h3 style={{ margin: '0 0 16px 0' }}>DPD Weight Evolution</h3>
+                                <div style={{
+                                    background: '#374151',
+                                    padding: '16px',
+                                    borderRadius: '8px',
+                                    height: '200px',
+                                    position: 'relative',
+                                    overflow: 'hidden'
+                                }}>
+                                    {weightHistory.length > 1 ? (
+                                        <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
+                                            {/* Draw lines for each weight */}
+                                            {['empathy', 'coherence', 'dissonance'].map((weight, weightIndex) => {
+                                                const color = weight === 'empathy' ? '#10b981' :
+                                                            weight === 'coherence' ? '#3b82f6' : '#f59e0b';
+                                                return (
+                                                    <polyline
+                                                        key={weight}
+                                                        fill="none"
+                                                        stroke={color}
+                                                        strokeWidth="2"
+                                                        points={weightHistory.map((entry, index) => {
+                                                            const x = (index / (weightHistory.length - 1)) * 100;
+                                                            const y = (1 - entry[weight]) * 80 + 10;
+                                                            return `${x},${y}`;
+                                                        }).join(' ')}
+                                                        style={{ vectorEffect: 'non-scaling-stroke' }}
+                                                        transform="scale(2.5, 2)"
+                                                    />
+                                                );
+                                            })}
+                                        </svg>
+                                    ) : (
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            height: '100%',
+                                            color: '#9ca3af',
+                                            fontSize: '14px'
+                                        }}>
+                                            Waiting for weight evolution data...
+                                        </div>
+                                    )}
+
+                                    {/* Legend */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: '8px',
+                                        right: '8px',
+                                        display: 'flex',
+                                        gap: '12px',
+                                        fontSize: '12px'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <div style={{
+                                                width: '12px',
+                                                height: '2px',
+                                                background: '#10b981'
+                                            }}></div>
+                                            <span style={{ color: '#d1fae5' }}>Empathy</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <div style={{
+                                                width: '12px',
+                                                height: '2px',
+                                                background: '#3b82f6'
+                                            }}></div>
+                                            <span style={{ color: '#dbeafe' }}>Coherence</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <div style={{
+                                                width: '12px',
+                                                height: '2px',
+                                                background: '#f59e0b'
+                                            }}></div>
+                                            <span style={{ color: '#fef3c7' }}>Dissonance</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Activity Log - Expanded */}
+                            <div style={{
+                                background: '#1f2937',
+                                borderRadius: '12px',
+                                padding: '24px',
+                                border: '1px solid #374151',
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                minHeight: 0
+                            }}>
+                                <h3 style={{ margin: '0 0 12px 0', flexShrink: 0 }}>
+                                    Activity Log
+                                </h3>
+                                <div style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '8px',
+                                    overflowY: 'auto',
+                                    paddingRight: '8px',
+                                    minHeight: 0
+                                }}>
+                                    {activityLog.length === 0 ? (
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'auto auto 1fr auto',
+                                            gap: '12px',
+                                            alignItems: 'center',
+                                            padding: '8px 12px',
+                                            background: '#374151',
+                                            borderRadius: '6px',
+                                            fontSize: '14px',
+                                            flexShrink: 0
+                                        }}>
+                                            <span style={{
+                                                color: '#9ca3af',
+                                                fontFamily: 'Courier New, monospace',
+                                                fontSize: '12px'
+                                            }}>--:--:--</span>
+                                            <span style={{
+                                                background: '#6b7280',
+                                                color: '#f3f4f6',
+                                                fontWeight: '600',
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '12px'
+                                            }}>System</span>
+                                            <span style={{ color: '#e5e7eb', lineHeight: '1.4' }}>
+                                                Waiting for consciousness activity...
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        activityLog.map((item) => (
+                                            <div key={item.id} style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '8px',
+                                                padding: '8px 12px',
+                                                background: '#374151',
+                                                borderRadius: '6px',
+                                                fontSize: '14px',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                <span style={{
+                                                    color: '#9ca3af',
+                                                    fontFamily: 'Courier New, monospace',
+                                                    fontSize: '12px'
+                                                }}>{formatActivityTime(item.timestamp)}</span>
+                                                {item.agent ? (
+                                                    <span style={{
+                                                        fontWeight: '600',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '12px',
+                                                        ...(item.agent === 'theoria' ? {
+                                                            background: '#1e40af',
+                                                            color: '#dbeafe'
+                                                        } : item.agent === 'pathia' ? {
+                                                            background: '#059669',
+                                                            color: '#d1fae5'
+                                                        } : {
+                                                            background: '#7c2d12',
+                                                            color: '#fed7aa'
+                                                        })
+                                                    }}>{item.agent}</span>
+                                                ) : (
+                                                    <span style={{
+                                                        background: '#6b7280',
+                                                        color: '#f3f4f6',
+                                                        fontWeight: '600',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '12px'
+                                                    }}>System</span>
+                                                )}
+                                                <div style={{
+                                                    color: '#e5e7eb',
+                                                    lineHeight: '1.4',
+                                                    wordBreak: 'break-word',
+                                                    whiteSpace: 'pre-wrap',
+                                                    overflow: 'visible',
+                                                    width: '100%',
+                                                    maxHeight: 'none',
+                                                    display: 'block'
+                                                }}>
+                                                    <MessageDisplay
+                                                        message={item.message || item.thought || item.content}
+                                                        maxLength={300}
+                                                    />
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                                                    {item.details?.confidence && (
+                                                        <span style={{
+                                                            color: '#3b82f6',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600',
+                                                            background: '#1e3a8a',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '3px'
+                                                        }}>
+                                                            {Math.round(item.details.confidence * 100)}%
+                                                        </span>
+                                                    )}
+                                                    {item.details?.originalData && (
+                                                        <button
+                                                            onClick={() => console.log('Debug data:', item.details.originalData)}
+                                                            style={{
+                                                                background: '#374151',
+                                                                border: '1px solid #4b5563',
+                                                                borderRadius: '3px',
+                                                                padding: '2px 6px',
+                                                                color: '#9ca3af',
+                                                                fontSize: '10px',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                            title="Log debug data to console"
+                                                        >
+                                                            Debug
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Growth Modal */}
+                    {showGrowthModal && (
+                        <div style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'rgba(0, 0, 0, 0.8)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1000
+                        }}>
+                            <div style={{
+                                background: '#111827',
+                                borderRadius: '16px',
+                                padding: '32px',
+                                maxWidth: '90vw',
+                                maxHeight: '90vh',
+                                overflow: 'auto',
+                                border: '1px solid #374151',
+                                minWidth: '800px'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '24px'
+                                }}>
+                                    <h2 style={{
+                                        fontSize: '28px',
+                                        fontWeight: '700',
+                                        margin: 0,
+                                        color: '#f9fafb'
+                                    }}>
+                                        意識成長レポート
+                                    </h2>
+                                    <button
+                                        onClick={() => setShowGrowthModal(false)}
+                                        style={{
+                                            background: '#6b7280',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '8px 16px',
+                                            color: 'white',
+                                            fontWeight: '600',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+
+                                {growthData ? (
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+                                        gap: '24px'
+                                    }}>
+                                        {/* Overview Section */}
+                                        <div style={{
+                                            background: '#1f2937',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            border: '1px solid #374151'
+                                        }}>
+                                            <h3 style={{ color: '#60a5fa', marginBottom: '16px' }}>Overview</h3>
+                                            <div style={{ color: '#e5e7eb', lineHeight: '1.6' }}>
+                                                <p><strong>Last Update:</strong> {growthData.overview?.lastUpdate ?
+                                                    new Date(growthData.overview.lastUpdate).toLocaleString() : 'Never'}</p>
+                                                <p><strong>Version:</strong> {growthData.overview?.version || 'N/A'}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Personality Evolution */}
+                                        <div style={{
+                                            background: '#1f2937',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            border: '1px solid #374151'
+                                        }}>
+                                            <h3 style={{ color: '#10b981', marginBottom: '16px' }}>Personality Traits</h3>
+                                            <div style={{ color: '#e5e7eb', lineHeight: '1.6' }}>
+                                                {growthData.personalityEvolution?.currentTraits ? Object.entries(growthData.personalityEvolution.currentTraits).map(([trait, value]) => (
+                                                    <p key={trait} style={{ marginBottom: '8px' }}>
+                                                        <strong>{trait}:</strong> {(value * 100).toFixed(1)}%
+                                                    </p>
+                                                )) : <p>No personality data available</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* DPD Evolution */}
+                                        <div style={{
+                                            background: '#1f2937',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            border: '1px solid #374151'
+                                        }}>
+                                            <h3 style={{ color: '#f59e0b', marginBottom: '16px' }}>DPD Evolution</h3>
+                                            <div style={{ color: '#e5e7eb', lineHeight: '1.6' }}>
+                                                {growthData.dpdEvolution?.currentWeights ? (
+                                                    <>
+                                                        <p><strong>Empathy:</strong> {(growthData.dpdEvolution.currentWeights.empathy * 100).toFixed(1)}%</p>
+                                                        <p><strong>Coherence:</strong> {(growthData.dpdEvolution.currentWeights.coherence * 100).toFixed(1)}%</p>
+                                                        <p><strong>Dissonance:</strong> {(growthData.dpdEvolution.currentWeights.dissonance * 100).toFixed(1)}%</p>
+                                                    </>
+                                                ) : <p>No DPD evolution data available</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Growth Metrics */}
+                                        <div style={{
+                                            background: '#1f2937',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            border: '1px solid #374151'
+                                        }}>
+                                            <h3 style={{ color: '#8b5cf6', marginBottom: '16px' }}>Growth Metrics</h3>
+                                            <div style={{ color: '#e5e7eb', lineHeight: '1.6' }}>
+                                                {growthData.growthMetrics ? Object.entries(growthData.growthMetrics).map(([metric, value]) => (
+                                                    <p key={metric} style={{ marginBottom: '8px' }}>
+                                                        <strong>{metric}:</strong> {typeof value === 'number' ? value.toFixed(2) : value}
+                                                    </p>
+                                                )) : <p>No growth metrics available</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Significant Thoughts */}
+                                        <div style={{
+                                            background: '#1f2937',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            border: '1px solid #374151',
+                                            gridColumn: 'span 2'
+                                        }}>
+                                            <h3 style={{ color: '#ef4444', marginBottom: '16px' }}>Significant Thoughts</h3>
+                                            <div style={{
+                                                maxHeight: '300px',
+                                                overflowY: 'auto',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '12px'
+                                            }}>
+                                                {growthData.significantThoughts && growthData.significantThoughts.length > 0 ?
+                                                    growthData.significantThoughts.slice(0, 10).map((thought, index) => (
+                                                        <div key={index} style={{
+                                                            background: '#374151',
+                                                            padding: '12px',
+                                                            borderRadius: '8px',
+                                                            borderLeft: '4px solid #ef4444'
+                                                        }}>
+                                                            <p style={{ color: '#e5e7eb', marginBottom: '8px', lineHeight: '1.4' }}>
+                                                                {thought.content || thought.thought || 'No content'}
+                                                            </p>
+                                                            <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                                                                Confidence: {((thought.confidence || 0) * 100).toFixed(1)}% |
+                                                                {thought.timestamp ? ` ${new Date(thought.timestamp).toLocaleString()}` : ' No timestamp'}
+                                                            </div>
+                                                        </div>
+                                                    )) :
+                                                    <p style={{ color: '#9ca3af' }}>No significant thoughts recorded yet</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Unresolved Ideas */}
+                                        <div style={{
+                                            background: '#1f2937',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            border: '1px solid #374151',
+                                            gridColumn: 'span 2'
+                                        }}>
+                                            <h3 style={{ color: '#06b6d4', marginBottom: '16px' }}>Unresolved Ideas</h3>
+                                            <div style={{
+                                                maxHeight: '300px',
+                                                overflowY: 'auto',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '12px'
+                                            }}>
+                                                {growthData.unresolvedIdeas && growthData.unresolvedIdeas.length > 0 ?
+                                                    growthData.unresolvedIdeas.slice(0, 10).map((idea, index) => (
+                                                        <div key={index} style={{
+                                                            background: '#374151',
+                                                            padding: '12px',
+                                                            borderRadius: '8px',
+                                                            borderLeft: '4px solid #06b6d4'
+                                                        }}>
+                                                            <p style={{ color: '#e5e7eb', marginBottom: '8px', lineHeight: '1.4' }}>
+                                                                {idea.question || idea.content || 'No content'}
+                                                            </p>
+                                                            <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                                                                Category: {idea.category || 'Unknown'} |
+                                                                {idea.firstAppeared ? ` First appeared: ${new Date(idea.firstAppeared).toLocaleString()}` : ' No timestamp'}
+                                                            </div>
+                                                        </div>
+                                                    )) :
+                                                    <p style={{ color: '#9ca3af' }}>No unresolved ideas recorded yet</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '400px',
+                                        color: '#9ca3af'
+                                    }}>
+                                        Loading growth data...
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // App Component
+        const App = () => {
+            const [appState, setAppState] = useState({
+                currentView: 'dashboard',
+                isConnected: false,
+                systemStatus: 'active'
+            });
+
+            return (
+                <div className="aenea-app">
+                    <Dashboard systemStatus={appState.systemStatus} />
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

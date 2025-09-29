@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "node",
+    "lib": ["ES2020", "DOM"],
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@aenea/*": ["aenea/*"],
+      "@integration/*": ["integration/*"],
+      "@model/*": ["types/*"],
+      "@utils/*": ["utils/*"],
+      "@ui/*": ["ui/*"],
+      "@yui/*": ["../yui-protocol/src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "tests", "src/test-consciousness-pipeline.ts"]
+}

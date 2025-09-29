@@ -1,0 +1,62 @@
+{
+  "name": "aenea-project",
+  "version": "1.0.0",
+  "description": "Aenea - Autonomous AI Consciousness Model based on Yui Protocol",
+  "main": "dist/server/aenea-server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server/aenea-server.ts",
+    "clean": "shx rm -rf dist",
+    "build": "npm run clean && npm run build:yui && tsc && npm run copy:ui",
+    "copy:ui": "shx cp src/ui/index.html dist/ui/",
+    "build:yui": "cd yui-protocol && npm install && npm run build",
+    "start": "node dist/server/aenea-server.js",
+    "test": "jest",
+    "test:consciousness": "jest tests/aenea/consciousness/",
+    "test:dpd": "jest tests/aenea/dpd/",
+    "consciousness:start": "npm run dev -- --consciousness-mode",
+    "debug:internal-state": "npm run dev -- --debug-mode",
+    "test:ui": "tsx src/server/aenea-server.ts",
+    "demo": "npm run build && tsx src/server/aenea-server.ts"
+  },
+  "keywords": [
+    "ai",
+    "consciousness",
+    "autonomous",
+    "yui-protocol",
+    "multi-agent",
+    "self-questioning"
+  ],
+  "author": "Aenea Project",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^1.21.0",
+    "@types/sqlite3": "^3.1.11",
+    "crypto-js": "^4.1.1",
+    "express": "^4.18.0",
+    "lodash": "^4.17.21",
+    "ollama": "^0.6.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "socket.io": "^4.7.0",
+    "sqlite3": "^5.1.7",
+    "typescript": "^5.0.0",
+    "undici": "^7.16.0",
+    "ws": "^8.13.0",
+    "yui-protocol": "file:../yui-protocol"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.1.0",
+    "@types/express": "^4.17.0",
+    "@types/jest": "^30.0.0",
+    "@types/lodash": "^4.14.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/ws": "^8.5.0",
+    "jest": "^29.0.0",
+    "shx": "^0.4.0",
+    "ts-jest": "^29.4.4",
+    "tsx": "^3.12.0"
+  }
+}
