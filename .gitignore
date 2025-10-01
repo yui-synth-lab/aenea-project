@@ -41,7 +41,8 @@ node_modules
 dist
 .claude
 sessions/
-logs/
-memory/
+/logs/
+/memory/*
 CLAUDE.md
 .github/copilot-instructions.md
+data/*

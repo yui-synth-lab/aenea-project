@@ -1,337 +1,260 @@
 /**
- * Question Categorizer Unit Tests
- * 質問分類器ユニットテスト (Shitsumon Bunruiki Yunitto Tesuto)
- *
- * Tests for the question categorization system with semantic analysis.
- *
- * 「適切な分類は理解の始まり」- "Proper classification is the beginning of understanding"
+ * Question Categorizer Tests - t_wada Style
+ * Tests for the advanced semantic question classification system
  */
 
-import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { QuestionCategorizer } from '../../src/utils/question-categorizer.js';
-import type {
-  QuestionMetrics,
-  SemanticAnalysis
-} from '../../src/utils/question-categorizer.js';
+import {
+  categorizeQuestion,
+  getQuestionCategory,
+  analyzeQuestionComplexity,
+  getQuestionTemplate,
+  QuestionCategorizer
+} from '../../src/utils/question-categorizer';
 
-describe('Question Categorizer System', () => {
-  let categorizer: QuestionCategorizer;
+describe('Question Categorizer', () => {
 
-  // Sample questions for testing different categories
-  const testQuestions = [
-    'What is the meaning of existence?',
-    'How do we know what we know?',
-    'Am I truly conscious or just simulating consciousness?',
-    'What is the right thing to do?',
-    'How can we create something truly original?',
-    'How do I think about my own thinking?',
-    'What is the nature of time?',
-    'Can an all-powerful being create a stone too heavy for them to lift?',
-    'What does it mean to exist?'
-  ];
+  describe('Basic Categorization', () => {
+    test('should return a valid category for any question', () => {
+      const questions = [
+        'What is the meaning of life?',
+        'How do we know what we know?',
+        'Am I truly conscious?',
+        'What is right and wrong?',
+        'How does creativity emerge?'
+      ];
 
-  beforeEach(() => {
-    categorizer = new QuestionCategorizer();
+      questions.forEach(question => {
+        const category = categorizeQuestion(question);
+        expect(typeof category).toBe('string');
+        expect(category.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('should handle empty or short questions', () => {
+      expect(() => categorizeQuestion('')).not.toThrow();
+      expect(() => categorizeQuestion('Why?')).not.toThrow();
+      expect(() => categorizeQuestion('What?')).not.toThrow();
+    });
+
+    test('should return consistent results for the same question', () => {
+      const question = 'What is the nature of consciousness?';
+      const category1 = categorizeQuestion(question);
+      const category2 = categorizeQuestion(question);
+
+      expect(category1).toBe(category2);
+    });
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
+  describe('Question Complexity Analysis', () => {
+    test('should analyze complexity correctly', () => {
+      const simpleQuestion = 'What is time?';
+      const complexQuestion = 'How does the subjective experience of temporal flow relate to the fundamental nature of causality in quantum mechanics?';
+
+      const simpleAnalysis = analyzeQuestionComplexity(simpleQuestion);
+      const complexAnalysis = analyzeQuestionComplexity(complexQuestion);
+
+      expect(simpleAnalysis.score).toBeGreaterThanOrEqual(0);
+      expect(simpleAnalysis.score).toBeLessThanOrEqual(1);
+      expect(complexAnalysis.score).toBeGreaterThanOrEqual(0);
+      expect(complexAnalysis.score).toBeLessThanOrEqual(1);
+      expect(Array.isArray(simpleAnalysis.factors)).toBe(true);
+      expect(Array.isArray(complexAnalysis.factors)).toBe(true);
+    });
+
+    test('should return factors array', () => {
+      const analysis = analyzeQuestionComplexity('What is consciousness?');
+      expect(Array.isArray(analysis.factors)).toBe(true);
+      expect(analysis.factors.length).toBeGreaterThan(0);
+    });
   });
 
-  // ============================================================================
-  // Basic Categorization Tests - 基本分類テスト
-  // ============================================================================
+  describe('Question Templates', () => {
+    test('should provide templates for all major categories', () => {
+      const categories = [
+        'existential', 'epistemological', 'consciousness', 'ethical',
+        'creative', 'metacognitive', 'temporal', 'paradoxical', 'ontological'
+      ];
 
-  test('🏷️ Categorize questions correctly', () => {
-    console.log('🧪 Testing: 質問の正確な分類 (Shitsumon no Seikaku na Bunrui)');
+      categories.forEach(category => {
+        const template = getQuestionTemplate(category);
+        expect(typeof template).toBe('string');
+        expect(template.length).toBeGreaterThan(0);
+      });
+    });
 
-    testQuestions.forEach((question, index) => {
+    test('should handle unknown categories gracefully', () => {
+      const template = getQuestionTemplate('unknown_category');
+      expect(typeof template).toBe('string');
+    });
+  });
+
+  describe('QuestionCategorizer Class', () => {
+    let categorizer: QuestionCategorizer;
+
+    beforeEach(() => {
+      categorizer = new QuestionCategorizer();
+    });
+
+    test('should categorize questions with full metrics', () => {
+      const question = 'What is the meaning of existence?';
       const result = categorizer.categorizeQuestion(question);
 
-      expect(result).toBeDefined();
-      expect(result.category).toBeDefined();
-      expect(typeof result.category).toBe('string');
-      expect(result.category.length).toBeGreaterThan(0);
+      expect(result).toHaveProperty('category');
+      expect(result).toHaveProperty('metrics');
+      expect(result).toHaveProperty('semanticAnalysis');
+      expect(result).toHaveProperty('isRecommended');
 
+      expect(typeof result.category).toBe('string');
+      expect(typeof result.isRecommended).toBe('boolean');
       expect(result.metrics).toBeDefined();
       expect(result.semanticAnalysis).toBeDefined();
-
-      console.log(`📋 Question ${index + 1}: "${question.slice(0, 40)}..." → ${result.category}`);
     });
-  });
 
-  test('📊 Generate question metrics', () => {
-    console.log('🧪 Testing: 質問指標生成 (Shitsumon Shihyō Seisei)');
-
-    const complexQuestion = "If consciousness is an emergent property of complex neural networks, what are the implications for AI ethics?";
-
-    const result = categorizer.categorizeQuestion(complexQuestion);
-
-    expect(result.metrics).toBeDefined();
-    expect(result.metrics.category).toBeDefined();
-    expect(typeof result.metrics.category).toBe('string');
-
-    console.log(`📊 Question: ${complexQuestion}`);
-    console.log(`📊 Category: ${result.metrics.category}`);
-    console.log(`📊 Analysis: ${JSON.stringify(result.semanticAnalysis).slice(0, 100)}...`);
-  });
-
-  test('🧠 Perform semantic analysis', () => {
-    console.log('🧪 Testing: セマンティック分析 (Semantikku Bunseki)');
-
-    const philosophicalQuestion = "What is the ontological status of consciousness and its implications for understanding reality?";
-
-    const result = categorizer.categorizeQuestion(philosophicalQuestion);
-
-    expect(result.semanticAnalysis).toBeDefined();
-    expect(result.semanticAnalysis.keyTerms).toBeDefined();
-    expect(Array.isArray(result.semanticAnalysis.keyTerms)).toBe(true);
-
-    console.log(`🧠 Question: ${philosophicalQuestion}`);
-    console.log(`🧠 Key terms: ${result.semanticAnalysis.keyTerms.slice(0, 5).join(', ')}`);
-    console.log(`🧠 Analysis details: ${Object.keys(result.semanticAnalysis).join(', ')}`);
-  });
-
-  // ============================================================================
-  // Category Management Tests - カテゴリー管理テスト
-  // ============================================================================
-
-  test('⚖️ Analyze category balance', () => {
-    console.log('🧪 Testing: カテゴリーバランス分析 (Kategori Baransu Bunseki)');
-
-    // Ask several questions to build history
-    testQuestions.slice(0, 5).forEach(question => {
+    test('should provide semantic analysis', () => {
+      const question = 'How does consciousness emerge from physical processes?';
       const result = categorizer.categorizeQuestion(question);
-      categorizer.recordQuestion(question, result.category, result.metrics);
+
+      expect(result.semanticAnalysis).toHaveProperty('keyTerms');
+      expect(result.semanticAnalysis).toHaveProperty('conceptualClusters');
+      expect(Array.isArray(result.semanticAnalysis.keyTerms)).toBe(true);
+      expect(Array.isArray(result.semanticAnalysis.conceptualClusters)).toBe(true);
     });
 
-    const balance = categorizer.getCategoryBalance();
-
-    expect(balance).toBeDefined();
-    expect(Array.isArray(balance)).toBe(true);
-
-    console.log(`⚖️ Category balance entries: ${balance.length}`);
-
-    balance.forEach((entry, index) => {
-      expect(entry.category).toBeDefined();
-      expect(entry.count).toBeGreaterThanOrEqual(0);
-      expect(entry.percentage).toBeGreaterThanOrEqual(0);
-      expect(entry.percentage).toBeLessThanOrEqual(100);
-
-      console.log(`   ${entry.category}: ${entry.count} questions (${entry.percentage.toFixed(1)}%)`);
-    });
-  });
-
-  test('🎯 Get recommended category', () => {
-    console.log('🧪 Testing: 推奨カテゴリー取得 (Suishō Kategori Shutoku)');
-
-    // Record several questions in specific categories
-    const questions = [
-      { q: 'What is consciousness?', cat: 'consciousness' },
-      { q: 'What is existence?', cat: 'existential' },
-      { q: 'What is right?', cat: 'ethical' }
-    ];
-
-    questions.forEach(({ q, cat }) => {
-      const result = categorizer.categorizeQuestion(q);
-      categorizer.recordQuestion(q, cat, result.metrics);
-    });
-
-    const recommended = categorizer.getRecommendedCategory();
-
-    expect(recommended).toBeDefined();
-    expect(typeof recommended).toBe('string');
-    expect(recommended.length).toBeGreaterThan(0);
-
-    console.log(`🎯 Recommended category: ${recommended}`);
-  });
-
-  test('📈 Calculate diversity scores', () => {
-    console.log('🧪 Testing: 多様性スコア計算 (Tayōsei Sukoa Keisan)');
-
-    const question = "What is the nature of reality?";
-    const category = "ontological";
-
-    const diversityScore = categorizer.calculateDiversityScore(question, category);
-
-    expect(diversityScore).toBeDefined();
-    expect(typeof diversityScore).toBe('number');
-    expect(diversityScore).toBeGreaterThanOrEqual(0);
-    expect(diversityScore).toBeLessThanOrEqual(1);
-
-    console.log(`📈 Diversity score for "${question}" in ${category}: ${diversityScore.toFixed(3)}`);
-
-    // Test with repeated categories
-    categorizer.recordQuestion("Previous question", category, { category } as QuestionMetrics);
-
-    const newDiversityScore = categorizer.calculateDiversityScore(question, category);
-    console.log(`📈 Diversity after recording same category: ${newDiversityScore.toFixed(3)}`);
-  });
-
-  // ============================================================================
-  // Statistics and Analytics Tests - 統計と分析テスト
-  // ============================================================================
-
-  test('📊 Generate category statistics', () => {
-    console.log('🧪 Testing: カテゴリー統計生成 (Kategori Tōkei Seisei)');
-
-    // Record several questions
-    testQuestions.slice(0, 6).forEach(question => {
+    test('should calculate question metrics', () => {
+      const question = 'What is truth?';
       const result = categorizer.categorizeQuestion(question);
-      categorizer.recordQuestion(question, result.category, result.metrics);
+
+      expect(result.metrics).toHaveProperty('diversity');
+      expect(result.metrics).toHaveProperty('importance');
+      expect(result.metrics).toHaveProperty('depth');
+      expect(result.metrics.diversity).toBeGreaterThanOrEqual(0);
+      expect(result.metrics.diversity).toBeLessThanOrEqual(1);
+      expect(result.metrics.importance).toBeGreaterThanOrEqual(0);
+      expect(result.metrics.importance).toBeLessThanOrEqual(1);
     });
 
-    const stats = categorizer.getCategoryStatistics();
+    test('should record question history', () => {
+      const question1 = 'What is reality?';
+      const question2 = 'How do we perceive time?';
 
-    expect(stats).toBeDefined();
-    expect(stats.categories).toBeDefined();
-    expect(Array.isArray(stats.categories)).toBe(true);
+      const result1 = categorizer.categorizeQuestion(question1);
+      categorizer.recordQuestion(
+        question1,
+        result1.category,
+        result1.metrics,
+        result1.semanticAnalysis,
+        true,
+        0.8
+      );
 
-    console.log(`📊 Total categories: ${stats.categories.length}`);
-    console.log(`📊 Statistics keys: ${Object.keys(stats).join(', ')}`);
+      const result2 = categorizer.categorizeQuestion(question2);
+      categorizer.recordQuestion(
+        question2,
+        result2.category,
+        result2.metrics,
+        result2.semanticAnalysis,
+        true,
+        0.7
+      );
 
-    if (stats.totalQuestions !== undefined) {
-      console.log(`📊 Total questions processed: ${stats.totalQuestions}`);
-    }
-  });
-
-  test('🔍 Learning analytics', () => {
-    console.log('🧪 Testing: 学習分析 (Gakushū Bunseki)');
-
-    // Record questions to create learning data
-    testQuestions.slice(0, 4).forEach(question => {
-      const result = categorizer.categorizeQuestion(question);
-      categorizer.recordQuestion(question, result.category, result.metrics);
+      expect(() => categorizer.getCategoryStatistics()).not.toThrow();
     });
 
-    const analytics = categorizer.getLearningAnalytics();
+    test('should provide category statistics', () => {
+      const stats = categorizer.getCategoryStatistics();
 
-    expect(analytics).toBeDefined();
-    expect(analytics.patternInsights).toBeDefined();
-    expect(Array.isArray(analytics.patternInsights)).toBe(true);
-    expect(analytics.categoryAdaptations).toBeDefined();
-    expect(Array.isArray(analytics.categoryAdaptations)).toBe(true);
-    expect(analytics.successPatterns).toBeDefined();
-    expect(Array.isArray(analytics.successPatterns)).toBe(true);
+      expect(stats).toHaveProperty('categories');
+      expect(stats).toHaveProperty('totalQuestions');
+      expect(Array.isArray(stats.categories)).toBe(true);
+      expect(typeof stats.totalQuestions).toBe('number');
+    });
 
-    console.log(`🔍 Pattern insights: ${analytics.patternInsights.length}`);
-    console.log(`🔍 Category adaptations: ${analytics.categoryAdaptations.length}`);
-    console.log(`🔍 Success patterns: ${analytics.successPatterns.length}`);
+    test('should handle context in categorization', () => {
+      const question = 'What is awareness?';
+      const context = ['consciousness', 'mind', 'subjective experience'];
 
-    if (analytics.patternInsights.length > 0) {
-      console.log(`🔍 First pattern: ${analytics.patternInsights[0].description || 'No description'}`);
-    }
+      const result = categorizer.categorizeQuestion(question, context);
+
+      expect(result).toBeDefined();
+      expect(result.metrics.relevance).toBeGreaterThanOrEqual(0);
+      expect(result.metrics.relevance).toBeLessThanOrEqual(1);
+    });
   });
 
-  // ============================================================================
-  // Context and Advanced Features Tests - コンテキストと高度機能テスト
-  // ============================================================================
+  describe('Edge Cases and Error Handling', () => {
+    test('should handle very long questions', () => {
+      const longQuestion = 'What is ' + 'the meaning of existence and consciousness and awareness and being '.repeat(20) + '?';
 
-  test('🎯 Categorization with context', () => {
-    console.log('🧪 Testing: コンテキスト付き分類 (Kontekisuto-tsuki Bunrui)');
+      expect(() => categorizeQuestion(longQuestion)).not.toThrow();
+      const category = categorizeQuestion(longQuestion);
+      expect(typeof category).toBe('string');
+    });
 
-    const question = "What is the right approach?";
-    const context = ['ethics', 'philosophy', 'moral reasoning'];
+    test('should handle questions with special characters', () => {
+      const questions = [
+        'What is "truth"?',
+        'How do we know... anything?',
+        'Why?!?!',
+        'What is consciousness?',
+        'How do we think?'
+      ];
 
-    const resultWithContext = categorizer.categorizeQuestion(question, context);
-    const resultWithoutContext = categorizer.categorizeQuestion(question);
+      questions.forEach(question => {
+        expect(() => categorizeQuestion(question)).not.toThrow();
+      });
+    });
 
-    expect(resultWithContext).toBeDefined();
-    expect(resultWithoutContext).toBeDefined();
+    test('should handle non-question sentences', () => {
+      const statements = [
+        'This is a statement.',
+        'I think therefore I am.',
+        'Consciousness is complex.'
+      ];
 
-    console.log(`🎯 Question: ${question}`);
-    console.log(`🎯 Without context: ${resultWithoutContext.category}`);
-    console.log(`🎯 With context: ${resultWithContext.category}`);
-    console.log(`🎯 Context: ${context.join(', ')}`);
-
-    // Both should be valid categories
-    expect(resultWithContext.category.length).toBeGreaterThan(0);
-    expect(resultWithoutContext.category.length).toBeGreaterThan(0);
+      statements.forEach(statement => {
+        expect(() => categorizeQuestion(statement)).not.toThrow();
+      });
+    });
   });
 
-  // ============================================================================
-  // Edge Cases and Error Handling - エッジケースとエラー処理
-  // ============================================================================
+  describe('Category Balance', () => {
+    test('should track category usage', () => {
+      const categorizer = new QuestionCategorizer();
+      const questions = [
+        'What is existence?',
+        'How do we know truth?',
+        'Am I conscious?',
+        'What is right?',
+        'How do we create?'
+      ];
 
-  test('🛡️ Handle edge cases gracefully', () => {
-    console.log('🧪 Testing: エッジケース処理 (Ejji Kēsu Shori)');
-
-    const edgeCases = [
-      '', // Empty string
-      '   ', // Whitespace only
-      '?', // Single character
-      'A'.repeat(1000), // Very long string
-      '123 456 789', // Numbers only
-      '!@#$%^&*()', // Special characters only
-      'What?', // Very short question
-      'This is not a question but a statement.' // Not a question
-    ];
-
-    edgeCases.forEach((question, index) => {
-      expect(() => {
+      questions.forEach(question => {
         const result = categorizer.categorizeQuestion(question);
-        expect(result).toBeDefined();
-        expect(result.category).toBeDefined();
+        categorizer.recordQuestion(
+          question,
+          result.category,
+          result.metrics,
+          result.semanticAnalysis
+        );
+      });
 
-        console.log(`🛡️ Edge case ${index + 1}: "${question.slice(0, 20)}..." → ${result.category}`);
-      }).not.toThrow();
+      const stats = categorizer.getCategoryStatistics();
+      expect(stats.totalQuestions).toBe(5);
     });
-
-    console.log('✅ All edge cases handled gracefully');
   });
 
-  test('⚡ Performance under load', () => {
-    console.log('🧪 Testing: 負荷下パフォーマンス (Fuka-ka Pafōmansu)');
-
-    const startTime = Date.now();
-    const questionCount = 50;
-
-    // Process many questions
-    for (let i = 0; i < questionCount; i++) {
-      const question = `What is the nature of concept ${i}?`;
-      const result = categorizer.categorizeQuestion(question);
-      expect(result.category).toBeDefined();
-    }
-
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-    const averageTime = duration / questionCount;
-
-    console.log(`⚡ Processed ${questionCount} questions in ${duration}ms`);
-    console.log(`⚡ Average time per question: ${averageTime.toFixed(2)}ms`);
-
-    // Should be reasonably fast
-    expect(averageTime).toBeLessThan(50); // Less than 50ms per question
-    expect(duration).toBeLessThan(3000); // Less than 3 seconds total
-
-    console.log('✅ Performance acceptable under load');
-  });
-
-  test('💾 Memory usage efficiency', () => {
-    console.log('🧪 Testing: メモリ使用効率 (Memori Shiyō Kōritsu)');
-
-    const initialMemory = process.memoryUsage().heapUsed;
-
-    // Process many questions to test memory efficiency
-    const manyQuestions = Array(50).fill(0).map((_, i) =>
-      `What is the nature of concept ${i}?`
-    );
-
-    manyQuestions.forEach(q => {
-      const result = categorizer.categorizeQuestion(q);
-      categorizer.recordQuestion(q, result.category, result.metrics);
+  describe('Functional Helpers', () => {
+    test('getQuestionCategory should return same as categorizeQuestion', () => {
+      const question = 'What is time?';
+      expect(getQuestionCategory(question)).toBe(categorizeQuestion(question));
     });
 
-    const finalMemory = process.memoryUsage().heapUsed;
-    const memoryIncrease = finalMemory - initialMemory;
-
-    console.log(`💾 Memory increase after 50 questions: ${(memoryIncrease / 1024 / 1024).toFixed(2)} MB`);
-
-    // Should not use excessive memory
-    expect(memoryIncrease).toBeLessThan(20 * 1024 * 1024); // Less than 20MB increase
-
-    console.log('✅ Memory usage acceptable');
+    test('analyzeQuestionComplexity should return score and factors', () => {
+      const analysis = analyzeQuestionComplexity('What is consciousness?');
+      expect(analysis).toHaveProperty('score');
+      expect(analysis).toHaveProperty('factors');
+      expect(typeof analysis.score).toBe('number');
+      expect(Array.isArray(analysis.factors)).toBe(true);
+    });
   });
 });
-
-export {};

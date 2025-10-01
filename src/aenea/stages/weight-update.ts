@@ -27,7 +27,7 @@ export class WeightUpdateStage {
    * Enhanced with AI interpretation of weight changes
    * 乗法的重みアルゴリズムを使用した重み更新実行（AI解釈強化）
    */
-  async run(current: DPDWeights, scores: DPDScores): Promise<DPDWeights> {
+  async run(scores: DPDScores, current: DPDWeights): Promise<DPDWeights> {
     // Emit weight update start to Activity Log
     if (this.eventEmitter) {
       this.eventEmitter.emit('agentThought', {

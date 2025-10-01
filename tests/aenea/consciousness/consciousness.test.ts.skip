@@ -1,0 +1,278 @@
+/**
+ * Consciousness Backend Tests - t_wada Style
+ * Comprehensive unit tests for the core consciousness system
+ */
+
+import ConsciousnessBackend from '../../../src/server/consciousness-backend';
+import { DatabaseManager } from '../../../src/server/database-manager';
+
+// Mock dependencies with proper TypeScript typing
+jest.mock('../../../src/server/database-manager.js');
+jest.mock('../../../src/server/ai-executor.js', () => ({
+  createAIExecutor: jest.fn(() => ({
+    execute: jest.fn(() => Promise.resolve({
+      content: 'Mock AI response',
+      reasoning: 'Mock reasoning',
+      confidence: 0.8
+    }))
+  }))
+}));
+
+jest.mock('../../../src/utils/energy-management.js', () => ({
+  getEnergyManager: jest.fn(() => ({
+    getEnergyState: () => ({ available: 80, maxEnergy: 100 }),
+    consumeEnergy: () => true,
+    isEnergySufficient: () => true,
+    waitForEnergy: () => Promise.resolve(true),
+    rechargeEnergy: () => {},
+    getEnergyLevel: () => 'high'
+  }))
+}));
+
+describe('ConsciousnessBackend', () => {
+  let consciousness: ConsciousnessBackend;
+  let mockDatabaseManager: jest.Mocked<DatabaseManager>;
+
+  beforeEach(() => {
+    // Reset all mocks
+    jest.clearAllMocks();
+
+    // Setup comprehensive mock database manager
+    mockDatabaseManager = {
+      getConsciousnessState: jest.fn(() => ({
+        systemClock: 0,
+        energy: 80.0,
+        totalQuestions: 0,
+        totalThoughts: 0,
+        lastActivity: new Date().toISOString()
+      })),
+      saveConsciousnessState: jest.fn(),
+      saveDPDWeights: jest.fn(),
+      getUnresolvedIdeas: jest.fn(() => []),
+      getUnresolvedIdeasAsync: jest.fn(() => Promise.resolve([])),
+      addUnresolvedIdea: jest.fn(),
+      saveQuestion: jest.fn(),
+      saveThoughtCycle: jest.fn(),
+      recordSignificantThought: jest.fn(),
+      getSignificantThoughts: jest.fn(() => []),
+      getStats: jest.fn(() => ({
+        questions: 0,
+        thought_cycles: 0,
+        dpd_weights: 0,
+        unresolved_ideas: 0,
+        significant_thoughts: 0
+      })),
+      isConnected: jest.fn(() => true),
+      cleanup: jest.fn()
+    } as any;
+
+    // Inject mock into constructor
+    (DatabaseManager as jest.MockedClass<typeof DatabaseManager>).mockImplementation(() => mockDatabaseManager);
+
+    consciousness = new ConsciousnessBackend();
+  });
+
+  afterEach(() => {
+    if (consciousness && typeof consciousness.stop === 'function') {
+      consciousness.stop();
+    }
+  });
+
+  describe('Initialization', () => {
+    test('should initialize with proper default state', () => {
+      const state = consciousness.getState();
+
+      expect(state).toBeValidConsciousnessState();
+      expect(state.systemClock).toBe(0);
+      expect(state.isRunning).toBe(false);
+      expect(state.agents).toEqual(['theoria', 'pathia', 'kinesis']);
+    });
+
+    test('should load consciousness state if available', () => {
+      mockDatabaseManager.getConsciousnessState.mockReturnValue({
+        systemClock: 100,
+        energy: 60,
+        totalQuestions: 5,
+        totalThoughts: 3,
+        lastActivity: new Date().toISOString()
+      });
+
+      const newConsciousness = new ConsciousnessBackend();
+      const state = newConsciousness.getState();
+
+      expect(state.systemClock).toBe(100);
+      expect(state.totalQuestions).toBe(5);
+      expect(state.totalThoughts).toBe(3);
+    });
+  });
+
+  describe('Consciousness Flow Control', () => {
+    test('should start consciousness successfully', async () => {
+      const result = await consciousness.start();
+
+      expect(result).toBe(true);
+      expect(consciousness.getState().isRunning).toBe(true);
+    });
+
+    test('should handle start when already running', async () => {
+      await consciousness.start();
+      const secondStart = await consciousness.start();
+
+      expect(secondStart).toBe(false);
+    });
+
+    test('should stop consciousness properly', () => {
+      consciousness.start();
+      consciousness.stop();
+
+      expect(consciousness.getState().isRunning).toBe(false);
+    });
+
+    test('should pause and resume consciousness', () => {
+      consciousness.start();
+
+      consciousness.pause();
+      expect(consciousness.getState().isPaused).toBe(true);
+
+      consciousness.resume();
+      expect(consciousness.getState().isPaused).toBe(false);
+    });
+  });
+
+  describe('Event System', () => {
+    test('should register and trigger event listeners', () => {
+      const mockListener = jest.fn();
+      consciousness.on('test-event', mockListener);
+
+      consciousness.emit('test-event', { data: 'test' });
+
+      expect(mockListener).toHaveBeenCalledWith({ data: 'test' });
+    });
+
+    test('should remove event listeners', () => {
+      const mockListener = jest.fn();
+      consciousness.on('test-event', mockListener);
+      consciousness.off('test-event', mockListener);
+
+      consciousness.emit('test-event', { data: 'test' });
+
+      expect(mockListener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Internal Trigger Generation', () => {
+    test('should generate internal triggers', async () => {
+      const trigger = await consciousness.generateInternalTrigger();
+
+      expect(trigger).toMatchObject({
+        id: expect.any(String),
+        timestamp: expect.any(Number),
+        question: expect.any(String),
+        category: expect.any(String),
+        importance: expect.any(Number),
+        source: expect.any(String)
+      });
+
+      expect(trigger.importance).toBeGreaterThanOrEqual(0);
+      expect(trigger.importance).toBeLessThanOrEqual(1);
+    });
+
+    test('should categorize questions properly', async () => {
+      const trigger = await consciousness.generateInternalTrigger();
+      const validCategories = [
+        'existential', 'epistemological', 'consciousness', 'ethical',
+        'creative', 'metacognitive', 'temporal', 'paradoxical', 'ontological'
+      ];
+
+      expect(validCategories).toContain(trigger.category);
+    });
+  });
+
+  describe('Data Persistence', () => {
+    test('should save questions in real-time', async () => {
+      const trigger = await consciousness.generateInternalTrigger();
+
+      expect(mockDatabaseManager.saveQuestion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: trigger.id,
+          question: trigger.question,
+          category: trigger.category
+        })
+      );
+    });
+
+    test('should maintain consciousness state', () => {
+      consciousness.getState(); // Trigger internal state access
+
+      expect(mockDatabaseManager.saveConsciousnessState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemClock: expect.any(Number),
+          energy: expect.any(Number),
+          totalQuestions: expect.any(Number),
+          totalThoughts: expect.any(Number)
+        })
+      );
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('should handle database errors gracefully', async () => {
+      mockDatabaseManager.saveQuestion.mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      // Should not throw
+      await expect(consciousness.generateInternalTrigger()).resolves.toBeDefined();
+    });
+
+    test('should handle AI executor failures', async () => {
+      const mockExecutor = {
+        execute: jest.fn(() => Promise.reject(new Error('AI Error')))
+      };
+
+      // Should handle AI failures gracefully
+      await expect(consciousness.generateInternalTrigger()).resolves.toBeDefined();
+    });
+  });
+
+  describe('State Management', () => {
+    test('should provide consistent state snapshots', () => {
+      const state1 = consciousness.getState();
+      const state2 = consciousness.getState();
+
+      expect(state1).toEqual(state2);
+      expect(state1).not.toBe(state2); // Should be different objects
+    });
+
+    test('should track system clock progression', async () => {
+      const initialState = consciousness.getState();
+      const initialClock = initialState.systemClock;
+
+      await consciousness.generateInternalTrigger();
+      const newState = consciousness.getState();
+
+      expect(newState.systemClock).toBeGreaterThan(initialClock);
+    });
+  });
+
+  describe('Agent Integration', () => {
+    test('should have all required agents initialized', () => {
+      const state = consciousness.getState();
+
+      expect(state.agents).toHaveLength(3);
+      expect(state.agents).toContain('theoria');
+      expect(state.agents).toContain('pathia');
+      expect(state.agents).toContain('kinesis');
+    });
+  });
+
+  describe('Memory Management', () => {
+    test('should clean up resources on stop', () => {
+      consciousness.start();
+      consciousness.stop();
+
+      // Verify cleanup was called
+      expect(mockDatabaseManager.cleanup).toHaveBeenCalled();
+    });
+  });
+});

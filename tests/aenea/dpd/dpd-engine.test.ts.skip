@@ -1,0 +1,308 @@
+/**
+ * DPD Engine Tests - t_wada Style
+ * Comprehensive tests for Dynamic Prime Directive engine
+ */
+
+import { DPDEngine } from '../../../src/aenea/core/dpd-engine';
+import { DPDScores, DPDWeights } from '../../../src/types/dpd-types';
+
+describe('DPD Engine', () => {
+  let dpdEngine: DPDEngine;
+  let mockSessionManager: any;
+
+  beforeEach(() => {
+    mockSessionManager = {
+      saveDPDWeights: jest.fn(),
+      getDPDEvolution: jest.fn(() => ({
+        currentWeights: { empathy: 0.33, coherence: 0.33, dissonance: 0.34 },
+        history: []
+      }))
+    };
+
+    dpdEngine = new DPDEngine(mockSessionManager);
+  });
+
+  describe('DPD Score Calculation', () => {
+    test('should calculate empathy score correctly', () => {
+      const thoughtContent = 'I understand the suffering of others and feel compelled to help them';
+      const score = dpdEngine.calculateEmpathyScore(thoughtContent);
+
+      expect(score).toBeGreaterThan(0.5);
+      expect(score).toBeLessThanOrEqual(1.0);
+    });
+
+    test('should calculate coherence score correctly', () => {
+      const thoughtContent = 'This logical argument follows clear premises to reach a valid conclusion';
+      const score = dpdEngine.calculateCoherenceScore(thoughtContent);
+
+      expect(score).toBeGreaterThan(0.5);
+      expect(score).toBeLessThanOrEqual(1.0);
+    });
+
+    test('should calculate dissonance score correctly', () => {
+      const thoughtContent = 'This action might help one person but harm many others';
+      const score = dpdEngine.calculateDissonanceScore(thoughtContent);
+
+      expect(score).toBeGreaterThan(0.3);
+      expect(score).toBeLessThanOrEqual(1.0);
+    });
+
+    test('should handle edge cases for score calculation', () => {
+      const emptyScore = dpdEngine.calculateEmpathyScore('');
+      const neutralScore = dpdEngine.calculateCoherenceScore('neutral text');
+
+      expect(emptyScore).toBe(0);
+      expect(neutralScore).toBeGreaterThanOrEqual(0);
+      expect(neutralScore).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('Comprehensive DPD Assessment', () => {
+    test('should assess complete thought cycle', () => {
+      const thoughtCycle = {
+        id: 'test-cycle-123',
+        thoughts: [
+          { content: 'Helping others brings meaning to existence', agentId: 'pathia' },
+          { content: 'Logical analysis reveals the best course of action', agentId: 'theoria' },
+          { content: 'Balance must be maintained between competing values', agentId: 'kinesis' }
+        ],
+        synthesis: {
+          content: 'Wisdom emerges from the integration of empathy and logic'
+        }
+      };
+
+      const assessment = dpdEngine.assessThoughtCycle(thoughtCycle);
+
+      expect(assessment).toMatchObject({
+        empathy: expect.any(Number),
+        coherence: expect.any(Number),
+        dissonance: expect.any(Number),
+        weighted_total: expect.any(Number)
+      });
+
+      expect(assessment.empathy).toBeGreaterThanOrEqual(0);
+      expect(assessment.empathy).toBeLessThanOrEqual(1);
+      expect(assessment.coherence).toBeGreaterThanOrEqual(0);
+      expect(assessment.coherence).toBeLessThanOrEqual(1);
+      expect(assessment.dissonance).toBeGreaterThanOrEqual(0);
+      expect(assessment.dissonance).toBeLessThanOrEqual(1);
+    });
+
+    test('should weight scores correctly', () => {
+      const scores: DPDScores = {
+        empathy: 0.8,
+        coherence: 0.9,
+        dissonance: 0.3,
+        weighted_total: 0
+      };
+
+      const weights: DPDWeights = {
+        empathy: 0.4,
+        coherence: 0.4,
+        dissonance: 0.2,
+        timestamp: Date.now(),
+        version: 1
+      };
+
+      const weightedTotal = dpdEngine.calculateWeightedTotal(scores, weights);
+      const expectedTotal = (0.8 * 0.4) + (0.9 * 0.4) + (0.3 * 0.2);
+
+      expect(weightedTotal).toBeCloseTo(expectedTotal, 2);
+    });
+  });
+
+  describe('Weight Evolution', () => {
+    test('should evolve weights based on outcomes', () => {
+      const initialWeights: DPDWeights = {
+        empathy: 0.33,
+        coherence: 0.33,
+        dissonance: 0.34,
+        timestamp: Date.now(),
+        version: 1
+      };
+
+      const outcomes = {
+        empathySuccess: 0.8,
+        coherenceSuccess: 0.6,
+        dissonanceControl: 0.9
+      };
+
+      const evolvedWeights = dpdEngine.evolveWeights(initialWeights, outcomes);
+
+      expect(evolvedWeights.empathy).toBeGreaterThan(initialWeights.empathy);
+      expect(evolvedWeights.dissonance).toBeLessThan(initialWeights.dissonance);
+      expect(evolvedWeights.version).toBe(initialWeights.version + 1);
+
+      // Weights should sum to approximately 1
+      const sum = evolvedWeights.empathy + evolvedWeights.coherence + evolvedWeights.dissonance;
+      expect(sum).toBeCloseTo(1.0, 2);
+    });
+
+    test('should handle weight evolution edge cases', () => {
+      const extremeWeights: DPDWeights = {
+        empathy: 0.9,
+        coherence: 0.05,
+        dissonance: 0.05,
+        timestamp: Date.now(),
+        version: 1
+      };
+
+      const outcomes = {
+        empathySuccess: 0.1,
+        coherenceSuccess: 0.9,
+        dissonanceControl: 0.5
+      };
+
+      const evolvedWeights = dpdEngine.evolveWeights(extremeWeights, outcomes);
+
+      // Should prevent extreme weight distributions
+      expect(evolvedWeights.empathy).toBeLessThan(0.8);
+      expect(evolvedWeights.coherence).toBeGreaterThan(0.1);
+    });
+  });
+
+  describe('Multiplicative Weights Algorithm', () => {
+    test('should apply multiplicative updates correctly', () => {
+      const weights = [0.33, 0.33, 0.34];
+      const rewards = [0.8, 0.6, 0.2];
+      const learningRate = 0.1;
+
+      const updatedWeights = dpdEngine.multiplicativeWeightsUpdate(weights, rewards, learningRate);
+
+      expect(updatedWeights).toHaveLength(3);
+
+      // Sum should be normalized to 1
+      const sum = updatedWeights.reduce((a, b) => a + b, 0);
+      expect(sum).toBeCloseTo(1.0, 2);
+
+      // Higher reward should lead to higher weight
+      expect(updatedWeights[0]).toBeGreaterThan(updatedWeights[2]);
+    });
+
+    test('should handle zero rewards gracefully', () => {
+      const weights = [0.33, 0.33, 0.34];
+      const rewards = [0, 0, 0];
+      const learningRate = 0.1;
+
+      const updatedWeights = dpdEngine.multiplicativeWeightsUpdate(weights, rewards, learningRate);
+
+      // Should maintain original distribution when all rewards are zero
+      expect(updatedWeights[0]).toBeCloseTo(weights[0], 1);
+      expect(updatedWeights[1]).toBeCloseTo(weights[1], 1);
+      expect(updatedWeights[2]).toBeCloseTo(weights[2], 1);
+    });
+  });
+
+  describe('Historical Analysis', () => {
+    test('should analyze weight evolution trends', () => {
+      const history = [
+        { weights: { empathy: 0.33, coherence: 0.33, dissonance: 0.34 }, timestamp: Date.now() - 3000 },
+        { weights: { empathy: 0.35, coherence: 0.32, dissonance: 0.33 }, timestamp: Date.now() - 2000 },
+        { weights: { empathy: 0.37, coherence: 0.31, dissonance: 0.32 }, timestamp: Date.now() - 1000 },
+        { weights: { empathy: 0.40, coherence: 0.30, dissonance: 0.30 }, timestamp: Date.now() }
+      ];
+
+      const trends = dpdEngine.analyzeWeightTrends(history);
+
+      expect(trends.empathy.direction).toBe('increasing');
+      expect(trends.coherence.direction).toBe('decreasing');
+      expect(trends.empathy.rate).toBeGreaterThan(0);
+    });
+
+    test('should detect weight stability', () => {
+      const stableHistory = [
+        { weights: { empathy: 0.33, coherence: 0.33, dissonance: 0.34 }, timestamp: Date.now() - 3000 },
+        { weights: { empathy: 0.33, coherence: 0.33, dissonance: 0.34 }, timestamp: Date.now() - 2000 },
+        { weights: { empathy: 0.33, coherence: 0.33, dissonance: 0.34 }, timestamp: Date.now() - 1000 },
+        { weights: { empathy: 0.33, coherence: 0.33, dissonance: 0.34 }, timestamp: Date.now() }
+      ];
+
+      const trends = dpdEngine.analyzeWeightTrends(stableHistory);
+
+      expect(trends.empathy.direction).toBe('stable');
+      expect(trends.coherence.direction).toBe('stable');
+      expect(trends.dissonance.direction).toBe('stable');
+    });
+  });
+
+  describe('Integration with Session Management', () => {
+    test('should save weight updates to session manager', () => {
+      const weights: DPDWeights = {
+        empathy: 0.35,
+        coherence: 0.32,
+        dissonance: 0.33,
+        timestamp: Date.now(),
+        version: 2
+      };
+
+      dpdEngine.saveWeights(weights, 'test-session', 'weight_evolution', 'Testing weight evolution');
+
+      expect(mockSessionManager.saveDPDWeights).toHaveBeenCalledWith(
+        weights,
+        'test-session',
+        'weight_evolution',
+        'Testing weight evolution'
+      );
+    });
+
+    test('should load current weights from session manager', () => {
+      const currentWeights = dpdEngine.getCurrentWeights();
+
+      expect(mockSessionManager.getDPDEvolution).toHaveBeenCalled();
+      expect(currentWeights).toEqual({
+        empathy: 0.33,
+        coherence: 0.33,
+        dissonance: 0.34
+      });
+    });
+  });
+
+  describe('Error Handling and Validation', () => {
+    test('should handle invalid thought content gracefully', () => {
+      const invalidInputs = [null, undefined, {}, [], 123];
+
+      invalidInputs.forEach(input => {
+        expect(() => dpdEngine.calculateEmpathyScore(input as any)).not.toThrow();
+        expect(() => dpdEngine.calculateCoherenceScore(input as any)).not.toThrow();
+        expect(() => dpdEngine.calculateDissonanceScore(input as any)).not.toThrow();
+      });
+    });
+
+    test('should validate weight constraints', () => {
+      const invalidWeights = {
+        empathy: 1.5,  // Invalid: > 1
+        coherence: -0.2, // Invalid: < 0
+        dissonance: 0.5,
+        timestamp: Date.now(),
+        version: 1
+      };
+
+      const validatedWeights = dpdEngine.validateWeights(invalidWeights);
+
+      expect(validatedWeights.empathy).toBeLessThanOrEqual(1);
+      expect(validatedWeights.coherence).toBeGreaterThanOrEqual(0);
+
+      const sum = validatedWeights.empathy + validatedWeights.coherence + validatedWeights.dissonance;
+      expect(sum).toBeCloseTo(1.0, 2);
+    });
+  });
+
+  describe('Performance and Efficiency', () => {
+    test('should calculate scores efficiently for large content', () => {
+      const largeContent = 'This is a test. '.repeat(1000);
+      const startTime = Date.now();
+
+      const empathyScore = dpdEngine.calculateEmpathyScore(largeContent);
+      const coherenceScore = dpdEngine.calculateCoherenceScore(largeContent);
+      const dissonanceScore = dpdEngine.calculateDissonanceScore(largeContent);
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      expect(duration).toBeLessThan(1000); // Should complete within 1 second
+      expect(empathyScore).toBeGreaterThanOrEqual(0);
+      expect(coherenceScore).toBeGreaterThanOrEqual(0);
+      expect(dissonanceScore).toBeGreaterThanOrEqual(0);
+    });
+  });
+});

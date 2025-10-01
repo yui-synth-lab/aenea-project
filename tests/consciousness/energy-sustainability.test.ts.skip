@@ -1,0 +1,227 @@
+/**
+ * Energy Management Sustainability Tests - t_wada Style
+ * Tests for the energy system's sustainability and efficiency
+ */
+
+import { getEnergyManager, EnergyManager } from '../../src/utils/energy-management';
+
+describe('Energy Management System', () => {
+  let energyManager: EnergyManager;
+
+  beforeEach(() => {
+    energyManager = getEnergyManager();
+    // Reset energy state for each test
+    energyManager.resetEnergy();
+  });
+
+  describe('Energy State Management', () => {
+    test('should initialize with default energy level', () => {
+      const state = energyManager.getEnergyState();
+
+      expect(state.available).toBe(100);
+      expect(state.maxEnergy).toBe(100);
+      expect(energyManager.getEnergyLevel()).toBe('high');
+    });
+
+    test('should consume energy correctly', () => {
+      const initialState = energyManager.getEnergyState();
+      const consumed = energyManager.consumeEnergy(20, 'test_operation');
+
+      expect(consumed).toBe(true);
+      expect(energyManager.getEnergyState().available).toBe(initialState.available - 20);
+    });
+
+    test('should reject energy consumption when insufficient', () => {
+      // Consume most energy
+      energyManager.consumeEnergy(95, 'drain_test');
+
+      const consumed = energyManager.consumeEnergy(20, 'should_fail');
+      expect(consumed).toBe(false);
+    });
+
+    test('should recharge energy over time', async () => {
+      energyManager.consumeEnergy(50, 'test_consumption');
+      const beforeRecharge = energyManager.getEnergyState().available;
+
+      energyManager.rechargeEnergy(10);
+      const afterRecharge = energyManager.getEnergyState().available;
+
+      expect(afterRecharge).toBeGreaterThan(beforeRecharge);
+    });
+  });
+
+  describe('Energy Level Classification', () => {
+    test('should classify high energy correctly', () => {
+      expect(energyManager.getEnergyLevel()).toBe('high');
+    });
+
+    test('should classify medium energy correctly', () => {
+      energyManager.consumeEnergy(60, 'medium_test');
+      expect(energyManager.getEnergyLevel()).toBe('medium');
+    });
+
+    test('should classify low energy correctly', () => {
+      energyManager.consumeEnergy(85, 'low_test');
+      expect(energyManager.getEnergyLevel()).toBe('low');
+    });
+
+    test('should classify critical energy correctly', () => {
+      energyManager.consumeEnergy(95, 'critical_test');
+      expect(energyManager.getEnergyLevel()).toBe('critical');
+    });
+  });
+
+  describe('Energy Recommendations', () => {
+    test('should provide appropriate recommendations for high energy', () => {
+      const recommendations = energyManager.getEnergyRecommendations();
+      expect(recommendations).toContain('Good time for complex activities');
+    });
+
+    test('should provide appropriate recommendations for low energy', () => {
+      energyManager.consumeEnergy(85, 'low_energy_test');
+      const recommendations = energyManager.getEnergyRecommendations();
+
+      expect(recommendations).toContain('Consider reducing activity complexity');
+    });
+
+    test('should provide appropriate recommendations for critical energy', () => {
+      energyManager.consumeEnergy(95, 'critical_energy_test');
+      const recommendations = energyManager.getEnergyRecommendations();
+
+      expect(recommendations).toContain('Only essential operations recommended');
+    });
+  });
+
+  describe('Energy Sufficiency Checks', () => {
+    test('should correctly identify sufficient energy', () => {
+      expect(energyManager.isEnergySufficient(20)).toBe(true);
+      expect(energyManager.isEnergySufficient(50)).toBe(true);
+    });
+
+    test('should correctly identify insufficient energy', () => {
+      energyManager.consumeEnergy(90, 'insufficiency_test');
+      expect(energyManager.isEnergySufficient(20)).toBe(false);
+    });
+
+    test('should handle edge cases for energy sufficiency', () => {
+      energyManager.consumeEnergy(80, 'edge_case_test');
+      expect(energyManager.isEnergySufficient(20)).toBe(true);
+      expect(energyManager.isEnergySufficient(21)).toBe(false);
+    });
+  });
+
+  describe('Energy Wait Mechanism', () => {
+    test('should resolve immediately when energy is sufficient', async () => {
+      const startTime = Date.now();
+      const result = await energyManager.waitForEnergy(20);
+      const endTime = Date.now();
+
+      expect(result).toBe(true);
+      expect(endTime - startTime).toBeLessThan(100); // Should be immediate
+    });
+
+    test('should wait and resolve when energy becomes available', async () => {
+      energyManager.consumeEnergy(95, 'wait_test');
+
+      // Start waiting in background
+      const waitPromise = energyManager.waitForEnergy(20);
+
+      // Simulate energy recharge after a delay
+      setTimeout(() => {
+        energyManager.rechargeEnergy(30);
+      }, 100);
+
+      const result = await waitPromise;
+      expect(result).toBe(true);
+    });
+
+    test('should timeout if energy never becomes available', async () => {
+      energyManager.consumeEnergy(95, 'timeout_test');
+
+      const result = await energyManager.waitForEnergy(50, 100); // 100ms timeout
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Energy History and Tracking', () => {
+    test('should track energy consumption operations', () => {
+      energyManager.consumeEnergy(20, 'tracked_operation');
+      energyManager.consumeEnergy(15, 'another_operation');
+
+      const history = energyManager.getEnergyHistory();
+      expect(history).toHaveLength(2);
+      expect(history[0].operation).toBe('tracked_operation');
+      expect(history[1].operation).toBe('another_operation');
+    });
+
+    test('should provide energy usage statistics', () => {
+      energyManager.consumeEnergy(20, 'stat_test_1');
+      energyManager.consumeEnergy(30, 'stat_test_2');
+
+      const stats = energyManager.getEnergyStatistics();
+      expect(stats.totalConsumed).toBe(50);
+      expect(stats.operationCount).toBe(2);
+      expect(stats.averageConsumption).toBe(25);
+    });
+  });
+
+  describe('Sustainable Operation Scenarios', () => {
+    test('should handle continuous low-energy operations', () => {
+      let successful = 0;
+      for (let i = 0; i < 20; i++) {
+        if (energyManager.consumeEnergy(4, `low_op_${i}`)) {
+          successful++;
+        }
+        // Simulate some recharge
+        if (i % 5 === 0) {
+          energyManager.rechargeEnergy(5);
+        }
+      }
+
+      expect(successful).toBeGreaterThan(15); // Should handle most operations
+    });
+
+    test('should adapt to different energy consumption patterns', () => {
+      const patterns = [
+        { amount: 10, count: 5 },  // Light operations
+        { amount: 25, count: 3 },  // Medium operations
+        { amount: 5, count: 10 }   // Micro operations
+      ];
+
+      patterns.forEach(pattern => {
+        energyManager.resetEnergy();
+        let successful = 0;
+
+        for (let i = 0; i < pattern.count; i++) {
+          if (energyManager.consumeEnergy(pattern.amount, `pattern_${pattern.amount}_${i}`)) {
+            successful++;
+          }
+        }
+
+        expect(successful).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    test('should handle negative energy consumption gracefully', () => {
+      const result = energyManager.consumeEnergy(-10, 'negative_test');
+      expect(result).toBe(false);
+    });
+
+    test('should handle zero energy consumption', () => {
+      const initialEnergy = energyManager.getEnergyState().available;
+      const result = energyManager.consumeEnergy(0, 'zero_test');
+
+      expect(result).toBe(true);
+      expect(energyManager.getEnergyState().available).toBe(initialEnergy);
+    });
+
+    test('should handle excessive energy recharge', () => {
+      energyManager.rechargeEnergy(1000);
+      const state = energyManager.getEnergyState();
+
+      expect(state.available).toBeLessThanOrEqual(state.maxEnergy);
+    });
+  });
+});

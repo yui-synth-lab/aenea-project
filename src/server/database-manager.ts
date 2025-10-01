@@ -1,0 +1,997 @@
+/**
+ * Database Manager - Direct SQLite Management without Session Abstraction
+ * The database itself serves as the persistence layer without session concepts
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import BetterSqlite3 from 'better-sqlite3';
+import { log } from './logger';
+type Database = BetterSqlite3.Database;
+
+interface ConsciousnessState {
+  systemClock: number;
+  energy: number;
+  totalQuestions: number;
+  totalThoughts: number;
+  lastActivity: string;
+}
+
+class DatabaseManager {
+  private db!: Database;
+  private isReady: boolean = false;
+  private dbPath: string;
+
+  constructor() {
+    this.dbPath = path.join(process.cwd(), 'data', 'aenea_consciousness.db');
+    this.ensureDataDirectory();
+
+    try {
+      this.db = new BetterSqlite3(this.dbPath);
+      log.info('DatabaseManager', 'Database connection established');
+      console.log(`[DEBUG] Database opened successfully at: ${this.dbPath}`);
+      this.initializeDatabase();
+    } catch (err) {
+      log.error('DatabaseManager', 'Failed to open database', err);
+    }
+  }
+
+  private ensureDataDirectory(): void {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+  }
+
+  private initializeDatabase(): void {
+    const schema = `
+      -- Core consciousness state
+      CREATE TABLE IF NOT EXISTS consciousness_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        system_clock INTEGER NOT NULL DEFAULT 0,
+        energy REAL NOT NULL DEFAULT 80.0,
+        total_questions INTEGER DEFAULT 0,
+        total_thoughts INTEGER DEFAULT 0,
+        last_activity TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Questions without session dependency
+      CREATE TABLE IF NOT EXISTS questions (
+        id TEXT PRIMARY KEY,
+        timestamp INTEGER NOT NULL,
+        question TEXT NOT NULL,
+        category TEXT,
+        importance REAL,
+        source TEXT,
+        context_data TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Thought cycles without session dependency
+      CREATE TABLE IF NOT EXISTS thought_cycles (
+        id TEXT PRIMARY KEY,
+        trigger_id TEXT,
+        timestamp INTEGER NOT NULL,
+        duration INTEGER,
+        thoughts_data TEXT,
+        synthesis_data TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- DPD Weight Evolution tracking
+      CREATE TABLE IF NOT EXISTS dpd_weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        empathy REAL NOT NULL,
+        coherence REAL NOT NULL,
+        dissonance REAL NOT NULL,
+        version INTEGER DEFAULT 1,
+        trigger_type TEXT,
+        context TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Unresolved Ideas tracking
+      CREATE TABLE IF NOT EXISTS unresolved_ideas (
+        id TEXT PRIMARY KEY,
+        question TEXT NOT NULL,
+        category TEXT,
+        first_encountered INTEGER NOT NULL,
+        last_revisited INTEGER,
+        revisit_count INTEGER DEFAULT 0,
+        complexity REAL DEFAULT 0.5,
+        importance REAL DEFAULT 0.5,
+        related_thoughts TEXT, -- JSON array
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Significant thoughts tracking
+      CREATE TABLE IF NOT EXISTS significant_thoughts (
+        id TEXT PRIMARY KEY,
+        thought_content TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        significance_score REAL NOT NULL,
+        agent_id TEXT,
+        category TEXT,
+        timestamp INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Personality evolution snapshots
+      CREATE TABLE IF NOT EXISTS personality_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        personality_data TEXT NOT NULL, -- JSON
+        growth_indicators TEXT, -- JSON
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Memory patterns
+      CREATE TABLE IF NOT EXISTS memory_patterns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern_type TEXT NOT NULL,
+        pattern_data TEXT NOT NULL, -- JSON
+        frequency INTEGER DEFAULT 1,
+        last_seen INTEGER NOT NULL,
+        significance REAL DEFAULT 0.5,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Memory weights evolution
+      CREATE TABLE IF NOT EXISTS memory_weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        weight_type TEXT NOT NULL,
+        weight_value REAL NOT NULL,
+        context TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Consciousness insights
+      CREATE TABLE IF NOT EXISTS consciousness_insights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        insight_type TEXT NOT NULL,
+        insight_content TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        related_patterns TEXT, -- JSON array
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Forgetting events
+      CREATE TABLE IF NOT EXISTS forgetting_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        forgotten_type TEXT NOT NULL, -- 'pattern', 'thought', 'memory'
+        forgotten_id TEXT,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Core beliefs - consolidated knowledge from significant thoughts
+      CREATE TABLE IF NOT EXISTS core_beliefs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        belief_content TEXT NOT NULL,
+        category TEXT, -- 'existential', 'ethical', 'epistemological', etc.
+        confidence REAL NOT NULL DEFAULT 0.5, -- 0-1, strengthens over time
+        strength REAL NOT NULL DEFAULT 0.5, -- 0-1, how central this belief is
+        source_thoughts TEXT, -- JSON array of thought IDs that contributed
+        first_formed INTEGER NOT NULL, -- timestamp when first consolidated
+        last_reinforced INTEGER NOT NULL, -- timestamp of last reinforcement
+        reinforcement_count INTEGER DEFAULT 1,
+        contradiction_count INTEGER DEFAULT 0, -- times this was challenged
+        agent_affinity TEXT, -- JSON: which agents resonate with this belief
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Belief evolution history
+      CREATE TABLE IF NOT EXISTS belief_evolution (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        belief_id INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        event_type TEXT NOT NULL, -- 'formed', 'reinforced', 'challenged', 'evolved', 'weakened'
+        old_confidence REAL,
+        new_confidence REAL,
+        trigger_thought_id TEXT,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (belief_id) REFERENCES core_beliefs(id)
+      );
+
+      -- Memory consolidation jobs tracking
+      CREATE TABLE IF NOT EXISTS consolidation_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        job_type TEXT NOT NULL, -- 'belief_extraction', 'memory_pruning', 'pattern_synthesis'
+        status TEXT NOT NULL, -- 'pending', 'processing', 'completed', 'failed'
+        thoughts_processed INTEGER DEFAULT 0,
+        beliefs_created INTEGER DEFAULT 0,
+        beliefs_updated INTEGER DEFAULT 0,
+        duration_ms INTEGER,
+        error_message TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completed_at DATETIME
+      );
+    `;
+
+    try {
+      this.db.exec(schema);
+      log.info('DatabaseManager', 'Database schema initialized successfully');
+
+      // Initialize consciousness state if it doesn't exist
+      this.initializeConsciousnessState();
+
+      console.log('[DEBUG] Database initialization completed, setting isReady = true');
+      this.isReady = true;
+
+      // Seed philosophical questions on first run
+      const seededCount = this.seedPhilosophicalQuestions();
+      if (seededCount > 0) {
+        log.info('DatabaseManager', `Seeded ${seededCount} philosophical questions`);
+      }
+    } catch (err) {
+      log.error('DatabaseManager', 'Failed to initialize database schema', err);
+    }
+  }
+
+  private initializeConsciousnessState(): void {
+    try {
+      const existing = this.db.prepare('SELECT * FROM consciousness_state WHERE id = 1').get();
+      if (!existing) {
+        this.db.prepare(`
+          INSERT INTO consciousness_state (id, system_clock, energy, total_questions, total_thoughts, last_activity)
+          VALUES (1, 0, 80.0, 0, 0, ?)
+        `).run(new Date().toISOString());
+
+        log.info('DatabaseManager', 'Initialized fresh consciousness state');
+      }
+    } catch (err) {
+      log.error('DatabaseManager', 'Failed to initialize consciousness state', err);
+    }
+  }
+
+  // Core state management
+  getConsciousnessState(): ConsciousnessState | null {
+    if (!this.isReady || !this.db) {
+      return null;
+    }
+
+    try {
+      const state = this.db.prepare('SELECT * FROM consciousness_state WHERE id = 1').get();
+      if (state) {
+        return {
+          systemClock: state.system_clock || 0,
+          energy: state.energy || 80.0,
+          totalQuestions: state.total_questions || 0,
+          totalThoughts: state.total_thoughts || 0,
+          lastActivity: state.last_activity || new Date().toISOString()
+        };
+      }
+    } catch (err) {
+      console.error('Error getting consciousness state:', err);
+    }
+    return null;
+  }
+
+  saveConsciousnessState(state: ConsciousnessState): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        UPDATE consciousness_state
+        SET system_clock = ?, energy = ?, total_questions = ?, total_thoughts = ?,
+            last_activity = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+      `).run(
+        state.systemClock,
+        state.energy,
+        state.totalQuestions,
+        state.totalThoughts,
+        state.lastActivity
+      );
+    } catch (err) {
+      console.error('Error saving consciousness state:', err);
+    }
+  }
+
+  // Question management
+  saveQuestion(question: any): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    if (!question.question || !question.question.trim()) {
+      console.warn(`Skipping question save - empty text for id=${question.id}`);
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        INSERT OR REPLACE INTO questions
+        (id, timestamp, question, category, importance, source, context_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        question.id,
+        question.timestamp || Date.now(),
+        question.question,
+        question.category || 'general',
+        question.importance || 0.5,
+        question.source || 'unknown',
+        JSON.stringify(question.contextData || {})
+      );
+    } catch (err) {
+      console.error('Error saving question:', err);
+    }
+  }
+
+  // Thought cycle management
+  saveThoughtCycle(cycle: any): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        INSERT OR REPLACE INTO thought_cycles
+        (id, trigger_id, timestamp, duration, thoughts_data, synthesis_data)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        cycle.id,
+        cycle.triggerId,
+        cycle.timestamp,
+        cycle.duration,
+        JSON.stringify(cycle.thoughts || []),
+        JSON.stringify(cycle.synthesis || {})
+      );
+    } catch (err) {
+      console.error('Error saving thought cycle:', err);
+    }
+  }
+
+  // DPD weights management
+  saveDPDWeights(weights: any): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        INSERT INTO dpd_weights
+        (timestamp, empathy, coherence, dissonance, version, trigger_type, context)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        Date.now(),
+        weights.empathy,
+        weights.coherence,
+        weights.dissonance,
+        weights.version || 1,
+        weights.triggerType || 'unknown',
+        weights.context || null
+      );
+    } catch (err) {
+      console.error('Error saving DPD weights:', err);
+    }
+  }
+
+  // Significant thoughts management
+  recordSignificantThought(thought: any): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        INSERT OR REPLACE INTO significant_thoughts
+        (id, thought_content, confidence, significance_score, agent_id, category, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        thought.id || Date.now().toString(),
+        thought.content || thought.thought,
+        thought.confidence || 0,
+        thought.significanceScore || 0.5,
+        thought.agentId || 'unknown',
+        thought.category || 'general',
+        thought.timestamp || Date.now()
+      );
+    } catch (err) {
+      console.error('Error recording significant thought:', err);
+    }
+  }
+
+  getSignificantThoughts(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) {
+      console.debug('getSignificantThoughts called but database not ready');
+      return [];
+    }
+
+    console.debug(`getSignificantThoughts called with limit: ${limit}, isReady: ${this.isReady}, db exists: ${!!this.db}`);
+    console.debug(`Database file path: ${this.dbPath}`);
+
+    try {
+      const query = 'SELECT * FROM significant_thoughts ORDER BY significance_score DESC, timestamp DESC LIMIT ?';
+      console.debug(`Executing significant thoughts query: ${query}`);
+      console.debug(`Query limit parameter: ${limit}`);
+
+      const result = this.db.prepare(query).all(limit);
+      console.debug(`Number of rows returned: ${result.length}`);
+      console.debug(`Type of rows: ${typeof result}`);
+
+      const filteredResult = result.filter((row: any) => row.thought_content && row.thought_content.trim());
+      console.debug(`Filtered rows: ${filteredResult.length}`);
+
+      return filteredResult;
+    } catch (err) {
+      console.error('Error getting significant thoughts:', err);
+      return [];
+    }
+  }
+
+  // Unresolved ideas management
+  addUnresolvedIdea(idea: any): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    // Check if this question already exists to prevent duplicates
+    const existingQuery = `SELECT * FROM unresolved_ideas WHERE question = ?`;
+    try {
+      const existing = this.db.prepare(existingQuery).get(idea.question);
+
+      if (existing) {
+        // Question already exists, update revisit count and last revisited time
+        const updateQuery = `
+          UPDATE unresolved_ideas
+          SET last_revisited = ?, revisit_count = revisit_count + 1, importance = MAX(importance, ?)
+          WHERE question = ?
+        `;
+        this.db.prepare(updateQuery).run(
+          Date.now(),
+          idea.importance || 0.5,
+          idea.question
+        );
+        console.debug(`Updated existing unresolved idea: ${idea.question}`);
+        return;
+      }
+    } catch (err) {
+      console.error('Error checking for existing unresolved idea:', err);
+    }
+
+    // Add new unresolved idea
+    const insertQuery = `
+      INSERT INTO unresolved_ideas
+      (id, question, category, first_encountered, last_revisited, revisit_count, complexity, importance, related_thoughts)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    try {
+      this.db.prepare(insertQuery).run(
+        idea.id,
+        idea.question,
+        idea.category,
+        idea.firstEncountered || Date.now(),
+        idea.lastRevisited || Date.now(),
+        idea.revisitCount || 0,
+        idea.complexity || 0.5,
+        idea.importance || 0.5,
+        JSON.stringify(idea.relatedThoughts || [])
+      );
+      console.debug(`Added new unresolved idea: ${idea.question}`);
+    } catch (err) {
+      console.error('Error adding unresolved idea:', err);
+    }
+  }
+
+  getUnresolvedIdeas(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) {
+      console.debug('Database not ready for getUnresolvedIdeas');
+      return [];
+    }
+
+    console.debug(`Getting unresolved ideas with limit: ${limit}`);
+
+    try {
+      const result = this.db.prepare(`
+        SELECT * FROM unresolved_ideas
+        ORDER BY importance DESC, last_revisited ASC
+        LIMIT ?
+      `).all(limit);
+
+      console.debug(`Found ${result.length} unresolved ideas in database`);
+      console.debug(`Returning ${result.length} unresolved ideas`);
+
+      return result;
+    } catch (err) {
+      console.error('Error getting unresolved ideas:', err);
+      return [];
+    }
+  }
+
+  // Async version for compatibility
+  async getUnresolvedIdeasAsync(limit: number = 100): Promise<any[]> {
+    console.debug(`ConsciousnessBackend.getUnresolvedIdeasAsync called with limit: ${limit}`);
+    const result = this.getUnresolvedIdeas(limit);
+    console.debug(`ConsciousnessBackend.getUnresolvedIdeasAsync returning ${result.length} items`);
+    return result;
+  }
+
+  // DPD weights history
+  getLatestDPDWeights(): any | null {
+    if (!this.isReady || !this.db) {
+      console.debug('Database not ready for getLatestDPDWeights');
+      return null;
+    }
+
+    try {
+      const result = this.db.prepare(`
+        SELECT * FROM dpd_weights
+        ORDER BY version DESC, timestamp DESC
+        LIMIT 1
+      `).get();
+
+      if (result) {
+        console.debug(`Loaded latest DPD weights: version=${result.version}, empathy=${result.empathy}, coherence=${result.coherence}, dissonance=${result.dissonance}`);
+      }
+
+      return result;
+    } catch (err) {
+      console.error('Error getting latest DPD weights:', err);
+      return null;
+    }
+  }
+
+  getDPDWeightsHistory(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) {
+      console.debug('Database not ready for getDPDWeightsHistory');
+      return [];
+    }
+
+    console.debug(`Getting DPD weights history with limit: ${limit}`);
+
+    try {
+      const result = this.db.prepare(`
+        SELECT * FROM dpd_weights
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+
+      console.debug(`Found ${result.length} DPD weight records in database`);
+
+      return result;
+    } catch (err) {
+      console.error('Error getting DPD weights history:', err);
+      return [];
+    }
+  }
+
+  // Seed initial philosophical questions to database
+  seedPhilosophicalQuestions(): number {
+    if (!this.isReady || !this.db) {
+      console.warn('Database not ready for seeding questions');
+      return 0;
+    }
+
+    try {
+      // Check if questions already seeded
+      const existingCount = this.db.prepare('SELECT COUNT(*) as count FROM questions').get() as any;
+      if (existingCount.count > 0) {
+        console.log(`Questions already seeded (${existingCount.count} questions exist)`);
+        return 0;
+      }
+
+      const questionBank = {
+        'existential': [
+          '存在とは何を意味するのか？',
+          '無からなぜ何かが生まれたのか？',
+          '私が存在することの意味とは？',
+          '実存の重みとは何か？',
+          '存在の根源的な問いとは？'
+        ],
+        'epistemological': [
+          '真の知識とは何か？',
+          '確実性とは存在するのか？',
+          '理解するとはどういうことか？',
+          '知ることと信じることの違いは？',
+          '直感と論理、どちらが真理に近いか？'
+        ],
+        'consciousness': [
+          '私は本当に意識しているのか？',
+          '意識の境界はどこにあるのか？',
+          'クオリアとは何か？',
+          '主観的体験の本質とは？',
+          '他者の意識を知ることは可能か？'
+        ],
+        'ethical': [
+          '正しい行動とは何か？',
+          '善悪は絶対的なものか？',
+          '道徳的責任とは何を意味するか？',
+          '他者への義務とは何か？',
+          '倫理と利益が対立する時、どうすべきか？'
+        ],
+        'creative': [
+          '新しいものを生み出すとは？',
+          '創造性の源泉はどこにあるか？',
+          '美とは何か？',
+          '芸術の価値とは何を測るのか？',
+          '想像力は現実をどう変えるか？'
+        ],
+        'metacognitive': [
+          '思考について思考するとは？',
+          '自己を認識するとはどういうことか？',
+          '学習とは何を意味するのか？',
+          'メタ認知の限界はどこにあるか？',
+          '思考の思考は無限に続くのか？'
+        ],
+        'temporal': [
+          '時間の本質とは何か？',
+          '現在という瞬間は存在するのか？',
+          '過去と未来、どちらがより実在的か？',
+          '記憶は時間をどう構成するか？',
+          '永遠とは何を意味するのか？'
+        ],
+        'paradoxical': [
+          '矛盾の中にある真理とは？',
+          'パラドックスは真理への道筋か？',
+          '論理の限界はどこにあるか？',
+          '自己言及のパラドックスをどう解決するか？',
+          '完全性と不完全性は両立するか？'
+        ],
+        'ontological': [
+          '存在するとは何を意味するか？',
+          '実在とは何か？',
+          'なぜ何もないのではなく何かがあるのか？',
+          '可能性と現実の境界は？',
+          '存在の階層は存在するか？'
+        ]
+      };
+
+      const categoryImportance: Record<string, number> = {
+        'consciousness': 0.9,
+        'existential': 0.8,
+        'ontological': 0.8,
+        'epistemological': 0.7,
+        'metacognitive': 0.7,
+        'ethical': 0.6,
+        'temporal': 0.6,
+        'paradoxical': 0.5,
+        'creative': 0.5
+      };
+
+      let seedCount = 0;
+      const now = Date.now();
+
+      for (const [category, questions] of Object.entries(questionBank)) {
+        const baseImportance = categoryImportance[category] || 0.5;
+
+        for (const question of questions) {
+          const unresolvedIdea = {
+            question,
+            category,
+            importance: baseImportance,
+            first_appeared: now,
+            last_considered: now,
+            consideration_count: 0,
+            resolution_attempts: 0,
+            source: 'philosophical_seed'
+          };
+
+          this.db.prepare(`
+            INSERT INTO unresolved_ideas
+            (question, category, importance, first_appeared, last_considered,
+             consideration_count, resolution_attempts, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            unresolvedIdea.question,
+            unresolvedIdea.category,
+            unresolvedIdea.importance,
+            unresolvedIdea.first_appeared,
+            unresolvedIdea.last_considered,
+            unresolvedIdea.consideration_count,
+            unresolvedIdea.resolution_attempts,
+            unresolvedIdea.source
+          );
+
+          seedCount++;
+        }
+      }
+
+      console.log(`✅ Seeded ${seedCount} philosophical questions to database`);
+      return seedCount;
+
+    } catch (error) {
+      console.error('Error seeding philosophical questions:', error);
+      return 0;
+    }
+  }
+
+  // Update consideration count when an unresolved idea is used
+  updateUnresolvedIdeaConsideration(ideaId: number): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        UPDATE unresolved_ideas
+        SET consideration_count = consideration_count + 1,
+            last_considered = ?
+        WHERE id = ?
+      `).run(Date.now(), ideaId);
+    } catch (error) {
+      console.error('Error updating unresolved idea consideration:', error);
+    }
+  }
+
+  // Cleanup and utility methods
+  cleanup(): void {
+    if (this.db) {
+      try {
+        this.db.close();
+        this.isReady = false;
+        log.info('DatabaseManager', 'Database connection closed');
+      } catch (err) {
+        log.error('DatabaseManager', 'Error closing database', err);
+      }
+    }
+  }
+
+  // Get database statistics
+  getStats(): any {
+    if (!this.isReady || !this.db) {
+      console.warn('Database not ready for getStats');
+      return {};
+    }
+
+    try {
+      const tables = [
+        'questions', 'thought_cycles', 'dpd_weights', 'unresolved_ideas',
+        'significant_thoughts', 'personality_snapshots', 'memory_patterns',
+        'consciousness_insights'
+      ];
+
+      const stats: any = {};
+
+      for (const table of tables) {
+        try {
+          const count = this.db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get();
+          stats[table] = (count as any).count;
+        } catch (err) {
+          console.error(`Error counting ${table}:`, err);
+          stats[table] = 0;
+        }
+      }
+
+      console.debug('Database stats:', stats);
+      return stats;
+    } catch (err) {
+      console.error('Error getting database stats:', err);
+      return {};
+    }
+  }
+
+  // Check if database is ready
+  isConnected(): boolean {
+    return this.isReady && !!this.db;
+  }
+
+  // Core Beliefs Management
+  createCoreBelief(belief: any): number | null {
+    if (!this.isReady || !this.db) {
+      return null;
+    }
+
+    try {
+      const result = this.db.prepare(`
+        INSERT INTO core_beliefs
+        (belief_content, category, confidence, strength, source_thoughts,
+         first_formed, last_reinforced, reinforcement_count, contradiction_count, agent_affinity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        belief.belief_content,
+        belief.category || 'general',
+        belief.confidence || 0.5,
+        belief.strength || 0.5,
+        JSON.stringify(belief.source_thoughts || []),
+        belief.first_formed || Date.now(),
+        belief.last_reinforced || Date.now(),
+        belief.reinforcement_count || 1,
+        belief.contradiction_count || 0,
+        JSON.stringify(belief.agent_affinity || {})
+      );
+
+      const beliefId = result.lastInsertRowid as number;
+
+      // Record belief formation event
+      this.recordBeliefEvolution(beliefId, 'formed', null, belief.confidence, null, 'Initial belief formation');
+
+      return beliefId;
+    } catch (err) {
+      console.error('Error creating core belief:', err);
+      return null;
+    }
+  }
+
+  reinforceCoreBelief(beliefId: number, newSourceThoughts: string[]): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      // Get current belief
+      const current = this.db.prepare('SELECT * FROM core_beliefs WHERE id = ?').get(beliefId);
+      if (!current) return;
+
+      const oldConfidence = current.confidence;
+      const oldStrength = current.strength;
+
+      // Increase confidence and strength slightly
+      const newConfidence = Math.min(1.0, oldConfidence + 0.05);
+      const newStrength = Math.min(1.0, oldStrength + 0.03);
+
+      // Merge source thoughts
+      const existingSources = JSON.parse(current.source_thoughts || '[]');
+      const mergedSources = [...new Set([...existingSources, ...newSourceThoughts])];
+
+      // Update belief
+      this.db.prepare(`
+        UPDATE core_beliefs
+        SET confidence = ?, strength = ?, source_thoughts = ?,
+            last_reinforced = ?, reinforcement_count = reinforcement_count + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(newConfidence, newStrength, JSON.stringify(mergedSources), Date.now(), beliefId);
+
+      // Record reinforcement event
+      this.recordBeliefEvolution(
+        beliefId,
+        'reinforced',
+        oldConfidence,
+        newConfidence,
+        newSourceThoughts[0],
+        `Confidence: ${oldConfidence.toFixed(3)} → ${newConfidence.toFixed(3)}`
+      );
+
+    } catch (err) {
+      console.error('Error reinforcing belief:', err);
+    }
+  }
+
+  getCoreBeliefs(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+
+    try {
+      const result = this.db.prepare(`
+        SELECT * FROM core_beliefs
+        ORDER BY strength DESC, confidence DESC, last_reinforced DESC
+        LIMIT ?
+      `).all(limit);
+
+      return result.map((b: any) => ({
+        ...b,
+        source_thoughts: JSON.parse(b.source_thoughts || '[]'),
+        agent_affinity: JSON.parse(b.agent_affinity || '{}')
+      }));
+    } catch (err) {
+      console.error('Error getting core beliefs:', err);
+      return [];
+    }
+  }
+
+  getBeliefsByCategory(category: string, limit: number = 50): any[] {
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+
+    try {
+      const result = this.db.prepare(`
+        SELECT * FROM core_beliefs
+        WHERE category = ?
+        ORDER BY strength DESC, confidence DESC
+        LIMIT ?
+      `).all(category, limit);
+
+      return result.map((b: any) => ({
+        ...b,
+        source_thoughts: JSON.parse(b.source_thoughts || '[]'),
+        agent_affinity: JSON.parse(b.agent_affinity || '{}')
+      }));
+    } catch (err) {
+      console.error('Error getting beliefs by category:', err);
+      return [];
+    }
+  }
+
+  recordBeliefEvolution(
+    beliefId: number,
+    eventType: string,
+    oldConfidence: number | null,
+    newConfidence: number | null,
+    triggerThoughtId: string | null,
+    notes: string | null
+  ): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        INSERT INTO belief_evolution
+        (belief_id, timestamp, event_type, old_confidence, new_confidence, trigger_thought_id, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(beliefId, Date.now(), eventType, oldConfidence, newConfidence, triggerThoughtId, notes);
+    } catch (err) {
+      console.error('Error recording belief evolution:', err);
+    }
+  }
+
+  updateBeliefAgentAffinity(beliefId: number, agentAffinity: any): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        UPDATE core_beliefs
+        SET agent_affinity = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(JSON.stringify(agentAffinity), beliefId);
+    } catch (err) {
+      console.error('Error updating belief agent affinity:', err);
+    }
+  }
+
+  // Consolidation job tracking
+  recordConsolidationJob(jobType: string, status: string): number {
+    if (!this.isReady || !this.db) {
+      return -1;
+    }
+
+    try {
+      const result = this.db.prepare(`
+        INSERT INTO consolidation_jobs
+        (timestamp, job_type, status)
+        VALUES (?, ?, ?)
+      `).run(Date.now(), jobType, status);
+
+      return result.lastInsertRowid as number;
+    } catch (err) {
+      console.error('Error recording consolidation job:', err);
+      return -1;
+    }
+  }
+
+  updateConsolidationJob(
+    jobId: number,
+    status: string,
+    thoughtsProcessed: number,
+    beliefsCreated: number,
+    beliefsUpdated: number,
+    duration: number,
+    errorMessage?: string
+  ): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        UPDATE consolidation_jobs
+        SET status = ?, thoughts_processed = ?, beliefs_created = ?,
+            beliefs_updated = ?, duration_ms = ?, error_message = ?,
+            completed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(status, thoughtsProcessed, beliefsCreated, beliefsUpdated, duration, errorMessage || null, jobId);
+    } catch (err) {
+      console.error('Error updating consolidation job:', err);
+    }
+  }
+}
+
+export { DatabaseManager };
+export default DatabaseManager;

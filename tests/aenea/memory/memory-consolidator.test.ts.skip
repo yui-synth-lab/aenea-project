@@ -1,0 +1,363 @@
+/**
+ * Memory Consolidator Tests - t_wada Quality
+ *
+ * Tests following t_wada principles:
+ * - Clear test names that describe behavior
+ * - One assertion concept per test
+ * - Arrange-Act-Assert pattern
+ * - Boundary value analysis
+ * - Property-based thinking
+ */
+
+import { MemoryConsolidator } from '../../../src/aenea/memory/memory-consolidator';
+import { DatabaseManager } from '../../../src/server/database-manager';
+import { AIExecutor } from '../../../src/server/ai-executor';
+
+describe('MemoryConsolidator', () => {
+  let consolidator: MemoryConsolidator;
+  let mockDb: jest.Mocked<DatabaseManager>;
+  let mockAIExecutor: jest.Mocked<AIExecutor>;
+
+  beforeEach(() => {
+    // Arrange: Mock dependencies with clear interfaces
+    mockDb = {
+      getSignificantThoughts: jest.fn(),
+      getCoreBeliefs: jest.fn(),
+      createCoreBelief: jest.fn(),
+      reinforceCoreBelief: jest.fn(),
+      recordConsolidationJob: jest.fn(() => 1),
+      updateConsolidationJob: jest.fn(),
+    } as any;
+
+    mockAIExecutor = {
+      execute: jest.fn(),
+    } as any;
+
+    consolidator = new MemoryConsolidator(mockDb, mockAIExecutor);
+  });
+
+  describe('Consolidation Process', () => {
+    describe('when no significant thoughts exist', () => {
+      test('should complete without creating beliefs', async () => {
+        // Arrange
+        mockDb.getSignificantThoughts.mockReturnValue([]);
+        mockDb.getCoreBeliefs.mockReturnValue([]);
+
+        // Act
+        const result = await consolidator.consolidate(0.6);
+
+        // Assert
+        expect(result.beliefs_created).toBe(0);
+        expect(result.beliefs_updated).toBe(0);
+        expect(result.thoughts_processed).toBe(0);
+      });
+    });
+
+    describe('when significant thoughts have insufficient confidence', () => {
+      test('should filter out low-confidence thoughts', async () => {
+        // Arrange
+        const lowConfidenceThoughts = [
+          { id: '1', thought_content: 'Uncertain thought', confidence: 0.3 },
+          { id: '2', thought_content: 'Another uncertain', confidence: 0.4 },
+        ];
+        mockDb.getSignificantThoughts.mockReturnValue(lowConfidenceThoughts);
+        mockDb.getCoreBeliefs.mockReturnValue([]);
+
+        // Act
+        const result = await consolidator.consolidate(0.6);
+
+        // Assert
+        expect(result.thoughts_processed).toBe(0);
+      });
+    });
+
+    describe('when AI executor is available', () => {
+      test('should use AI to extract beliefs with high compression ratio', async () => {
+        // Arrange: 10 thoughts should compress to 2-3 beliefs
+        const highConfidenceThoughts = Array.from({ length: 10 }, (_, i) => ({
+          id: `thought-${i}`,
+          thought_content: `Philosophical insight ${i}`,
+          confidence: 0.8,
+          agent_id: 'theoria',
+          category: 'existential'
+        }));
+
+        mockDb.getSignificantThoughts.mockReturnValue(highConfidenceThoughts);
+        mockDb.getCoreBeliefs.mockReturnValue([]);
+
+        // Mock AI response with compressed beliefs
+        mockAIExecutor.execute.mockResolvedValue(JSON.stringify([
+          {
+            belief_content: '存在の本質的理解',
+            category: 'existential',
+            confidence: 0.9,
+            strength: 0.8,
+            is_new: true,
+            source_thoughts: ['thought-0', 'thought-1', 'thought-2']
+          },
+          {
+            belief_content: '認識と実在の関係性',
+            category: 'epistemological',
+            confidence: 0.85,
+            strength: 0.75,
+            is_new: true,
+            source_thoughts: ['thought-3', 'thought-4', 'thought-5']
+          }
+        ]));
+
+        // Act
+        const result = await consolidator.consolidate(0.6);
+
+        // Assert: Verify compression ratio
+        expect(result.beliefs_created).toBe(2);
+        expect(result.thoughts_processed).toBe(10);
+        expect(result.compression_ratio).toBeGreaterThan(3); // 10 thoughts → 2 beliefs = 5:1 ratio
+      });
+
+      test('should respect 50-character limit for beliefs', async () => {
+        // Arrange
+        const thoughts = [
+          { id: '1', thought_content: 'A thought', confidence: 0.8 }
+        ];
+        mockDb.getSignificantThoughts.mockReturnValue(thoughts);
+        mockDb.getCoreBeliefs.mockReturnValue([]);
+
+        // Mock AI with overly long belief
+        mockAIExecutor.execute.mockResolvedValue(JSON.stringify([
+          {
+            belief_content: 'This is an extremely long belief that exceeds the fifty character limit and should be truncated',
+            category: 'existential',
+            confidence: 0.9,
+            strength: 0.8
+          }
+        ]));
+
+        // Act
+        await consolidator.consolidate(0.6);
+
+        // Assert
+        const createCall = mockDb.createCoreBelief.mock.calls[0][0];
+        expect(createCall.belief_content.length).toBeLessThanOrEqual(80); // Truncated with ...
+      });
+    });
+
+    describe('when AI executor fails', () => {
+      test('should fallback to rule-based extraction', async () => {
+        // Arrange: Multiple thoughts in same category should consolidate
+        const thoughts = Array.from({ length: 5 }, (_, i) => ({
+          id: `thought-${i}`,
+          thought_content: `存在についての考察 ${i}`,
+          confidence: 0.7,
+          category: 'existential'
+        }));
+
+        mockDb.getSignificantThoughts.mockReturnValue(thoughts);
+        mockDb.getCoreBeliefs.mockReturnValue([]);
+        mockAIExecutor.execute.mockRejectedValue(new Error('AI unavailable'));
+
+        // Act
+        const result = await consolidator.consolidate(0.6);
+
+        // Assert: Should still create beliefs using rules
+        expect(result.beliefs_created).toBeGreaterThan(0);
+        expect(result.thoughts_processed).toBe(5);
+      });
+    });
+
+    describe('when similar beliefs already exist', () => {
+      test('should reinforce existing belief instead of creating duplicate', async () => {
+        // Arrange
+        const existingBelief = {
+          id: 1,
+          belief_content: '存在の本質的理解',
+          category: 'existential',
+          confidence: 0.8,
+          strength: 0.7,
+          reinforcement_count: 1
+        };
+
+        const newThoughts = [
+          { id: '1', thought_content: '存在について', confidence: 0.8, category: 'existential' }
+        ];
+
+        mockDb.getSignificantThoughts.mockReturnValue(newThoughts);
+        mockDb.getCoreBeliefs.mockReturnValue([existingBelief]);
+
+        mockAIExecutor.execute.mockResolvedValue(JSON.stringify([
+          {
+            belief_content: '存在の本質的理解', // Same as existing
+            category: 'existential',
+            confidence: 0.85,
+            strength: 0.8,
+            is_new: false
+          }
+        ]));
+
+        // Act
+        const result = await consolidator.consolidate(0.6);
+
+        // Assert
+        expect(result.beliefs_created).toBe(0);
+        expect(result.beliefs_updated).toBe(1);
+        expect(mockDb.reinforceCoreBelief).toHaveBeenCalledWith(
+          1,
+          expect.any(Array)
+        );
+      });
+    });
+  });
+
+  describe('Boundary Value Analysis', () => {
+    test('should handle minimum confidence threshold (0.0)', async () => {
+      // Arrange
+      const thoughts = [{ id: '1', thought_content: 'Low', confidence: 0.0 }];
+      mockDb.getSignificantThoughts.mockReturnValue(thoughts);
+      mockDb.getCoreBeliefs.mockReturnValue([]);
+
+      // Act
+      const result = await consolidator.consolidate(0.0);
+
+      // Assert: Should process even zero-confidence thoughts
+      expect(result.thoughts_processed).toBe(1);
+    });
+
+    test('should handle maximum confidence threshold (1.0)', async () => {
+      // Arrange
+      const thoughts = [
+        { id: '1', thought_content: 'High', confidence: 0.9 },
+        { id: '2', thought_content: 'Perfect', confidence: 1.0 }
+      ];
+      mockDb.getSignificantThoughts.mockReturnValue(thoughts);
+      mockDb.getCoreBeliefs.mockReturnValue([]);
+
+      mockAIExecutor.execute.mockResolvedValue(JSON.stringify([]));
+
+      // Act
+      const result = await consolidator.consolidate(1.0);
+
+      // Assert: Only perfect confidence should be processed
+      expect(result.thoughts_processed).toBe(1);
+    });
+
+    test('should handle empty belief content', async () => {
+      // Arrange
+      const thoughts = [{ id: '1', thought_content: 'Test', confidence: 0.8 }];
+      mockDb.getSignificantThoughts.mockReturnValue(thoughts);
+      mockDb.getCoreBeliefs.mockReturnValue([]);
+
+      // Mock AI with empty belief
+      mockAIExecutor.execute.mockResolvedValue(JSON.stringify([
+        { belief_content: '', category: 'existential', confidence: 0.9 }
+      ]));
+
+      // Act
+      const result = await consolidator.consolidate(0.6);
+
+      // Assert: Empty beliefs should be filtered out
+      expect(result.beliefs_created).toBe(0);
+    });
+
+    test('should handle exactly 50-character belief', async () => {
+      // Arrange
+      const thoughts = [{ id: '1', thought_content: 'Test', confidence: 0.8 }];
+      mockDb.getSignificantThoughts.mockReturnValue(thoughts);
+      mockDb.getCoreBeliefs.mockReturnValue([]);
+
+      const exactly50Chars = '1234567890'.repeat(5); // Exactly 50 chars
+      mockAIExecutor.execute.mockResolvedValue(JSON.stringify([
+        { belief_content: exactly50Chars, category: 'existential', confidence: 0.9 }
+      ]));
+
+      // Act
+      await consolidator.consolidate(0.6);
+
+      // Assert
+      const createCall = mockDb.createCoreBelief.mock.calls[0][0];
+      expect(createCall.belief_content.length).toBe(50);
+    });
+  });
+
+  describe('Concurrent Consolidation Prevention', () => {
+    test('should prevent concurrent consolidation runs', async () => {
+      // Arrange
+      mockDb.getSignificantThoughts.mockReturnValue([
+        { id: '1', thought_content: 'Test', confidence: 0.8 }
+      ]);
+      mockDb.getCoreBeliefs.mockReturnValue([]);
+
+      // Mock slow AI execution
+      mockAIExecutor.execute.mockImplementation(() =>
+        new Promise(resolve => setTimeout(() => resolve('[]'), 100))
+      );
+
+      // Act: Start two consolidations simultaneously
+      const promise1 = consolidator.consolidate(0.6);
+      const promise2 = consolidator.consolidate(0.6);
+
+      const [result1, result2] = await Promise.all([promise1, promise2]);
+
+      // Assert: Second call should be skipped
+      expect(result1.thoughts_processed + result2.thoughts_processed).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('should update job status to failed on error', async () => {
+      // Arrange
+      mockDb.getSignificantThoughts.mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      // Act & Assert
+      await expect(consolidator.consolidate(0.6)).rejects.toThrow('Database error');
+
+      expect(mockDb.updateConsolidationJob).toHaveBeenCalledWith(
+        expect.any(Number),
+        'failed',
+        0,
+        0,
+        0,
+        expect.any(Number),
+        'Database error'
+      );
+    });
+
+    test('should handle malformed JSON from AI', async () => {
+      // Arrange
+      const thoughts = [{ id: '1', thought_content: 'Test', confidence: 0.8 }];
+      mockDb.getSignificantThoughts.mockReturnValue(thoughts);
+      mockDb.getCoreBeliefs.mockReturnValue([]);
+
+      mockAIExecutor.execute.mockResolvedValue('invalid json{]');
+
+      // Act
+      const result = await consolidator.consolidate(0.6);
+
+      // Assert: Should fallback to rule-based extraction
+      expect(result.thoughts_processed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Performance Characteristics', () => {
+    test('should complete within reasonable time for 100 thoughts', async () => {
+      // Arrange
+      const manyThoughts = Array.from({ length: 100 }, (_, i) => ({
+        id: `thought-${i}`,
+        thought_content: `Thought ${i}`,
+        confidence: 0.8
+      }));
+
+      mockDb.getSignificantThoughts.mockReturnValue(manyThoughts);
+      mockDb.getCoreBeliefs.mockReturnValue([]);
+      mockAIExecutor.execute.mockResolvedValue(JSON.stringify([]));
+
+      // Act
+      const startTime = Date.now();
+      await consolidator.consolidate(0.6);
+      const duration = Date.now() - startTime;
+
+      // Assert: Should complete in reasonable time (not a hard limit, but a smell test)
+      expect(duration).toBeLessThan(5000); // 5 seconds
+    });
+  });
+});

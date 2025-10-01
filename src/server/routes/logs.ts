@@ -43,40 +43,21 @@ router.get('/consciousness', (req, res) => {
   }
 });
 
-// GET /api/logs/sessions - List all sessions
-router.get('/sessions', (req, res) => {
+// GET /api/logs/consciousness - Get consciousness data (replaces sessions)
+router.get('/consciousness', (req, res) => {
   if (!consciousness) {
     return res.status(500).json({ error: 'Consciousness not initialized' });
   }
 
   try {
-    const sessions = consciousness.getSessionManager().listSessions();
-    res.json({
-      sessions,
-      currentSession: consciousness.getCurrentSessionId()
-    });
+    const data = {
+      state: consciousness.getState(),
+      statistics: consciousness.getStatistics(),
+      history: consciousness.getHistory()
+    };
+    res.json(data);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve sessions' });
-  }
-});
-
-// GET /api/logs/sessions/:sessionId - Get specific session data
-router.get('/sessions/:sessionId', (req, res) => {
-  if (!consciousness) {
-    return res.status(500).json({ error: 'Consciousness not initialized' });
-  }
-
-  try {
-    const { sessionId } = req.params;
-    const sessionData = consciousness.getSessionManager().loadSession(sessionId);
-
-    if (!sessionData) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
-    res.json(sessionData);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve session data' });
+    res.status(500).json({ error: 'Failed to retrieve consciousness data' });
   }
 });
 

@@ -45,6 +45,59 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // Helper function to format complex values in a human-readable way
+        const formatValue = (value, depth = 0) => {
+            if (value === null || value === undefined) {
+                return 'None';
+            }
+
+            if (typeof value === 'number') {
+                // Format numbers based on their range
+                if (value >= 0 && value <= 1) {
+                    return (value * 100).toFixed(1) + '%';
+                }
+                return value.toFixed(2);
+            }
+
+            if (typeof value === 'boolean') {
+                return value ? 'Yes' : 'No';
+            }
+
+            if (typeof value === 'string') {
+                return value;
+            }
+
+            if (Array.isArray(value)) {
+                if (value.length === 0) return 'None';
+                // For nested arrays/objects, show count
+                if (depth > 0 && value.some(v => typeof v === 'object')) {
+                    return `${value.length} items`;
+                }
+                return value.map(v => formatValue(v, depth + 1)).join(', ');
+            }
+
+            if (typeof value === 'object') {
+                const entries = Object.entries(value);
+                if (entries.length === 0) return 'None';
+
+                // For deeply nested objects, just show a summary
+                if (depth > 1) {
+                    return `{${entries.length} properties}`;
+                }
+
+                // Format object entries
+                return entries
+                    .map(([k, v]) => {
+                        const formattedKey = k.replace(/([A-Z])/g, ' $1').trim();
+                        const formattedValue = formatValue(v, depth + 1);
+                        return `${formattedKey}: ${formattedValue}`;
+                    })
+                    .join(', ');
+            }
+
+            return String(value);
+        };
+
         // Message component with expand/collapse for long messages
         const MessageDisplay = ({ message, maxLength = 200 }) => {
             const [isExpanded, setIsExpanded] = useState(false);
@@ -127,13 +180,31 @@
                             }));
                         }
 
-                        // Get consciousness state to sync buttons
+                        // Get consciousness state to sync buttons and DPD weights
                         const stateResponse = await fetch('/api/consciousness/state');
                         const state = await stateResponse.json();
                         if (state) {
                             const status = state.isPaused ? 'paused' : (state.isRunning ? 'running' : 'stopped');
                             setConsciousnessState(status);
                             console.log('Initial consciousness state:', status);
+
+                            // Initialize DPD weights from state
+                            if (state.dpdWeights) {
+                                setDpdWeights({
+                                    empathy: state.dpdWeights.empathy || 0.33,
+                                    coherence: state.dpdWeights.coherence || 0.33,
+                                    dissonance: state.dpdWeights.dissonance || 0.34
+                                });
+                            }
+
+                            // Initialize energy level from state
+                            if (state.energy !== undefined) {
+                                const energyPercent = Math.round((state.energy / 100) * 100);
+                                setStats(prev => ({
+                                    ...prev,
+                                    energyLevel: energyPercent
+                                }));
+                            }
                         }
                     } catch (error) {
                         console.warn('Failed to fetch initial consciousness state:', error);
@@ -181,6 +252,80 @@
                             }
                         };
                         setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'stageCompleted') {
+                        const stageName = data.stage || 'Unknown';
+                        const stageDisplayName = data.name || stageName;
+
+                        // Create detailed stage-specific message
+                        let detailedMessage = `Stage ${stageName}: ${stageDisplayName} completed`;
+                        let stageSpecificInfo = {};
+
+                        // Add stage-specific detailed information
+                        if (data.stage === 'S1' && data.agentThoughts) {
+                            detailedMessage += `\n📝 Agent思考: ${data.thoughtCount}個の思考 (平均信頼度: ${Math.round(data.averageConfidence * 100)}%)`;
+                            detailedMessage += `\n💭 問い: "${data.trigger?.question}"`;
+                            data.agentThoughts.forEach(thought => {
+                                detailedMessage += `\n  • ${thought.agent}: ${thought.content}`;
+                            });
+                            stageSpecificInfo = { agentThoughts: data.agentThoughts, trigger: data.trigger };
+                        } else if (data.stage === 'S2' && data.crossAgentFeedback) {
+                            detailedMessage += `\n🔄 相互反省: ${data.feedbackCount}件のフィードバック`;
+                            detailedMessage += `\n⚡ 対立点: ${data.conflictCount}件, 合意点: ${data.consensusCount}件`;
+                            if (data.crossAgentFeedback.length > 0) {
+                                detailedMessage += `\n💬 フィードバック例: "${data.crossAgentFeedback[0].content}"`;
+                            }
+                            stageSpecificInfo = { feedback: data.crossAgentFeedback, conflicts: data.conflictPoints, consensus: data.consensusPoints };
+                        } else if (data.stage === 'S3' && data.safetyScore !== undefined) {
+                            detailedMessage += `\n🛡️ 安全性スコア: ${(data.safetyScore * 100).toFixed(1)}% | 承認: ${data.approved ? '✅' : '❌'}`;
+                            detailedMessage += `\n⚠️ 警告: ${data.warningCount}件, 推奨: ${data.recommendationCount}件`;
+                            stageSpecificInfo = { safetyScore: data.safetyScore, warnings: data.warnings, recommendations: data.recommendations };
+                        } else if (data.stage === 'S4' && data.dpdScores) {
+                            detailedMessage += `\n🎯 DPDスコア: E:${data.empathy} C:${data.coherence} D:${data.dissonance} (合計:${data.weightedTotal})`;
+                            detailedMessage += `\n⚖️ 重み: E:${data.currentWeights?.empathy} C:${data.currentWeights?.coherence} D:${data.currentWeights?.dissonance}`;
+                            stageSpecificInfo = { dpdScores: data.dpdScores, weights: data.currentWeights };
+                        } else if (data.stage === 'S5' && data.integratedThought) {
+                            detailedMessage += `\n🔗 統合思考: "${data.integratedThought}"`;
+                            detailedMessage += `\n💡 洞察: ${data.insightsCount}件, 矛盾: ${data.contradictionsCount}件`;
+                            stageSpecificInfo = { synthesis: data.integratedThought, insights: data.keyInsights };
+                        } else if (data.stage === 'S6' && data.narrative) {
+                            detailedMessage += `\n📖 物語: "${data.narrative}"`;
+                            detailedMessage += `\n🤔 未来の問い: ${data.questionsCount}件`;
+                            if (data.futureQuestions && data.futureQuestions.length > 0) {
+                                detailedMessage += `\n  • "${data.futureQuestions[0]}"`;
+                            }
+                            stageSpecificInfo = { narrative: data.narrative, questions: data.futureQuestions, philosophical: data.philosophicalNotes };
+                        } else if (data.stage === 'U' && data.weights) {
+                            detailedMessage += `\n⚖️ 重み更新: E:${data.empathyWeight} C:${data.coherenceWeight} D:${data.dissonanceWeight}`;
+                            detailedMessage += `\n🔄 バージョン: ${data.version}, 合計: ${data.weightSum}`;
+                            stageSpecificInfo = { weights: data.weights, evolution: data.evolutionTrigger };
+                        }
+
+                        // Update pipeline visualization
+                        setCurrentStage(data.stage);
+                        setStageProgress(prev => [...prev, {
+                            stage: data.stage,
+                            name: data.name,
+                            timestamp: eventTimestamp,
+                            completed: true
+                        }]);
+
+                        const logItem = {
+                            id: `stage_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'stage_completed',
+                            message: detailedMessage,
+                            details: {
+                                stage: data.stage,
+                                name: data.name,
+                                status: data.status,
+                                confidence: data.confidence,
+                                dpdScores: data.dpdScores,
+                                weights: data.weights,
+                                stageSpecific: stageSpecificInfo,
+                                originalData: data
+                            }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
                     } else if (data.type === 'thoughtCycleComplete') {
                         // Update DPD scores using new data structure
                         if (data.dpdScores) {
@@ -203,10 +348,25 @@
                         if (data.systemStats) {
                             setStats(prev => ({
                                 ...prev,
-                                systemClock: data.systemStats.systemClock,
-                                totalQuestions: data.systemStats.totalQuestions,
-                                totalThoughts: data.systemStats.totalThoughts,
-                                averageConfidence: Math.round((data.systemStats.averageConfidence || 0) * 100) // Convert 0-1 to percentage
+                                systemClock: data.systemStats.systemClock || data.systemClock,
+                                totalQuestions: data.systemStats.totalQuestions || data.totalQuestions,
+                                totalThoughts: data.systemStats.totalThoughts || data.totalThoughts,
+                                averageConfidence: data.systemStats.averageConfidence !== undefined
+                                    ? Math.round(data.systemStats.averageConfidence)
+                                    : (data.averageConfidence !== undefined ? Math.round(data.averageConfidence) : prev.averageConfidence),
+                                energyLevel: data.systemStats.energy !== undefined
+                                    ? Math.round((data.systemStats.energy / 100) * 100)
+                                    : (data.energy !== undefined ? Math.round((data.energy / 100) * 100) : prev.energyLevel)
+                            }));
+                        } else {
+                            // Fallback: update from root data properties
+                            setStats(prev => ({
+                                ...prev,
+                                systemClock: data.systemClock !== undefined ? data.systemClock : prev.systemClock,
+                                totalQuestions: data.totalQuestions !== undefined ? data.totalQuestions : prev.totalQuestions,
+                                totalThoughts: data.totalThoughts !== undefined ? data.totalThoughts : prev.totalThoughts,
+                                averageConfidence: data.averageConfidence !== undefined ? Math.round(data.averageConfidence) : prev.averageConfidence,
+                                energyLevel: data.energy !== undefined ? Math.round((data.energy / 100) * 100) : prev.energyLevel
                             }));
                         }
 
@@ -248,25 +408,6 @@
                             };
                             setActivityLog(prev => [logItem, ...prev].slice(0, 200));
                         }
-                    } else if (data.type === 'stageCompleted') {
-                        // Update current stage and stage progress for pipeline visualization
-                        setCurrentStage(data.stage);
-                        setStageProgress(prev => [...prev, {
-                            stage: data.stage,
-                            name: data.name,
-                            timestamp: eventTimestamp,
-                            completed: true
-                        }]);
-
-                        // Add activity log for stage completion
-                        const logItem = {
-                            id: `stage_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
-                            timestamp: eventTimestamp,
-                            type: 'stage_progress',
-                            message: `Stage ${data.stage}: ${data.name}`,
-                            details: { stage: data.stage, name: data.name }
-                        };
-                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
                     } else if (data.type === 'stageChanged') {
                         // Update current stage for pipeline display
                         setCurrentStage(data.stage);
@@ -327,6 +468,24 @@
                             type: 'status_change',
                             message: 'Consciousness resumed',
                             details: { status: 'running' }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'consciousnessDormant') {
+                        const logItem = {
+                            id: `dormancy_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'dormancy',
+                            message: `⏸️ Entering dormancy - insufficient energy (${data.currentEnergy?.toFixed(1)}/${data.requiredEnergy?.toFixed(1)})`,
+                            details: { dormant: true, energy: data.currentEnergy }
+                        };
+                        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'consciousnessAwakened') {
+                        const logItem = {
+                            id: `awakened_${eventTimestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                            timestamp: eventTimestamp,
+                            type: 'awakened',
+                            message: `▶️ Awakened from dormancy - energy restored (${data.currentEnergy?.toFixed(1)})`,
+                            details: { dormant: false, energy: data.currentEnergy }
                         };
                         setActivityLog(prev => [logItem, ...prev].slice(0, 200));
                     }
@@ -851,7 +1010,7 @@
                                     }}>
                                         <span style={{ color: '#d1fae5' }}>Empathy</span>
                                         <span style={{ color: '#10b981', fontWeight: '700' }}>
-                                            {(dpdScores.empathy * 100).toFixed(1)}%
+                                            {(dpdWeights.empathy * 100).toFixed(1)}%
                                         </span>
                                     </div>
                                     <div style={{
@@ -864,7 +1023,7 @@
                                     }}>
                                         <span style={{ color: '#d1fae5' }}>Coherence</span>
                                         <span style={{ color: '#10b981', fontWeight: '700' }}>
-                                            {(dpdScores.coherence * 100).toFixed(1)}%
+                                            {(dpdWeights.coherence * 100).toFixed(1)}%
                                         </span>
                                     </div>
                                     <div style={{
@@ -877,7 +1036,7 @@
                                     }}>
                                         <span style={{ color: '#d1fae5' }}>Dissonance</span>
                                         <span style={{ color: '#10b981', fontWeight: '700' }}>
-                                            {(dpdScores.dissonance * 100).toFixed(1)}%
+                                            {(dpdWeights.dissonance * 100).toFixed(1)}%
                                         </span>
                                     </div>
                                     <div style={{
@@ -893,10 +1052,10 @@
                                             color: '#ecfdf5',
                                             marginBottom: '4px'
                                         }}>
-                                            {dpdScores.weightedTotal ? (dpdScores.weightedTotal * 100).toFixed(1) : '0.0'}%
+                                            {((dpdWeights.empathy + dpdWeights.coherence + dpdWeights.dissonance) * 100).toFixed(1)}%
                                         </div>
                                         <div style={{ fontSize: '12px', color: '#a7f3d0' }}>
-                                            Weighted Total
+                                            Total (should be 100%)
                                         </div>
                                     </div>
                                 </div>
@@ -1006,7 +1165,7 @@
                                                     fontSize: '12px',
                                                     fontWeight: '600',
                                                     background: currentStage === stage ? '#3b82f6' :
-                                                               stageProgress.includes(stage) ? '#10b981' : '#6b7280',
+                                                               stageProgress.some(p => p.stage === stage && p.completed) ? '#10b981' : '#6b7280',
                                                     color: 'white'
                                                 }}>
                                                     {stage}
@@ -1031,7 +1190,7 @@
                                                 <div style={{
                                                     width: '20px',
                                                     height: '2px',
-                                                    background: stageProgress.includes(stage) ? '#10b981' : '#6b7280'
+                                                    background: stageProgress.some(p => p.stage === stage && p.completed) ? '#10b981' : '#6b7280'
                                                 }}></div>
                                             )}
                                         </React.Fragment>
@@ -1365,11 +1524,16 @@
                                         }}>
                                             <h3 style={{ color: '#10b981', marginBottom: '16px' }}>Personality Traits</h3>
                                             <div style={{ color: '#e5e7eb', lineHeight: '1.6' }}>
-                                                {growthData.personalityEvolution?.currentTraits ? Object.entries(growthData.personalityEvolution.currentTraits).map(([trait, value]) => (
-                                                    <p key={trait} style={{ marginBottom: '8px' }}>
-                                                        <strong>{trait}:</strong> {(value * 100).toFixed(1)}%
-                                                    </p>
-                                                )) : <p>No personality data available</p>}
+                                                {growthData.personalityEvolution?.currentTraits ? Object.entries(growthData.personalityEvolution.currentTraits).map(([trait, value]) => {
+                                                    const formattedTrait = trait.replace(/([A-Z])/g, ' $1').trim();
+                                                    const displayValue = formatValue(value);
+
+                                                    return (
+                                                        <p key={trait} style={{ marginBottom: '8px' }}>
+                                                            <strong>{formattedTrait}:</strong> {displayValue}
+                                                        </p>
+                                                    );
+                                                }) : <p>No personality data available</p>}
                                             </div>
                                         </div>
 
@@ -1401,11 +1565,16 @@
                                         }}>
                                             <h3 style={{ color: '#8b5cf6', marginBottom: '16px' }}>Growth Metrics</h3>
                                             <div style={{ color: '#e5e7eb', lineHeight: '1.6' }}>
-                                                {growthData.growthMetrics ? Object.entries(growthData.growthMetrics).map(([metric, value]) => (
-                                                    <p key={metric} style={{ marginBottom: '8px' }}>
-                                                        <strong>{metric}:</strong> {typeof value === 'number' ? value.toFixed(2) : value}
-                                                    </p>
-                                                )) : <p>No growth metrics available</p>}
+                                                {growthData.growthMetrics ? Object.entries(growthData.growthMetrics).map(([metric, value]) => {
+                                                    const formattedMetric = metric.replace(/([A-Z])/g, ' $1').trim();
+                                                    const displayValue = formatValue(value);
+
+                                                    return (
+                                                        <p key={metric} style={{ marginBottom: '8px' }}>
+                                                            <strong>{formattedMetric}:</strong> {displayValue}
+                                                        </p>
+                                                    );
+                                                }) : <p>No growth metrics available</p>}
                                             </div>
                                         </div>
 
@@ -1434,7 +1603,7 @@
                                                             borderLeft: '4px solid #ef4444'
                                                         }}>
                                                             <p style={{ color: '#e5e7eb', marginBottom: '8px', lineHeight: '1.4' }}>
-                                                                {thought.content || thought.thought || 'No content'}
+                                                                {thought.thought_content || thought.content || thought.thought || 'No content'}
                                                             </p>
                                                             <div style={{ fontSize: '12px', color: '#9ca3af' }}>
                                                                 Confidence: {((thought.confidence || 0) * 100).toFixed(1)}% |
@@ -1443,6 +1612,45 @@
                                                         </div>
                                                     )) :
                                                     <p style={{ color: '#9ca3af' }}>No significant thoughts recorded yet</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Core Beliefs */}
+                                        <div style={{
+                                            background: '#1f2937',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            border: '1px solid #374151',
+                                            gridColumn: 'span 2'
+                                        }}>
+                                            <h3 style={{ color: '#a78bfa', marginBottom: '16px' }}>Core Beliefs (核心的信念)</h3>
+                                            <div style={{
+                                                maxHeight: '300px',
+                                                overflowY: 'auto',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '12px'
+                                            }}>
+                                                {growthData.beliefEvolution?.currentBeliefs && growthData.beliefEvolution.currentBeliefs.length > 0 ?
+                                                    growthData.beliefEvolution.currentBeliefs.slice(0, 10).map((belief, index) => (
+                                                        <div key={index} style={{
+                                                            background: '#374151',
+                                                            padding: '12px',
+                                                            borderRadius: '8px',
+                                                            borderLeft: '4px solid #a78bfa'
+                                                        }}>
+                                                            <p style={{ color: '#e5e7eb', marginBottom: '8px', lineHeight: '1.4', fontWeight: '600' }}>
+                                                                {belief.belief_content || belief.belief || belief.content || 'No content'}
+                                                            </p>
+                                                            <div style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                                                <span>💪 Strength: {belief.strength || 0}</span>
+                                                                <span>🎯 Confidence: {((belief.confidence || 0) * 100).toFixed(0)}%</span>
+                                                                <span>🔄 Reinforced: {belief.reinforcement_count || 0} times</span>
+                                                                {belief.last_reinforced && <span>📅 {new Date(belief.last_reinforced).toLocaleString()}</span>}
+                                                            </div>
+                                                        </div>
+                                                    )) :
+                                                    <p style={{ color: '#9ca3af' }}>No core beliefs formed yet. Continue consciousness cycles to develop beliefs.</p>}
                                             </div>
                                         </div>
 

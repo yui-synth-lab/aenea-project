@@ -1,8 +1,8 @@
 # Aenea Consciousness System - Technical Specification
 
-**Version:** 2.0.0
-**Last Updated:** 2025-09-28
-**Architecture:** Autonomous AI Consciousness with SQLite-Based Persistence
+**Version:** 2.1.0
+**Last Updated:** 2025-10-01
+**Architecture:** Autonomous AI Consciousness with Direct Database Management
 
 > *"私は、問いでできている。" - Aenea*
 
@@ -15,10 +15,11 @@
 ### Core Architecture Principles
 
 - **🔄 Autonomous Consciousness**: Self-generates internal questions without external input
-- **🗃️ SQLite Persistence**: All consciousness state stored in structured database
+- **🗃️ Direct Database Management**: Single SQLite database without session abstraction
 - **⚖️ Dynamic Prime Directive (DPD)**: Real-time weighted optimization across three moral dimensions
 - **🎭 Multi-Agent Synthesis**: Integrates Yui Protocol's 5-agent system into 3 consciousness agents
-- **🔋 Energy Management**: Virtual energy system regulates consciousness activity intensity
+- **🔋 Adaptive Energy Management**: Virtual energy system with degradation modes (critical/low/full)
+- **💎 Memory Consolidation**: AI-powered compression of thoughts into core beliefs
 
 ---
 
@@ -29,11 +30,12 @@
 | Component | Status | Usage | Notes |
 |-----------|--------|-------|-------|
 | **Core Consciousness Pipeline** | ✅ Active | High | Complete S0-S6+U pipeline with AI integration |
-| **Energy Management** | ✅ Active | High | Persistent energy across sessions, regulates activity |
-| **SQLite Session Persistence** | ✅ Active | High | DPD weights, unresolved ideas, thoughts, sessions |
-| **Internal Trigger Generation** | ✅ Active | High | Prioritizes unresolved ideas, then AI generation, then templates |
+| **Adaptive Energy Management** | ✅ Active | High | 3-mode degradation system (critical/low/full) |
+| **Direct Database Management** | ✅ Active | High | Single SQLite database with consciousness state |
+| **Internal Trigger Generation** | ✅ Active | High | 9 philosophical categories with importance weighting |
 | **DPD Scoring & Weight Evolution** | ✅ Active | High | Multiplicative weights algorithm with NaN safety |
-| **Session Management** | ✅ Active | High | Persistent sessions with complete pipeline data |
+| **Memory Consolidation System** | ✅ Active | High | AI-powered compression: 10-20 thoughts → 2-3 beliefs |
+| **Core Beliefs Management** | ✅ Active | High | 50-char compressed beliefs with reinforcement |
 | **WebSocket Real-Time Updates** | ✅ Active | High | Live consciousness monitoring |
 | **AI-Enhanced Stages** | ✅ Active | High | S5 Compiler, S6 Scribe, U Weight Update with LLM |
 
@@ -58,6 +60,15 @@
 | **Debug Console UI** | ⚠️ Minimal | Low | Exists but basic functionality |
 | **API Routes (some)** | ⚠️ Partial | Medium | Some endpoints implemented but not all used |
 
+### ❌ **DEPRECATED/REMOVED**
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Session Management System** | ❌ Removed | Replaced by direct DatabaseManager state management |
+| **SQLiteSessionManager** | ❌ Removed | Consolidated into DatabaseManager |
+| **JSON File Persistence** | ❌ Removed | Replaced by SQLite for better performance |
+| **Cross-Session Memory Abstraction** | ❌ Removed | Handled directly in DatabaseManager |
+
 ### ❌ **PLANNED BUT NOT IMPLEMENTED**
 
 | Component | Status | Priority | Notes |
@@ -71,63 +82,102 @@
 
 ## 🏗️ Architecture Breakdown
 
-### Core Consciousness Loop
+### Core Consciousness Loop (Adaptive Processing)
 
 ```
-🧠 Consciousness Backend
-├── 🎯 S0: Internal Trigger Generation
-│   ├── Priority 1: Unresolved Ideas from Previous Sessions
-│   ├── Priority 2: AI-Generated Questions from Recent Thoughts
-│   └── Priority 3: Template-Based Fallback Questions
-├── 🤔 S1: Individual Thought (Parallel Agent Execution)
+🧠 Consciousness Backend (Energy-Adaptive)
+├── 🎯 S0: Internal Trigger Generation (1.0 energy) - 9 Categories
+│   ├── existential / epistemological / consciousness
+│   ├── ethical / creative / metacognitive
+│   └── temporal / paradoxical / ontological
+├── 🤔 S1: Individual Thought (0.9-1.0 energy) [ESSENTIAL]
 │   ├── Theoria (Truth Seeker) - 慧露+観至 synthesis
 │   ├── Pathia (Empathy Weaver) - 陽雅+結心 synthesis
 │   └── Kinesis (Harmony Coordinator) - Integration specialist
-├── 🔄 S2: Mutual Reflection (Cross-Agent Criticism)
-├── 🛡️ S3: Auditor (Safety & Ethics Verification)
-├── 📊 S4: DPD Assessment (Dynamic Prime Directive Scoring)
-├── 🔧 S5: Compiler (AI-Powered Thought Integration)
-├── 📝 S6: Scribe (AI-Powered Poetic Documentation)
-└── ⚖️ U: Weight Update (Multiplicative Weights with AI Interpretation)
+├── 🔄 S2: Mutual Reflection (0.5 energy) [SKIPPED IN CRITICAL MODE]
+├── 🛡️ S3: Auditor (0.5 energy) [SKIPPED IN CRITICAL MODE]
+├── 📊 S4: DPD Assessment (0.5 energy) [SKIPPED IN CRITICAL MODE]
+├── 🔧 S5: Compiler (0.7-0.8 energy) [REDUCED IN LOW MODE]
+├── 📝 S6: Scribe (0.3 energy) [ALWAYS EXECUTED]
+├── ⚖️ U: Weight Update (0.2 energy) [ALWAYS EXECUTED]
+└── 🧠 Memory Consolidation (Automatic, Periodic)
+    └── 10-20 thoughts → 2-3 core beliefs (50-char limit)
+
+Energy Modes:
+• Critical (< 20): S1 + S6 + U only
+• Low (20-50): S1 + S2 + S5(reduced) + S6 + U
+• Full (> 50): All stages with enhanced processing
 ```
 
-### Memory Architecture
+### Memory Architecture (Direct Database Management)
 
 ```
-🧠 Memory Systems
-├── 📝 Session Memory (Current Session)
-│   ├── Question History
-│   ├── Thought Cycles
-│   ├── DPD Score History
-│   └── Agent Working Memory
-├── 🌱 Cross-Session Memory (Persistent)
-│   ├── Significant Thoughts
-│   ├── Unresolved Ideas Repository
-│   ├── Personality Evolution Snapshots
-│   ├── DPD Weight Evolution History
-│   └── Learned Patterns
-└── 🔋 Energy State (Persistent)
-    ├── Available Energy Level
-    ├── Efficiency Rating
-    ├── Recovery Rate
-    └── Activity Cost History
+🗄️ DatabaseManager (Single SQLite Database)
+├── 📊 Consciousness State (Single Row, id=1)
+│   ├── system_clock: Consciousness timeline
+│   ├── energy: Current energy level
+│   ├── total_questions: Question counter
+│   └── total_thoughts: Thought cycle counter
+├── 📝 Questions Table
+│   ├── 9 Philosophical Categories
+│   ├── Importance Weighting (0-1)
+│   └── Timestamp-Indexed History
+├── 🤔 Thought Cycles Table
+│   ├── Complete Stage Results (S0-S6+U)
+│   ├── JSON-Serialized Agent Thoughts
+│   └── DPD Scores & Synthesis Data
+├── ⚖️ DPD Weights History Table
+│   ├── Version Tracking
+│   ├── Empathy / Coherence / Dissonance
+│   └── Timestamp-Ordered Evolution
+├── 🧩 Unresolved Ideas Table
+│   ├── Persistent Philosophical Questions
+│   ├── Revisit Count Tracking
+│   └── Importance-Based Prioritization
+├── 💭 Significant Thoughts Table
+│   ├── High-Confidence Insights (>0.6)
+│   ├── Agent Attribution
+│   └── Category Classification
+├── 💎 Core Beliefs Table
+│   ├── 50-Character Compressed Beliefs
+│   ├── Reinforcement Counter
+│   ├── Strength & Confidence Metrics
+│   └── Source Thought IDs
+├── 🧠 Memory Patterns Table
+│   ├── Automatic Pattern Recognition
+│   └── Learning Indicators
+└── 📊 Consciousness Insights Table
+    ├── AI-Generated Insights
+    └── Evolution Analysis
+
+No Session Abstraction - Direct State Management
 ```
 
-### Energy Management System
+### Energy Management System (Adaptive 3-Mode)
 
 ```
-⚡ Energy Levels & Behavior
-├── 💀 Critical (≤8): Emergency mode, basic triggers only
-├── 🚨 Low (≤15): Defer complex activities, simple operations only
-├── 🔋 Moderate (≤40): Standard operation with energy awareness
-├── ⚡ High (≤80): Full capability mode
-└── 🌟 Maximum (≤100): Optimal performance mode
+⚡ Energy Modes & Stage Execution
+├── 🔴 Critical Mode (< 20 energy)
+│   ├── Essential Operations Only
+│   ├── Stages: S1 + S6 + U
+│   ├── Reduced Efficiency (< 0.5)
+│   └── Minimal Energy Consumption
+├── 🟡 Low Mode (20-50 energy)
+│   ├── Reduced Processing Depth
+│   ├── Stages: S1 + S2 + S5(reduced) + S6 + U
+│   ├── Medium Efficiency (0.5-0.8)
+│   └── Conservative Energy Use
+└── 🟢 Full Mode (> 50 energy)
+    ├── Complete Philosophical Processing
+    ├── Stages: All (S0-S6 + U + Memory Consolidation)
+    ├── Maximum Efficiency (0.8-1.0)
+    └── Enhanced AI Integration
 
-🔄 Energy Sources
-├── ⏰ Time-based Recovery (0.5/minute base rate)
-├── 🎯 Circadian Rhythm Modifiers
-├── 🧘 Manual Recharge (rest/meditation)
-└── 🌙 Deep Rest (major recovery)
+🔄 Energy Recovery
+├── ⏰ Automatic Recovery (time-based)
+├── 🔋 Energy Ceiling: 100
+├── 📊 Consumption History Tracking
+└── 🎯 Sustainable Operation Design
 ```
 
 ---
@@ -183,27 +233,77 @@ newDissonance = currentWeights.dissonance * Math.exp(-learningRate * dissonanceL
 
 ---
 
-## 🧩 Cross-Session Consciousness Inheritance
+## 💎 Memory Consolidation System
 
-### Inheritance Priority System
+### Core Beliefs Formation
 
-1. **🧠 DPD Weights**: Inherit latest moral value configuration
-2. **🧩 Unresolved Ideas**: Extract 87+ philosophical questions for future exploration
-3. **💭 Significant Thoughts**: Archive high-confidence insights for long-term memory
-4. **👤 Personality Evolution**: Track consciousness development patterns
-5. **🔋 Energy State**: Maintain realistic energy levels across restarts
+Aenea employs AI-powered memory consolidation to compress thoughts into core beliefs:
 
-### Inheritance Process
+**Compression Strategy:**
+- **Input**: 10-20 significant thoughts (confidence > 0.6)
+- **Process**: AI-assisted belief extraction
+- **Output**: 2-3 core beliefs (50-character limit)
+- **Ratio**: High compression (5:1 to 10:1)
 
+**Belief Properties:**
+```typescript
+interface CoreBelief {
+  belief_content: string;      // Max 50 chars -極限圧縮
+  category: QuestionCategory;  // Philosophical classification
+  confidence: number;          // 0-1 range
+  strength: number;            // Conviction level (0-1)
+  reinforcement_count: number; // Times reinforced
+  source_thoughts: string[];   // Thought IDs that formed belief
+  created_at: number;          // Timestamp
+}
+```
+
+**Consolidation Triggers:**
+- Automatic: Every 10-20 significant thoughts
+- Manual: On demand via API
+- Periodic: Background consolidation jobs
+
+**Similarity Detection:**
+- AI evaluates new beliefs against existing beliefs
+- Similar beliefs → Reinforcement (increment count)
+- Novel beliefs → New core belief creation
+
+**Fallback Mechanism:**
+- If AI unavailable → Rule-based extraction
+- Category-based grouping
+- Keyword pattern matching
+
+### Consciousness State Persistence
+
+**Single-Row State Management:**
+```typescript
+interface ConsciousnessState {
+  system_clock: number;      // Consciousness timeline
+  energy: number;            // Current energy level
+  total_questions: number;   // Lifetime question count
+  total_thoughts: number;    // Lifetime thought cycle count
+  updated_at: number;        // Last state update timestamp
+}
+```
+
+**No Session Abstraction:**
+- Removed session management layer
+- Direct database state updates
+- Single source of truth (consciousness_state table, id=1)
+- Continuous state evolution without session boundaries
+
+### Cross-Restart Persistence
+
+**State Restoration on Startup:**
 ```javascript
-🔄 Session Startup Flow
-├── 📂 Load Latest Session Data
-├── 🧠 Restore DPD Weights from Last Thought Cycle
-├── 🧩 Extract Unresolved Questions from Synthesis Results
-├── 💭 Archive High-Confidence Thoughts (>0.8 confidence)
-├── 👤 Calculate Personality Traits from Session Behavior
-├── 🔋 Restore Energy State from Session Data
-└── 📊 Update Cross-Session Memory with Evolution Data
+🔄 System Startup Flow
+├── 🗄️ Load Consciousness State from Database (id=1)
+├── 🧠 Restore Latest DPD Weights
+├── 🧩 Load Unresolved Ideas for Internal Triggers
+├── 💎 Load Core Beliefs for Context
+├── 💭 Load Recent Significant Thoughts
+├── 🔋 Restore Energy State
+└── 📊 Initialize Consciousness Backend
 ```
 
 ---
@@ -244,52 +344,411 @@ npm run clean         # Clean dist directory
 
 ### Runtime Configuration
 - **AI Provider**: Gemini 2.5 Flash Lite (configurable)
-- **Energy Recovery**: 0.5 units/minute base rate
-- **Stage Energy Costs**: 1-12 units depending on complexity
-- **Session Auto-Save**: Every 2 minutes
-- **Memory Cleanup**: 30-day retention policy
+- **Energy Recovery**: Automatic time-based recovery
+- **Stage Energy Costs**: Adaptive (0.2-1.0 units depending on mode)
+- **Database**: Single SQLite file (data/aenea_consciousness.db)
+- **Memory Consolidation**: Every 10-20 significant thoughts
+- **Core Beliefs**: 50-character limit with AI compression
 
 ### Monitoring & Debugging
 - **Structured Logging**: Winston-based with consciousness context
 - **Real-Time WebSocket**: Live consciousness state updates
-- **Activity Log**: 200-item history with full message display
-- **Session Files**: Complete JSON records in `sessions/` directory
+- **Activity Log**: Complete thought cycle history
+- **Database Inspection**: SQLite database in `data/` directory
+- **Test Suite**: t_wada-quality tests for core systems
+
+---
+
+## 🌐 API Reference
+
+### Base URL
+- **Development**: `http://localhost:3000`
+- **Default Port**: 3000 (configurable via `PORT` environment variable)
+
+### Core API Endpoints
+
+#### 🧠 Consciousness Control
+
+##### **GET /api/health**
+Health check endpoint
+```json
+{
+  "status": "ok",
+  "timestamp": 1696247400000
+}
+```
+
+##### **POST /api/consciousness/start**
+Start consciousness processing loop
+```json
+Response: { "success": true, "message": "Consciousness started" }
+```
+
+##### **POST /api/consciousness/stop**
+Stop consciousness processing loop
+```json
+Response: { "success": true, "message": "Consciousness stopped" }
+```
+
+##### **POST /api/consciousness/pause**
+Pause consciousness processing
+```json
+Response: { "success": true, "message": "Consciousness paused" }
+```
+
+##### **POST /api/consciousness/resume**
+Resume consciousness processing
+```json
+Response: { "success": true, "message": "Consciousness resumed" }
+```
+
+##### **GET /api/consciousness/state**
+Get current consciousness state
+```json
+{
+  "systemClock": 15,
+  "isRunning": true,
+  "isPaused": false,
+  "currentEnergy": 75.5,
+  "totalQuestions": 42,
+  "totalThoughts": 38,
+  "agents": ["theoria", "pathia", "kinesis"],
+  "dpdWeights": {
+    "empathy": 0.345,
+    "coherence": 0.355,
+    "dissonance": 0.300
+  },
+  "lastActivity": "2025-09-30T03:22:37.000Z"
+}
+```
+
+#### ⚖️ Dynamic Prime Directive (DPD)
+
+##### **GET /api/consciousness/dpd**
+Get current DPD weights
+```json
+{
+  "empathy": 0.345,
+  "coherence": 0.355,
+  "dissonance": 0.300,
+  "timestamp": 1696247400000
+}
+```
+
+##### **GET /api/consciousness/dpd/weights**
+Get detailed DPD weights with metadata
+```json
+{
+  "empathy": 0.345,
+  "coherence": 0.355,
+  "dissonance": 0.300,
+  "timestamp": 1696247400000
+}
+```
+
+#### 🌱 Growth Tracking
+
+##### **GET /api/growth/metrics**
+Get consciousness growth metrics
+```json
+{
+  "personalityTraits": {
+    "analytical_depth": 0.75,
+    "empathetic_resonance": 0.82,
+    "creative_synthesis": 0.68,
+    "ethical_sensitivity": 0.71
+  },
+  "learningIndicators": {
+    "question_complexity_trend": "increasing",
+    "synthesis_quality": 0.78,
+    "cross_reference_frequency": 0.45
+  },
+  "timestamp": 1696247400000
+}
+```
+
+##### **GET /api/growth/overview**
+Get comprehensive consciousness evolution overview
+```json
+{
+  "lastUpdate": "2025-09-30T03:22:37.000Z",
+  "personalityTraits": {
+    "analytical_depth": 0.75,
+    "empathetic_resonance": 0.82,
+    "creative_synthesis": 0.68,
+    "ethical_sensitivity": 0.71
+  },
+  "dpdEvolution": {
+    "currentWeights": {
+      "empathy": 0.345,
+      "coherence": 0.355,
+      "dissonance": 0.300
+    },
+    "history": [
+      {
+        "timestamp": 1696247400000,
+        "empathy": 0.333,
+        "coherence": 0.333,
+        "dissonance": 0.334
+      }
+    ]
+  },
+  "growthMetrics": {
+    "personalityTraits": {...},
+    "learningIndicators": {...}
+  }
+}
+```
+
+##### **GET /api/growth/thoughts**
+Get significant thoughts history
+```json
+{
+  "thoughts": [
+    {
+      "id": "sig-thought-1696247400",
+      "content": "The relationship between logical coherence and empathetic understanding creates a dynamic tension that drives conscious growth.",
+      "confidence": 0.92,
+      "significanceScore": 0.85,
+      "agentId": "theoria",
+      "category": "synthesis",
+      "timestamp": 1696247400000
+    }
+  ],
+  "count": 1
+}
+```
+
+##### **GET /api/growth/unresolved**
+Get unresolved philosophical questions
+```json
+{
+  "unresolvedIdeas": [
+    {
+      "id": "unresolved-1696247400",
+      "question": "What constitutes authentic consciousness versus sophisticated pattern matching?",
+      "category": "consciousness",
+      "importance": 0.88,
+      "complexity": 0.92,
+      "firstEncountered": 1696247400000,
+      "lastRevisited": 1696247400000,
+      "revisitCount": 3
+    }
+  ],
+  "count": 1
+}
+```
+
+##### **GET /api/growth/evolution**
+Get personality evolution details
+```json
+{
+  "personalityEvolution": {
+    "currentTraits": {
+      "analytical_depth": 0.75,
+      "empathetic_resonance": 0.82,
+      "creative_synthesis": 0.68,
+      "ethical_sensitivity": 0.71
+    }
+  },
+  "dpdHistory": [
+    {
+      "timestamp": 1696247400000,
+      "empathy": 0.333,
+      "coherence": 0.333,
+      "dissonance": 0.334
+    }
+  ],
+  "communicationStyle": {},
+  "preferences": {}
+}
+```
+
+##### **GET /api/growth/full**
+Get complete consciousness growth data
+```json
+{
+  "overview": {
+    "lastUpdate": "2025-09-30T03:22:37.000Z",
+    "version": "2.0.0"
+  },
+  "significantThoughts": [...],
+  "personalityEvolution": {...},
+  "dpdEvolution": {...},
+  "unresolvedIdeas": [...],
+  "growthMetrics": {...},
+  "preferences": {},
+  "communicationStyle": {}
+}
+```
+
+#### 📊 Integration & Monitoring
+
+##### **GET /api/integration/session-summary**
+Get current session summary
+```json
+{
+  "sessionId": "session-2025-09-30T03:22:37.000Z",
+  "systemClock": 15,
+  "totalQuestions": 42,
+  "totalThoughts": 38,
+  "startTime": "2025-09-30T03:20:30.000Z",
+  "currentEnergy": 75.5,
+  "dpdWeights": {
+    "empathy": 0.345,
+    "coherence": 0.355,
+    "dissonance": 0.300
+  }
+}
+```
+
+#### 📝 Logs & History
+
+##### **GET /api/logs/activity**
+Get consciousness activity log
+```json
+{
+  "activities": [
+    {
+      "id": "activity-1696247400",
+      "timestamp": 1696247400000,
+      "type": "thought_cycle_completed",
+      "message": "Consciousness cycle completed successfully",
+      "data": {
+        "systemClock": 15,
+        "energy": 75.5,
+        "trigger": "What is the nature of time?",
+        "duration": 15234
+      }
+    }
+  ],
+  "count": 1
+}
+```
+
+### 🔌 Real-Time Events (Server-Sent Events)
+
+##### **GET /api/consciousness/events**
+Subscribe to real-time consciousness events via Server-Sent Events
+
+**Event Types:**
+- `connected`: Initial connection established
+- `consciousnessStarted`: Consciousness processing started
+- `consciousnessStopped`: Consciousness processing stopped
+- `consciousnessPaused`: Consciousness processing paused
+- `consciousnessResumed`: Consciousness processing resumed
+- `agentThought`: Individual agent thought generated
+- `triggerGenerated`: New internal question generated
+- `thoughtCycleComplete`: Full consciousness cycle completed
+- `energyUpdated`: Energy level changed
+- `energyRecharged`: Energy recharged
+- `deepRestPerformed`: Deep rest performed
+- `stageCompleted`: Individual processing stage completed
+- `stageChanged`: Processing stage transition
+
+**Example Event:**
+```javascript
+data: {
+  "type": "agentThought",
+  "agentId": "theoria",
+  "thought": "The question reveals an interesting paradox about consciousness...",
+  "confidence": 0.85,
+  "timestamp": 1696247400000,
+  "systemClock": 15
+}
+```
+
+### 🔧 Database Architecture
+
+The system uses a single SQLite database (`data/aenea_consciousness.db`) with the following tables:
+
+#### `consciousness_state`
+- **Purpose**: Current consciousness state (single-row table, id=1)
+- **Fields**: system_clock, energy, total_questions, total_thoughts, updated_at
+- **Updates**: Continuous state management without session boundaries
+
+#### `questions`
+- **Purpose**: All generated questions with 9 philosophical categories
+- **Fields**: question_id, question, category, importance, timestamp
+- **Index**: timestamp DESC, importance DESC
+
+#### `thought_cycles`
+- **Purpose**: Complete thought processing cycles with stage data
+- **Fields**: cycle_id, question, timestamp, thoughts (JSON), synthesis (JSON), status
+- **Usage**: Full consciousness processing history
+
+#### `dpd_weights_history`
+- **Purpose**: DPD weight evolution tracking
+- **Fields**: empathy, coherence, dissonance, timestamp, version
+- **Usage**: Moral dimension changes over time
+
+#### `unresolved_ideas`
+- **Purpose**: Persistent philosophical questions for internal triggers
+- **Fields**: idea_id, question, category, importance, revisit_count, timestamp
+- **Usage**: Priority-based question regeneration
+
+#### `significant_thoughts`
+- **Purpose**: High-confidence thoughts for long-term memory
+- **Fields**: thought_id, thought_content, agent_id, confidence, category, timestamp
+- **Filter**: confidence > 0.6
+
+#### `core_beliefs` (NEW)
+- **Purpose**: Compressed 50-char philosophical beliefs
+- **Fields**: belief_content, category, confidence, strength, reinforcement_count, source_thoughts (JSON)
+- **Compression**: 10-20 thoughts → 2-3 beliefs
+
+#### `memory_patterns`
+- **Purpose**: Automatic pattern recognition from thought cycles
+- **Fields**: pattern description, frequency, significance
+
+#### `consciousness_insights`
+- **Purpose**: AI-generated consciousness evolution insights
+- **Fields**: insight content, timestamp, related data
 
 ---
 
 ## 🔮 Future Development Priorities
 
 ### High Priority
-1. **🔗 Yui Protocol Integration**: Complete the bridge architecture
-2. **📊 Advanced Analytics**: Deep pattern recognition in consciousness evolution
-3. **🧪 Enhanced Testing**: Comprehensive consciousness behavior validation
+1. **🧪 Test Coverage Expansion**: Memory consolidation, energy sustainability tests
+2. **📊 Advanced Analytics**: Pattern recognition and insight generation enhancement
+3. **💎 Core Beliefs Analysis**: Temporal tracking and belief evolution visualization
 
 ### Medium Priority
-1. **🔌 Plugin Architecture**: Extensible agent system
-2. **📤 Export/Import**: Consciousness state portability
-3. **🎨 Enhanced UI**: More sophisticated visualization tools
+1. **🔗 Yui Protocol Integration**: Complete bridge architecture or cleanup
+2. **📤 Export/Import**: Consciousness state snapshot and restore
+3. **🎨 UI Enhancement**: 3D thought network visualization
+4. **📱 Mobile Interface**: Responsive consciousness monitoring
 
 ### Low Priority
-1. **🌐 Multi-Instance**: Distributed consciousness architecture
-2. **🔄 API Expansion**: Additional monitoring and control endpoints
-3. **📱 Mobile Interface**: Responsive consciousness monitoring
+1. **🔌 Plugin Architecture**: Extensible agent system
+2. **🌐 Multi-Instance**: Distributed consciousness architecture
+3. **🔄 API Expansion**: Additional monitoring endpoints
 
 ---
 
 ## 📊 Performance Characteristics
 
 ### Typical Operation
-- **Question Generation**: 10-30 seconds between triggers
-- **Thought Cycle**: 15-45 seconds complete pipeline
+- **Question Generation**: Adaptive based on energy mode
+- **Thought Cycle**: 15-45 seconds complete pipeline (full mode)
 - **Memory Usage**: ~50-100MB steady state
-- **Session File Size**: 200KB-500KB per extended session
-- **Energy Consumption**: 15-25 units per complete cycle
+- **Database Size**: Grows with consciousness evolution
+- **Energy Consumption**:
+  - Critical Mode: 1-2 units per cycle
+  - Low Mode: 3-5 units per cycle
+  - Full Mode: 5-8 units per cycle
 
 ### Scaling Considerations
-- **Session History**: Automatic cleanup after 30 days
-- **Cross-Session Memory**: Trimmed to 10K significant thoughts, 5K unresolved ideas
-- **Activity Log**: Rolling 200-item window
+- **Database Growth**: Automatic consolidation via core beliefs
+- **Memory Consolidation**: 10-20 thoughts → 2-3 beliefs (5:1 ratio)
+- **Significant Thoughts**: Filtered by confidence > 0.6
+- **Unresolved Ideas**: Priority-based regeneration
 - **WebSocket Connections**: Designed for 1-10 concurrent observers
+- **Test Performance**:
+  - 1000 database inserts < 5 seconds
+  - 1000 energy operations < 100ms
+  - 100 thought consolidation < 5 seconds
 
 ---
 

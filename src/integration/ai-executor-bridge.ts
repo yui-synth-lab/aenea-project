@@ -265,7 +265,26 @@ export class AIExecutorBridge {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        // Log AI prompt and system prompt
+        console.log(`\n🤖 [AI-EXEC] Starting AI execution - Provider: ${providerName}, Attempt: ${attempt + 1}`);
+        console.log(`📝 [AI-PROMPT] System Prompt:\n${systemPrompt}`);
+        console.log(`📝 [AI-PROMPT] User Prompt:\n${prompt}`);
+        console.log(`⏱️  [AI-EXEC] Execution started at: ${new Date().toISOString()}`);
+
         const result = await executor.execute(prompt, systemPrompt);
+
+        // Log AI output
+        console.log(`✅ [AI-OUTPUT] Success: ${result.success}`);
+        if (result.content) {
+          console.log(`📄 [AI-OUTPUT] Content:\n${result.content}`);
+        }
+        if (result.error) {
+          console.log(`❌ [AI-ERROR] Error: ${result.error}`);
+        }
+        console.log(`⏱️  [AI-EXEC] Duration: ${result.duration || 'unknown'}ms`);
+        console.log(`🎯 [AI-META] Confidence: ${result.metadata?.confidence || 'unknown'}`);
+        console.log(`🔚 [AI-EXEC] Execution completed\n`);
+
         if (result.success && result.content) {
           return result;
         }
@@ -293,13 +312,7 @@ export class AIExecutorBridge {
    * 意識コンテキストでプロンプトを強化
    */
   private enhancePromptWithContext(prompt: string, context: ConsciousnessAIContext): string {
-    const contextInfo = [
-      `[意識コンテキスト]`,
-      `エージェント: ${context.agentId}`,
-      `システムクロック: ${context.systemClock}`,
-      `フェーズ: ${context.phase}`,
-      `エネルギーレベル: ${(context.energyLevel * 100).toFixed(1)}%`
-    ];
+    const contextInfo = [];
 
     if (context.previousThoughts.length > 0) {
       contextInfo.push(`前の思考: ${context.previousThoughts.slice(-2).join(' / ')}`);
@@ -309,7 +322,8 @@ export class AIExecutorBridge {
       contextInfo.push(`最近の質問: ${context.questionHistory.slice(-1)[0]}`);
     }
 
-    return `${contextInfo.join('\n')}\n\n${prompt}`;
+    // Return prompt with minimal context if any, otherwise just the prompt
+    return contextInfo.length > 0 ? `${contextInfo.join('\n')}\n\n${prompt}` : prompt;
   }
 
   /**

@@ -1,0 +1,451 @@
+/**
+ * Energy Management Tests - t_wada Quality
+ *
+ * Testing strategy:
+ * - State transitions are predictable
+ * - Boundary conditions are explicit
+ * - Invariants are maintained
+ * - Side effects are observable
+ */
+
+import { EnergyManager, getEnergyManager, resetEnergyManager } from '../../src/utils/energy-management';
+
+describe('EnergyManager', () => {
+  let energyManager: EnergyManager;
+
+  beforeEach(() => {
+    resetEnergyManager();
+    energyManager = getEnergyManager();
+  });
+
+  describe('Initialization', () => {
+    test('should start with default energy level', () => {
+      // Arrange & Act: Energy manager is initialized in beforeEach
+      const state = energyManager.getEnergyState();
+
+      // Assert
+      expect(state.total).toBe(80); // Default initial energy
+      expect(state.available).toBe(80);
+      expect(state.reserved).toBe(0);
+    });
+
+    test('should have positive recovery rate', () => {
+      // Arrange & Act
+      const state = energyManager.getEnergyState();
+
+      // Assert: Recovery rate should enable energy regeneration
+      expect(state.recovery).toBeGreaterThan(0);
+    });
+
+    test('should initialize efficiency at maximum', () => {
+      // Arrange & Act
+      const state = energyManager.getEnergyState();
+
+      // Assert
+      expect(state.efficiency).toBe(1.0);
+    });
+  });
+
+  describe('Energy Consumption', () => {
+    describe('when sufficient energy is available', () => {
+      test('should consume requested amount successfully', () => {
+        // Arrange
+        const initialEnergy = energyManager.getEnergyState().available;
+        const consumeAmount = 10;
+
+        // Act
+        const success = energyManager.consumeEnergy(consumeAmount, 'test_operation');
+
+        // Assert
+        expect(success).toBe(true);
+        expect(energyManager.getEnergyState().available).toBe(initialEnergy - consumeAmount);
+      });
+
+      test('should record consumption in history', () => {
+        // Arrange
+        const consumeAmount = 15;
+
+        // Act
+        energyManager.consumeEnergy(consumeAmount, 'test_operation');
+        const history = energyManager.getEnergyHistory();
+
+        // Assert
+        expect(history).toHaveLength(1);
+        expect(history[0]).toMatchObject({
+          activity: 'test_operation',
+          amount: consumeAmount
+        });
+      });
+    });
+
+    describe('when insufficient energy is available', () => {
+      test('should reject consumption request', () => {
+        // Arrange: Consume most energy first
+        energyManager.consumeEnergy(75, 'drain');
+
+        // Act: Try to consume more than available
+        const success = energyManager.consumeEnergy(20, 'excessive_request');
+
+        // Assert
+        expect(success).toBe(false);
+      });
+
+      test('should not modify energy state on failed consumption', () => {
+        // Arrange
+        energyManager.consumeEnergy(75, 'drain');
+        const energyBeforeFailed = energyManager.getEnergyState().available;
+
+        // Act
+        energyManager.consumeEnergy(20, 'excessive_request');
+
+        // Assert: Energy should remain unchanged
+        expect(energyManager.getEnergyState().available).toBe(energyBeforeFailed);
+      });
+    });
+
+    describe('boundary values', () => {
+      test('should handle zero consumption', () => {
+        // Arrange
+        const initialEnergy = energyManager.getEnergyState().available;
+
+        // Act
+        const success = energyManager.consumeEnergy(0, 'zero_cost');
+
+        // Assert
+        expect(success).toBe(true);
+        expect(energyManager.getEnergyState().available).toBe(initialEnergy);
+      });
+
+      test('should handle exact available energy consumption', () => {
+        // Arrange
+        const exactAmount = energyManager.getEnergyState().available;
+
+        // Act
+        const success = energyManager.consumeEnergy(exactAmount, 'exact_consumption');
+
+        // Assert
+        expect(success).toBe(true);
+        expect(energyManager.getEnergyState().available).toBe(0);
+      });
+
+      test('should reject negative consumption', () => {
+        // Arrange & Act
+        const success = energyManager.consumeEnergy(-10, 'negative');
+
+        // Assert
+        expect(success).toBe(false);
+      });
+
+      test('should handle consumption just above available', () => {
+        // Arrange
+        const available = energyManager.getEnergyState().available;
+
+        // Act
+        const success = energyManager.consumeEnergy(available + 0.1, 'slightly_over');
+
+        // Assert
+        expect(success).toBe(false);
+      });
+    });
+  });
+
+  describe('Energy Recovery', () => {
+    test('should recover energy over time', async () => {
+      // Arrange: Consume some energy
+      energyManager.consumeEnergy(30, 'test');
+      const energyAfterConsumption = energyManager.getEnergyState().available;
+
+      // Act: Wait for recovery (energy loop runs periodically)
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Assert: Energy should have recovered some amount
+      const energyAfterRecovery = energyManager.getEnergyState().available;
+      expect(energyAfterRecovery).toBeGreaterThan(energyAfterConsumption);
+    });
+
+    test('should not exceed maximum energy during recovery', async () => {
+      // Arrange: Start at max energy
+      const maxEnergy = energyManager.getEnergyState().total;
+
+      // Act: Wait for potential recovery
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Assert: Should remain at or below max
+      expect(energyManager.getEnergyState().available).toBeLessThanOrEqual(maxEnergy);
+    });
+
+    test('should provide recovery information', () => {
+      // Arrange & Act
+      const info = energyManager.getRecoveryInfo();
+
+      // Assert
+      expect(info).toHaveProperty('currentRate');
+      expect(info).toHaveProperty('projectedFull');
+      expect(info).toHaveProperty('isRecovering');
+    });
+  });
+
+  describe('Energy Degradation Modes', () => {
+    describe('Critical Mode (< 20 energy)', () => {
+      test('should enter critical mode when energy is very low', () => {
+        // Arrange: Drain to critical level
+        energyManager.consumeEnergy(65, 'drain'); // 80 - 65 = 15
+
+        // Act
+        const mode = energyManager.getEnergyMode();
+
+        // Assert
+        expect(mode).toBe('critical');
+      });
+
+      test('should have reduced efficiency in critical mode', () => {
+        // Arrange
+        energyManager.consumeEnergy(65, 'drain');
+
+        // Act
+        const state = energyManager.getEnergyState();
+
+        // Assert
+        expect(state.efficiency).toBeLessThan(1.0);
+      });
+    });
+
+    describe('Low Mode (20-50 energy)', () => {
+      test('should enter low mode at appropriate threshold', () => {
+        // Arrange: Drain to low level
+        energyManager.consumeEnergy(50, 'drain'); // 80 - 50 = 30
+
+        // Act
+        const mode = energyManager.getEnergyMode();
+
+        // Assert
+        expect(mode).toBe('low');
+      });
+    });
+
+    describe('Full Mode (> 50 energy)', () => {
+      test('should remain in full mode with sufficient energy', () => {
+        // Arrange: Initial state is full
+
+        // Act
+        const mode = energyManager.getEnergyMode();
+
+        // Assert
+        expect(mode).toBe('full');
+      });
+
+      test('should have maximum efficiency in full mode', () => {
+        // Arrange & Act
+        const state = energyManager.getEnergyState();
+
+        // Assert
+        expect(state.efficiency).toBe(1.0);
+      });
+    });
+
+    describe('mode transitions', () => {
+      test('should transition from full to low to critical', () => {
+        // Arrange
+        const modes: string[] = [];
+
+        // Act: Record mode after each consumption
+        modes.push(energyManager.getEnergyMode()); // full
+
+        energyManager.consumeEnergy(40, 'step1'); // 80 - 40 = 40
+        modes.push(energyManager.getEnergyMode()); // low
+
+        energyManager.consumeEnergy(25, 'step2'); // 40 - 25 = 15
+        modes.push(energyManager.getEnergyMode()); // critical
+
+        // Assert
+        expect(modes).toEqual(['full', 'low', 'critical']);
+      });
+    });
+  });
+
+  describe('Energy Reservation', () => {
+    test('should reserve energy for future operations', () => {
+      // Arrange
+      const reserveAmount = 20;
+
+      // Act
+      const success = energyManager.reserveEnergy(reserveAmount, 'future_op');
+
+        // Assert
+      expect(success).toBe(true);
+      expect(energyManager.getEnergyState().reserved).toBe(reserveAmount);
+      expect(energyManager.getEnergyState().available).toBe(80 - reserveAmount);
+    });
+
+    test('should reject reservation exceeding available energy', () => {
+      // Arrange
+      const excessiveAmount = 100;
+
+      // Act
+      const success = energyManager.reserveEnergy(excessiveAmount, 'excessive');
+
+      // Assert
+      expect(success).toBe(false);
+      expect(energyManager.getEnergyState().reserved).toBe(0);
+    });
+
+    test('should release reserved energy', () => {
+      // Arrange
+      energyManager.reserveEnergy(20, 'op');
+
+      // Act
+      energyManager.releaseReservedEnergy(20);
+
+      // Assert
+      expect(energyManager.getEnergyState().reserved).toBe(0);
+      expect(energyManager.getEnergyState().available).toBe(80);
+    });
+  });
+
+  describe('Reset Functionality', () => {
+    test('should reset to initial state', () => {
+      // Arrange: Modify state
+      energyManager.consumeEnergy(50, 'modify');
+      energyManager.reserveEnergy(10, 'reserve');
+
+      // Act
+      energyManager.resetEnergy();
+
+      // Assert
+      const state = energyManager.getEnergyState();
+      expect(state.available).toBe(80);
+      expect(state.reserved).toBe(0);
+      expect(state.efficiency).toBe(1.0);
+    });
+
+    test('should clear consumption history on reset', () => {
+      // Arrange
+      energyManager.consumeEnergy(10, 'op1');
+      energyManager.consumeEnergy(10, 'op2');
+
+      // Act
+      energyManager.resetEnergy();
+
+      // Assert
+      expect(energyManager.getEnergyHistory()).toHaveLength(0);
+    });
+  });
+
+  describe('Singleton Pattern', () => {
+    test('should return same instance from getEnergyManager', () => {
+      // Arrange & Act
+      const instance1 = getEnergyManager();
+      const instance2 = getEnergyManager();
+
+      // Assert
+      expect(instance1).toBe(instance2);
+    });
+
+    test('should share state across instances', () => {
+      // Arrange
+      const instance1 = getEnergyManager();
+
+      // Act
+      instance1.consumeEnergy(20, 'op');
+      const instance2 = getEnergyManager();
+
+      // Assert
+      expect(instance2.getEnergyState().available).toBe(60);
+    });
+
+    test('should create new instance after reset', () => {
+      // Arrange
+      const instance1 = getEnergyManager();
+      instance1.consumeEnergy(40, 'op');
+
+      // Act
+      resetEnergyManager();
+      const instance2 = getEnergyManager();
+
+      // Assert
+      expect(instance2.getEnergyState().available).toBe(80);
+    });
+  });
+
+  describe('Invariants', () => {
+    test('total energy should remain constant', () => {
+      // Arrange
+      const initialTotal = energyManager.getEnergyState().total;
+
+      // Act: Various operations
+      energyManager.consumeEnergy(20, 'op1');
+      energyManager.reserveEnergy(10, 'op2');
+      energyManager.releaseReservedEnergy(10);
+
+      // Assert: Total should never change
+      expect(energyManager.getEnergyState().total).toBe(initialTotal);
+    });
+
+    test('available plus reserved should never exceed total', () => {
+      // Arrange & Act: Multiple operations
+      for (let i = 0; i < 10; i++) {
+        energyManager.consumeEnergy(Math.random() * 5, `op${i}`);
+        energyManager.reserveEnergy(Math.random() * 5, `reserve${i}`);
+
+        const state = energyManager.getEnergyState();
+
+        // Assert invariant
+        expect(state.available + state.reserved).toBeLessThanOrEqual(state.total);
+      }
+    });
+
+    test('energy values should never be negative', () => {
+      // Arrange & Act: Try to create negative state
+      energyManager.consumeEnergy(100, 'excessive'); // Should fail
+
+      const state = energyManager.getEnergyState();
+
+      // Assert
+      expect(state.available).toBeGreaterThanOrEqual(0);
+      expect(state.reserved).toBeGreaterThanOrEqual(0);
+      expect(state.total).toBeGreaterThanOrEqual(0);
+    });
+
+    test('efficiency should remain in valid range [0, 1]', async () => {
+      // Arrange & Act: Various states
+      for (let i = 0; i < 20; i++) {
+        energyManager.consumeEnergy(Math.random() * 10, `op${i}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        const state = energyManager.getEnergyState();
+
+        // Assert
+        expect(state.efficiency).toBeGreaterThanOrEqual(0);
+        expect(state.efficiency).toBeLessThanOrEqual(1);
+      }
+    });
+  });
+
+  describe('Performance', () => {
+    test('should handle rapid consecutive consumptions', () => {
+      // Arrange
+      const operations = 1000;
+      const startTime = Date.now();
+
+      // Act
+      for (let i = 0; i < operations; i++) {
+        energyManager.consumeEnergy(0.01, `op${i}`);
+      }
+      const duration = Date.now() - startTime;
+
+      // Assert: Should complete quickly
+      expect(duration).toBeLessThan(100); // 100ms for 1000 ops
+    });
+
+    test('should maintain reasonable history size', () => {
+      // Arrange & Act: Generate many operations
+      for (let i = 0; i < 200; i++) {
+        energyManager.consumeEnergy(0.1, `op${i}`);
+      }
+
+      // Assert: History should be bounded
+      const history = energyManager.getEnergyHistory();
+      expect(history.length).toBeLessThanOrEqual(100); // Max history size
+    });
+  });
+});

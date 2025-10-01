@@ -46,23 +46,18 @@ router.get('/overview', (req, res) => {
   try {
     const state = consciousness.getState();
     const energyState = consciousness.getEnergyState();
-    const sessionManager = consciousness.getSessionManager();
-    const currentSessionId = consciousness.getCurrentSessionId();
 
     const overview = {
       timestamp: Date.now(),
       systemStatus: {
         isRunning: state.isRunning,
         isPaused: state.isPaused,
-        status: state.status,
-        uptime: Date.now() - (sessionManager ? 0 : Date.now()) // Simplified uptime calculation
+        uptime: Date.now() - Date.now() // Simplified uptime calculation
       },
       consciousness: {
         systemClock: state.systemClock,
         totalQuestions: state.totalQuestions,
-        totalThoughts: state.totalThoughts,
-        lastQuestion: state.lastQuestion,
-        agents: state.agents
+        totalThoughts: state.totalThoughts
       },
       energy: {
         current: energyState.available,
@@ -72,8 +67,7 @@ router.get('/overview', (req, res) => {
         recovery: energyState.recovery
       },
       session: {
-        currentSessionId,
-        // Add more session details if available
+        // Session management removed from architecture
       },
       performance: {
         averageResponseTime: 0, // Would be calculated from actual metrics
@@ -131,8 +125,8 @@ router.get('/consciousness', (req, res) => {
       systemClock: clockDetails,
       questionAnalytics: questionStats,
       agentActivity: {
-        activeAgents: state.agents,
-        totalAgents: state.agents.length,
+        activeAgents: [],
+        totalAgents: 0,
         // Add agent-specific metrics if available
       },
       cognitiveMetrics: {
@@ -330,8 +324,7 @@ router.post('/debug', (req, res) => {
         result = {
           state: consciousness.getState(),
           history: consciousness.getHistory(),
-          energyState: consciousness.getEnergyState(),
-          sessionId: consciousness.getCurrentSessionId()
+          energyState: consciousness.getEnergyState()
         };
         break;
 

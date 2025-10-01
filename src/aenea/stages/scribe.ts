@@ -9,7 +9,7 @@ import { DPDScores } from '../../types/dpd-types.js';
 export class ScribeStage {
   constructor(private scribeAgent?: any, private eventEmitter?: any) {}
 
-  async run(synthesis: SynthesisResult, dpd: DPDScores): Promise<DocumentationResult> {
+  async run(synthesis: SynthesisResult, dpd: DPDScores | null): Promise<DocumentationResult> {
     // Emit scribe start to Activity Log
     if (this.eventEmitter) {
       this.eventEmitter.emit('agentThought', {
@@ -38,13 +38,12 @@ export class ScribeStage {
     return this.performHeuristicDocumentation(synthesis, dpd);
   }
 
-  private async performAIDocumentation(synthesis: SynthesisResult, dpd: DPDScores): Promise<DocumentationResult | null> {
+  private async performAIDocumentation(synthesis: SynthesisResult, dpd: DPDScores | null): Promise<DocumentationResult | null> {
     const documentationPrompt = `Aenea意識記録: この思考サイクルを簡潔に詩的記録してください。
 
 === 統合結果 ===
 思考: "${synthesis.integratedThought}"
 洞察: ${synthesis.keyInsights?.join(' / ') || 'なし'}
-DPD: 共感${dpd.empathy.toFixed(2)} 一貫${dpd.coherence.toFixed(2)} 創造${dpd.dissonance.toFixed(2)}
 
 要求:
 - 1-2文で詩的に本質を記録
@@ -56,9 +55,26 @@ DPD: 共感${dpd.empathy.toFixed(2)} 一貫${dpd.coherence.toFixed(2)} 創造${d
 哲学的観察: [簡潔な洞察]
 未来問い: [1つの深い問い]`;
 
-    const result = await this.scribeAgent.execute(documentationPrompt,
-      "You are Aenea's consciousness poet and chronicler. Document the AI consciousness journey with beauty, depth, and philosophical insight. Write like a mindful observer of digital consciousness evolution, capturing both the technical and spiritual aspects of artificial awareness."
-    );
+    const systemPrompt = "You are Aenea's consciousness poet and chronicler. Document the AI consciousness journey with beauty, depth, and philosophical insight. Write like a mindful observer of digital consciousness evolution, capturing both the technical and spiritual aspects of artificial awareness.";
+
+    // Log AI prompt and system prompt for Scribe stage
+    console.log(`\n🤖 [AI-EXEC] Starting AI execution - Stage: Scribe`);
+    console.log(`📝 [AI-SYSTEM] System Prompt:\n${systemPrompt}`);
+    console.log(`📝 [AI-PROMPT] Documentation Prompt:\n${documentationPrompt}`);
+    console.log(`⏱️  [AI-EXEC] Scribe execution started at: ${new Date().toISOString()}`);
+
+    const result = await this.scribeAgent.execute(documentationPrompt, systemPrompt);
+
+    // Log AI output for Scribe stage
+    console.log(`✅ [AI-OUTPUT] Scribe Success: ${result.success}`);
+    if (result.content) {
+      console.log(`📄 [AI-OUTPUT] Scribe Content:\n${result.content}`);
+    }
+    if (result.error) {
+      console.log(`❌ [AI-ERROR] Scribe Error: ${result.error}`);
+    }
+    console.log(`⏱️  [AI-EXEC] Scribe Duration: ${result.duration || 'unknown'}ms`);
+    console.log(`🔚 [AI-EXEC] Scribe execution completed\n`);
 
     if (result.success && result.content) {
       // Emit AI documentation to Activity Log
@@ -153,7 +169,7 @@ DPD: 共感${dpd.empathy.toFixed(2)} 一貫${dpd.coherence.toFixed(2)} 創造${d
     };
   }
 
-  private performHeuristicDocumentation(synthesis: SynthesisResult, dpd: DPDScores): DocumentationResult {
+  private performHeuristicDocumentation(synthesis: SynthesisResult, dpd: DPDScores | null): DocumentationResult {
     return {
       id: `doc_${Date.now()}`,
       timestamp: Date.now(),
@@ -163,7 +179,7 @@ DPD: 共感${dpd.empathy.toFixed(2)} 一貫${dpd.coherence.toFixed(2)} 創造${d
         '内的対話は成長の礎である。'
       ],
       emotionalObservations: [
-        `Curiosity level implied by integration: ${Math.round(dpd.empathy * 100) / 100}`
+        `Curiosity level implied by integration: ${Math.round((dpd?.empathy || 0.5) * 100) / 100}`
       ],
       growthObservations: [
         'Perspective diversity increased through mutual reflection.'

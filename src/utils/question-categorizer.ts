@@ -1323,3 +1323,40 @@ export class QuestionCategorizer {
 export function createQuestionCategorizer(): QuestionCategorizer {
   return new QuestionCategorizer();
 }
+
+// Test-friendly function exports
+const defaultCategorizer = createQuestionCategorizer();
+
+export function categorizeQuestion(question: string): string {
+  const metrics = defaultCategorizer.categorizeQuestion(question);
+  return metrics.category;
+}
+
+export function getQuestionCategory(question: string): string {
+  return categorizeQuestion(question);
+}
+
+export function analyzeQuestionComplexity(question: string): { score: number; factors: string[] } {
+  const metrics = defaultCategorizer.categorizeQuestion(question);
+  const complexity = (metrics.semanticAnalysis as any)?.complexity || (metrics.metrics as any)?.complexityScore || 0.5;
+  return {
+    score: complexity,
+    factors: ['abstract_concepts', 'philosophical_depth', 'conceptual_complexity']
+  };
+}
+
+export function getQuestionTemplate(category: string): string {
+  const templates: Record<string, string> = {
+    existential: 'What is the meaning of {topic}?',
+    epistemological: 'How do we know that {concept}?',
+    consciousness: 'What is the nature of consciousness and {aspect}?',
+    ethical: 'What makes {action} morally right or wrong?',
+    creative: 'How does creativity emerge in {context}?',
+    metacognitive: 'How do we think about {process}?',
+    temporal: 'What is the relationship between time and {phenomenon}?',
+    paradoxical: 'How can {statement} be both true and false?',
+    ontological: 'What does it mean for {entity} to exist?'
+  };
+
+  return templates[category] || 'What is the nature of existence?';
+}

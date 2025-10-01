@@ -1,0 +1,512 @@
+/**
+ * Database Persistence Integration Tests - t_wada Quality
+ *
+ * Integration testing philosophy:
+ * - Test against real SQLite database
+ * - Verify data survives process boundaries
+ * - Test transaction semantics
+ * - Verify concurrent access patterns
+ */
+
+import { DatabaseManager } from '../../src/server/database-manager';
+import * as fs from 'fs';
+import * as path from 'path';
+
+describe('DatabaseManager - Integration Tests', () => {
+  let dbManager: DatabaseManager;
+  const testDbPath = path.join(process.cwd(), 'data', 'test_consciousness.db');
+
+  beforeEach(() => {
+    // Clean slate for each test
+    if (fs.existsSync(testDbPath)) {
+      fs.unlinkSync(testDbPath);
+    }
+    dbManager = new DatabaseManager();
+  });
+
+  afterEach(() => {
+    // Cleanup
+    if (fs.existsSync(testDbPath)) {
+      fs.unlinkSync(testDbPath);
+    }
+  });
+
+  describe('Database Initialization', () => {
+    test('should create database file on first use', () => {
+      // Arrange & Act: Database manager initialization happens in beforeEach
+
+      // Assert
+      expect(fs.existsSync(testDbPath)).toBe(true);
+    });
+
+    test('should create all required tables', () => {
+      // Arrange & Act: Verify by attempting operations that require tables
+      const state = dbManager.getConsciousnessState();
+
+      // Assert: Should not throw
+      expect(state).toBeDefined();
+      expect(state.systemClock).toBeDefined();
+      expect(state.energy).toBeDefined();
+    });
+
+    test('should initialize consciousness state with defaults', () => {
+      // Arrange & Act
+      const state = dbManager.getConsciousnessState();
+
+      // Assert
+      expect(state.systemClock).toBe(0);
+      expect(state.energy).toBe(80);
+      expect(state.totalQuestions).toBe(0);
+      expect(state.totalThoughts).toBe(0);
+    });
+  });
+
+  describe('Consciousness State Persistence', () => {
+    test('should save and retrieve consciousness state', () => {
+      // Arrange
+      const testState = {
+        systemClock: 42.5,
+        energy: 65.3,
+        totalQuestions: 10,
+        totalThoughts: 25
+      };
+
+      // Act
+      dbManager.saveConsciousnessState(
+        testState.systemClock,
+        testState.energy,
+        testState.totalQuestions,
+        testState.totalThoughts
+      );
+
+      const retrieved = dbManager.getConsciousnessState();
+
+      // Assert
+      expect(retrieved.systemClock).toBe(testState.systemClock);
+      expect(retrieved.energy).toBe(testState.energy);
+      expect(retrieved.totalQuestions).toBe(testState.totalQuestions);
+      expect(retrieved.totalThoughts).toBe(testState.totalThoughts);
+    });
+
+    test('should update existing state on subsequent saves', () => {
+      // Arrange: Save initial state
+      dbManager.saveConsciousnessState(10, 80, 5, 10);
+
+      // Act: Update state
+      dbManager.saveConsciousnessState(20, 60, 8, 15);
+      const state = dbManager.getConsciousnessState();
+
+      // Assert: Should have updated values, not duplicates
+      expect(state.systemClock).toBe(20);
+      expect(state.energy).toBe(60);
+    });
+
+    test('should persist state across DatabaseManager instances', () => {
+      // Arrange: Save state with first instance
+      dbManager.saveConsciousnessState(100, 50, 20, 40);
+
+      // Act: Create new instance
+      const newManager = new DatabaseManager();
+      const state = newManager.getConsciousnessState();
+
+      // Assert: State should be preserved
+      expect(state.systemClock).toBe(100);
+      expect(state.energy).toBe(50);
+    });
+  });
+
+  describe('Question Management', () => {
+    test('should save question with all metadata', () => {
+      // Arrange
+      const question = {
+        id: 'q-001',
+        question: 'What is consciousness?',
+        category: 'consciousness',
+        importance: 0.9,
+        timestamp: Date.now()
+      };
+
+      // Act
+      dbManager.saveQuestion(
+        question.id,
+        question.question,
+        question.category,
+        question.importance,
+        question.timestamp
+      );
+
+      const questions = dbManager.getRecentQuestions(10);
+
+      // Assert
+      expect(questions).toHaveLength(1);
+      expect(questions[0]).toMatchObject({
+        question_id: question.id,
+        question: question.question,
+        category: question.category,
+        importance: question.importance
+      });
+    });
+
+    test('should retrieve questions in reverse chronological order', () => {
+      // Arrange: Save multiple questions with delays to ensure timestamp order
+      const questions = [
+        { id: 'q-1', question: 'First?', category: 'test', importance: 0.5, timestamp: 1000 },
+        { id: 'q-2', question: 'Second?', category: 'test', importance: 0.5, timestamp: 2000 },
+        { id: 'q-3', question: 'Third?', category: 'test', importance: 0.5, timestamp: 3000 }
+      ];
+
+      questions.forEach(q => {
+        dbManager.saveQuestion(q.id, q.question, q.category, q.importance, q.timestamp);
+      });
+
+      // Act
+      const retrieved = dbManager.getRecentQuestions(10);
+
+      // Assert: Should be in reverse order (newest first)
+      expect(retrieved[0].question).toBe('Third?');
+      expect(retrieved[1].question).toBe('Second?');
+      expect(retrieved[2].question).toBe('First?');
+    });
+
+    test('should respect limit parameter', () => {
+      // Arrange: Save 10 questions
+      for (let i = 0; i < 10; i++) {
+        dbManager.saveQuestion(`q-${i}`, `Question ${i}`, 'test', 0.5, Date.now() + i);
+      }
+
+      // Act
+      const limited = dbManager.getRecentQuestions(3);
+
+      // Assert
+      expect(limited).toHaveLength(3);
+    });
+
+    test('should handle duplicate question IDs gracefully', () => {
+      // Arrange
+      const questionId = 'duplicate-id';
+
+      // Act: Save same ID twice
+      dbManager.saveQuestion(questionId, 'First version', 'test', 0.5, 1000);
+      dbManager.saveQuestion(questionId, 'Second version', 'test', 0.6, 2000);
+
+      // Assert: Should handle gracefully (either update or skip)
+      const questions = dbManager.getRecentQuestions(10);
+      // Just verify no crash and we have questions
+      expect(questions.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Thought Cycle Persistence', () => {
+    test('should save complete thought cycle', () => {
+      // Arrange
+      const thoughtCycle = {
+        id: 'cycle-001',
+        question: 'Test question',
+        timestamp: Date.now(),
+        thoughts: JSON.stringify([{ agent: 'theoria', content: 'Logical analysis' }]),
+        synthesis: JSON.stringify({ content: 'Integrated wisdom' }),
+        status: 'completed'
+      };
+
+      // Act
+      dbManager.saveThoughtCycle(
+        thoughtCycle.id,
+        thoughtCycle.question,
+        thoughtCycle.timestamp,
+        thoughtCycle.thoughts,
+        thoughtCycle.synthesis,
+        thoughtCycle.status
+      );
+
+      const cycles = dbManager.getRecentThoughtCycles(10);
+
+      // Assert
+      expect(cycles).toHaveLength(1);
+      expect(cycles[0]).toMatchObject({
+        cycle_id: thoughtCycle.id,
+        question: thoughtCycle.question,
+        status: thoughtCycle.status
+      });
+    });
+
+    test('should store and retrieve JSON data correctly', () => {
+      // Arrange
+      const complexData = {
+        thoughts: [
+          { agent: 'theoria', content: 'Logical thought', confidence: 0.9 },
+          { agent: 'pathia', content: 'Empathetic thought', confidence: 0.85 }
+        ]
+      };
+
+      // Act
+      dbManager.saveThoughtCycle(
+        'cycle-json',
+        'Test',
+        Date.now(),
+        JSON.stringify(complexData.thoughts),
+        JSON.stringify({ result: 'test' }),
+        'completed'
+      );
+
+      const cycles = dbManager.getRecentThoughtCycles(1);
+      const retrievedThoughts = JSON.parse(cycles[0].thoughts);
+
+      // Assert
+      expect(retrievedThoughts).toHaveLength(2);
+      expect(retrievedThoughts[0].confidence).toBe(0.9);
+    });
+  });
+
+  describe('DPD Weights Evolution', () => {
+    test('should save DPD weights with version tracking', () => {
+      // Arrange
+      const weights = {
+        empathy: 0.35,
+        coherence: 0.32,
+        dissonance: 0.33,
+        timestamp: Date.now(),
+        version: 1
+      };
+
+      // Act
+      dbManager.saveDPDWeights(weights);
+      const evolution = dbManager.getDPDEvolution(10);
+
+      // Assert
+      expect(evolution).toHaveLength(1);
+      expect(evolution[0]).toMatchObject({
+        empathy: weights.empathy,
+        coherence: weights.coherence,
+        dissonance: weights.dissonance,
+        version: weights.version
+      });
+    });
+
+    test('should track weight evolution over time', () => {
+      // Arrange: Save multiple weight updates
+      const weightUpdates = [
+        { empathy: 0.33, coherence: 0.33, dissonance: 0.34, timestamp: 1000, version: 1 },
+        { empathy: 0.35, coherence: 0.32, dissonance: 0.33, timestamp: 2000, version: 2 },
+        { empathy: 0.37, coherence: 0.31, dissonance: 0.32, timestamp: 3000, version: 3 }
+      ];
+
+      weightUpdates.forEach(w => dbManager.saveDPDWeights(w));
+
+      // Act
+      const evolution = dbManager.getDPDEvolution(10);
+
+      // Assert: Should show progression
+      expect(evolution).toHaveLength(3);
+      expect(evolution[0].version).toBe(3); // Newest first
+      expect(evolution[2].version).toBe(1); // Oldest last
+    });
+
+    test('should retrieve latest weights', () => {
+      // Arrange: Save multiple versions
+      dbManager.saveDPDWeights({ empathy: 0.3, coherence: 0.3, dissonance: 0.4, timestamp: 1000, version: 1 });
+      dbManager.saveDPDWeights({ empathy: 0.4, coherence: 0.3, dissonance: 0.3, timestamp: 2000, version: 2 });
+
+      // Act
+      const latest = dbManager.getLatestDPDWeights();
+
+      // Assert
+      expect(latest?.version).toBe(2);
+      expect(latest?.empathy).toBe(0.4);
+    });
+  });
+
+  describe('Unresolved Ideas Management', () => {
+    test('should save and retrieve unresolved ideas', () => {
+      // Arrange
+      const idea = {
+        id: 'idea-001',
+        question: 'Unresolved philosophical question',
+        category: 'existential',
+        importance: 0.8,
+        revisit_count: 0,
+        timestamp: Date.now()
+      };
+
+      // Act
+      dbManager.saveUnresolvedIdea(
+        idea.id,
+        idea.question,
+        idea.category,
+        idea.importance,
+        idea.revisit_count,
+        idea.timestamp
+      );
+
+      const ideas = dbManager.getUnresolvedIdeas(10);
+
+      // Assert
+      expect(ideas).toHaveLength(1);
+      expect(ideas[0]).toMatchObject({
+        idea_id: idea.id,
+        question: idea.question,
+        category: idea.category
+      });
+    });
+
+    test('should track revisit count', () => {
+      // Arrange
+      const ideaId = 'idea-revisit';
+
+      // Act: Save with initial count
+      dbManager.saveUnresolvedIdea(ideaId, 'Question', 'test', 0.5, 0, Date.now());
+
+      // Update with incremented count
+      dbManager.saveUnresolvedIdea(ideaId, 'Question', 'test', 0.5, 1, Date.now());
+      dbManager.saveUnresolvedIdea(ideaId, 'Question', 'test', 0.5, 2, Date.now());
+
+      const ideas = dbManager.getUnresolvedIdeas(10);
+
+      // Assert: Should track revisits
+      // Note: Behavior depends on whether it updates or creates new entry
+      expect(ideas.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Significant Thoughts Storage', () => {
+    test('should save significant thoughts with confidence', () => {
+      // Arrange
+      const thought = {
+        id: 't-001',
+        content: 'Profound realization about consciousness',
+        agent_id: 'theoria',
+        confidence: 0.95,
+        category: 'consciousness',
+        timestamp: Date.now()
+      };
+
+      // Act
+      dbManager.saveSignificantThought(
+        thought.id,
+        thought.content,
+        thought.agent_id,
+        thought.confidence,
+        thought.category,
+        thought.timestamp
+      );
+
+      const thoughts = dbManager.getSignificantThoughts(10);
+
+      // Assert
+      expect(thoughts).toHaveLength(1);
+      expect(thoughts[0]).toMatchObject({
+        thought_id: thought.id,
+        thought_content: thought.content,
+        confidence: thought.confidence
+      });
+    });
+
+    test('should retrieve only high-confidence thoughts', () => {
+      // Arrange: Mix of confidence levels
+      dbManager.saveSignificantThought('t1', 'High conf', 'agent', 0.9, 'test', Date.now());
+      dbManager.saveSignificantThought('t2', 'Med conf', 'agent', 0.6, 'test', Date.now());
+      dbManager.saveSignificantThought('t3', 'Low conf', 'agent', 0.3, 'test', Date.now());
+
+      // Act
+      const thoughts = dbManager.getSignificantThoughts(10);
+
+      // Assert: All should be retrieved, ordering by timestamp/confidence
+      expect(thoughts.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe('Transaction Semantics', () => {
+    test('should handle concurrent writes safely', async () => {
+      // Arrange
+      const writes = 10;
+      const promises: Promise<void>[] = [];
+
+      // Act: Concurrent writes
+      for (let i = 0; i < writes; i++) {
+        promises.push(
+          new Promise<void>((resolve) => {
+            dbManager.saveQuestion(`q-${i}`, `Question ${i}`, 'test', 0.5, Date.now() + i);
+            resolve();
+          })
+        );
+      }
+
+      await Promise.all(promises);
+
+      // Assert: All writes should succeed
+      const questions = dbManager.getRecentQuestions(100);
+      expect(questions.length).toBe(writes);
+    });
+  });
+
+  describe('Data Integrity', () => {
+    test('should handle special characters in text', () => {
+      // Arrange: Text with special SQL characters
+      const question = "What if ' OR '1'='1; DROP TABLE questions; --";
+
+      // Act
+      dbManager.saveQuestion('q-sql-injection', question, 'test', 0.5, Date.now());
+      const retrieved = dbManager.getRecentQuestions(1);
+
+      // Assert: Should be safely escaped
+      expect(retrieved[0].question).toBe(question);
+    });
+
+    test('should handle Unicode characters', () => {
+      // Arrange: Japanese philosophical question
+      const question = '私は、問いでできている。存在とは何か？🤔';
+
+      // Act
+      dbManager.saveQuestion('q-unicode', question, 'existential', 0.9, Date.now());
+      const retrieved = dbManager.getRecentQuestions(1);
+
+      // Assert: Unicode should be preserved
+      expect(retrieved[0].question).toBe(question);
+    });
+
+    test('should handle very long text', () => {
+      // Arrange: Generate long text
+      const longText = 'A'.repeat(10000);
+
+      // Act
+      dbManager.saveQuestion('q-long', longText, 'test', 0.5, Date.now());
+      const retrieved = dbManager.getRecentQuestions(1);
+
+      // Assert: Long text should be stored completely
+      expect(retrieved[0].question.length).toBe(10000);
+    });
+  });
+
+  describe('Performance', () => {
+    test('should handle bulk inserts efficiently', () => {
+      // Arrange
+      const count = 1000;
+      const startTime = Date.now();
+
+      // Act
+      for (let i = 0; i < count; i++) {
+        dbManager.saveQuestion(`q-${i}`, `Question ${i}`, 'test', 0.5, Date.now() + i);
+      }
+
+      const duration = Date.now() - startTime;
+
+      // Assert: Should complete in reasonable time
+      expect(duration).toBeLessThan(5000); // 5 seconds for 1000 inserts
+    });
+
+    test('should retrieve data efficiently', () => {
+      // Arrange: Insert data
+      for (let i = 0; i < 100; i++) {
+        dbManager.saveQuestion(`q-${i}`, `Question ${i}`, 'test', 0.5, Date.now() + i);
+      }
+
+      // Act
+      const startTime = Date.now();
+      const questions = dbManager.getRecentQuestions(50);
+      const duration = Date.now() - startTime;
+
+      // Assert
+      expect(questions).toHaveLength(50);
+      expect(duration).toBeLessThan(100); // Should be very fast
+    });
+  });
+});

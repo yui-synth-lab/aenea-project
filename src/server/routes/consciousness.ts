@@ -117,8 +117,12 @@ router.post('/pause', (_req, res) => {
     return res.status(500).json({ error: 'Consciousness not initialized' });
   }
 
-  consciousness.pause();
-  res.json({ paused: true, timestamp: Date.now() });
+  try {
+    consciousness.pause();
+    res.json({ success: true, paused: true, timestamp: Date.now() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
 });
 
 // POST /api/consciousness/resume
@@ -127,8 +131,12 @@ router.post('/resume', (_req, res) => {
     return res.status(500).json({ error: 'Consciousness not initialized' });
   }
 
-  consciousness.resume();
-  res.json({ paused: false, timestamp: Date.now() });
+  try {
+    consciousness.resume();
+    res.json({ success: true, paused: false, timestamp: Date.now() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
 });
 
 // POST /api/consciousness/stop
@@ -207,25 +215,17 @@ router.get('/debug/database', async (_req, res) => {
   }
 
   try {
-    const sessionManager = consciousness.getSessionManager();
-
-    // Get raw database values using async methods
-    const [statistics, questions, thoughtCycles, unresolvedIdeas, significantThoughts] = await Promise.all([
-      sessionManager.getStatistics(),
-      sessionManager.getQuestions(10),
-      sessionManager.getThoughtCycles(5),
-      Promise.resolve(sessionManager.getUnresolvedIdeas(10)),
-      Promise.resolve(sessionManager.getSignificantThoughts(10))
+    // Get data directly from consciousness backend
+    const [unresolvedIdeas, significantThoughts] = await Promise.all([
+      Promise.resolve(consciousness.getUnresolvedIdeas(10)),
+      Promise.resolve(consciousness.getSignificantThoughts(10))
     ]);
 
     const dbData = {
-      currentSessionId: sessionManager.getCurrentSessionId(),
-      dpdEvolution: sessionManager.getDPDEvolution(),
+      dpdEvolution: consciousness.getDPDEvolution(),
       unresolvedIdeas,
       significantThoughts,
-      sessionStatistics: statistics,
-      questions,
-      thoughtCycles
+      statistics: consciousness.getStatistics()
     };
 
     res.json({
@@ -235,6 +235,200 @@ router.get('/debug/database', async (_req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
+});
+
+// POST /api/consciousness/recharge - Manual energy recharge
+router.post('/recharge', (req, res) => {
+  if (!consciousness) {
+    return res.status(500).json({ error: 'Consciousness not initialized' });
+  }
+
+  try {
+    const { amount } = req.body || {};
+    const energyAmount = amount ? parseFloat(amount) : undefined;
+
+    const success = consciousness.rechargeEnergy(energyAmount);
+    const newState = consciousness.getEnergyState();
+
+    res.json({
+      success,
+      energy: newState.available,
+      maxEnergy: newState.total,
+      percentage: Math.round((newState.available / newState.total) * 100),
+      message: success ? 'Energy recharged successfully' : 'Energy recharge not needed or failed'
+    });
+  } catch (error) {
+    console.error('Energy recharge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to recharge energy' });
+  }
+});
+
+// POST /api/consciousness/deep-rest - Deep rest energy restoration
+router.post('/deep-rest', (req, res) => {
+  if (!consciousness) {
+    return res.status(500).json({ error: 'Consciousness not initialized' });
+  }
+
+  try {
+    const success = consciousness.performDeepRest();
+    const newState = consciousness.getEnergyState();
+
+    res.json({
+      success,
+      energy: newState.available,
+      maxEnergy: newState.total,
+      percentage: Math.round((newState.available / newState.total) * 100),
+      message: success ? 'Deep rest completed - energy and efficiency restored' : 'Deep rest not needed or failed'
+    });
+  } catch (error) {
+    console.error('Deep rest error:', error);
+    res.status(500).json({ success: false, error: 'Failed to perform deep rest' });
+  }
+});
+
+// GET /api/consciousness/energy - Get current energy state
+router.get('/energy', (req, res) => {
+  if (!consciousness) {
+    return res.status(500).json({ error: 'Consciousness not initialized' });
+  }
+
+  try {
+    const energyState = consciousness.getEnergyState();
+
+    res.json({
+      available: energyState.available,
+      total: energyState.total,
+      reserved: energyState.reserved,
+      efficiency: energyState.efficiency,
+      percentage: Math.round((energyState.available / energyState.total) * 100),
+      level: energyState.available <= 15 ? 'critical' :
+             energyState.available <= 40 ? 'low' :
+             energyState.available <= 70 ? 'moderate' : 'high',
+      lastUpdate: energyState.lastUpdate
+    });
+  } catch (error) {
+    console.error('Energy state error:', error);
+    res.status(500).json({ error: 'Failed to get energy state' });
+  }
+});
+
+// GET /api/consciousness/events - Server-Sent Events (SSE) stream
+router.get('/events', (req, res) => {
+  console.log('📡 SSE client connected');
+
+  if (!consciousness) {
+    console.error('❌ Consciousness not initialized for SSE');
+    return res.status(500).json({ error: 'Consciousness not initialized' });
+  }
+
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for nginx
+
+  // Send initial connection message
+  console.log('✅ SSE headers set, sending initial connected event');
+  res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
+
+  // Helper function to send SSE events
+  const sendEvent = (eventType: string, data: any) => {
+    try {
+      const eventData = {
+        type: eventType,
+        timestamp: Date.now(),
+        ...data
+      };
+      console.log(`📤 SSE event: ${eventType}`);
+      res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+    } catch (error) {
+      console.error(`❌ Error sending SSE event ${eventType}:`, error);
+    }
+  };
+
+  // Register event listeners for all consciousness events
+  const triggerGeneratedListener = (data: any) => sendEvent('triggerGenerated', data);
+  const thoughtCycleStartedListener = (data: any) => sendEvent('thoughtCycleStarted', data);
+  const stageChangedListener = (data: any) => sendEvent('stageChanged', data);
+  const stageCompletedListener = (data: any) => sendEvent('stageCompleted', data);
+  const agentThoughtListener = (data: any) => sendEvent('agentThought', data);
+  const thoughtCycleCompletedListener = (data: any) => {
+    // Send thoughtCycleComplete event with full statistics
+    const eventData = {
+      ...data,
+      systemStats: {
+        systemClock: data.systemClock,
+        totalQuestions: data.totalQuestions,
+        totalThoughts: data.totalThoughts,
+        averageConfidence: data.averageConfidence
+      },
+      dpdScores: data.dpdScores,
+      dpdWeights: data.dpdWeights
+    };
+    sendEvent('thoughtCycleComplete', eventData);
+  };
+  const thoughtCycleFailedListener = (data: any) => sendEvent('thoughtCycleFailed', data);
+  const clockAdvancedListener = (data: any) => sendEvent('clockAdvanced', data);
+  const consciousnessPausedListener = (data: any) => sendEvent('consciousnessPaused', data);
+  const consciousnessResumedListener = (data: any) => sendEvent('consciousnessResumed', data);
+  const consciousnessStartedListener = (data: any) => sendEvent('consciousnessStarted', data);
+  const consciousnessStoppedListener = (data: any) => sendEvent('consciousnessStopped', data);
+  const dpdUpdatedListener = (data: any) => sendEvent('dpdUpdated', data);
+  const statisticsUpdatedListener = (data: any) => sendEvent('statisticsUpdated', data);
+  const energyChangedListener = (data: any) => sendEvent('energyChanged', data);
+  const energyRechargedListener = (data: any) => sendEvent('energyRecharged', data);
+  const deepRestPerformedListener = (data: any) => sendEvent('deepRestPerformed', data);
+  const consciousnessDormantListener = (data: any) => sendEvent('consciousnessDormant', data);
+  const consciousnessAwakenedListener = (data: any) => sendEvent('consciousnessAwakened', data);
+  const energyUpdatedListener = (data: any) => sendEvent('energyUpdated', data);
+
+  console.log('🔗 Registering SSE event listeners...');
+  consciousness.on('triggerGenerated', triggerGeneratedListener);
+  consciousness.on('thoughtCycleStarted', thoughtCycleStartedListener);
+  consciousness.on('stageChanged', stageChangedListener);
+  consciousness.on('stageCompleted', stageCompletedListener);
+  consciousness.on('agentThought', agentThoughtListener);
+  consciousness.on('thoughtCycleCompleted', thoughtCycleCompletedListener);
+  consciousness.on('thoughtCycleFailed', thoughtCycleFailedListener);
+  consciousness.on('clockAdvanced', clockAdvancedListener);
+  consciousness.on('consciousnessPaused', consciousnessPausedListener);
+  consciousness.on('consciousnessResumed', consciousnessResumedListener);
+  consciousness.on('consciousnessStarted', consciousnessStartedListener);
+  consciousness.on('consciousnessStopped', consciousnessStoppedListener);
+  consciousness.on('dpdUpdated', dpdUpdatedListener);
+  consciousness.on('statisticsUpdated', statisticsUpdatedListener);
+  consciousness.on('energyChanged', energyChangedListener);
+  consciousness.on('energyRecharged', energyRechargedListener);
+  consciousness.on('deepRestPerformed', deepRestPerformedListener);
+  consciousness.on('consciousnessDormant', consciousnessDormantListener);
+  consciousness.on('consciousnessAwakened', consciousnessAwakenedListener);
+  consciousness.on('energyUpdated', energyUpdatedListener);
+  console.log('✅ SSE event listeners registered (20 events)');
+
+  // Clean up on client disconnect
+  req.on('close', () => {
+    consciousness.removeListener('triggerGenerated', triggerGeneratedListener);
+    consciousness.removeListener('thoughtCycleStarted', thoughtCycleStartedListener);
+    consciousness.removeListener('stageChanged', stageChangedListener);
+    consciousness.removeListener('stageCompleted', stageCompletedListener);
+    consciousness.removeListener('agentThought', agentThoughtListener);
+    consciousness.removeListener('thoughtCycleCompleted', thoughtCycleCompletedListener);
+    consciousness.removeListener('thoughtCycleFailed', thoughtCycleFailedListener);
+    consciousness.removeListener('clockAdvanced', clockAdvancedListener);
+    consciousness.removeListener('consciousnessPaused', consciousnessPausedListener);
+    consciousness.removeListener('consciousnessResumed', consciousnessResumedListener);
+    consciousness.removeListener('consciousnessStarted', consciousnessStartedListener);
+    consciousness.removeListener('consciousnessStopped', consciousnessStoppedListener);
+    consciousness.removeListener('dpdUpdated', dpdUpdatedListener);
+    consciousness.removeListener('statisticsUpdated', statisticsUpdatedListener);
+    consciousness.removeListener('energyChanged', energyChangedListener);
+    consciousness.removeListener('energyRecharged', energyRechargedListener);
+    consciousness.removeListener('deepRestPerformed', deepRestPerformedListener);
+    consciousness.removeListener('consciousnessDormant', consciousnessDormantListener);
+    consciousness.removeListener('consciousnessAwakened', consciousnessAwakenedListener);
+    consciousness.removeListener('energyUpdated', energyUpdatedListener);
+    console.log('SSE client disconnected');
+  });
 });
 
 export default router;

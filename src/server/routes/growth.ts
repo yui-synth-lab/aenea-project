@@ -15,6 +15,27 @@ export function initializeGrowthRoutes(backend: any) {
 }
 
 /**
+ * GET /api/growth/metrics
+ * 基本的な成長指標を取得
+ */
+router.get('/metrics', async (req, res) => {
+  try {
+    if (!consciousnessBackend) {
+      return res.status(503).json({ error: 'Consciousness backend not initialized' });
+    }
+
+    const growthMetrics = await consciousnessBackend.getGrowthMetrics();
+    res.json(growthMetrics);
+  } catch (error) {
+    console.error('Failed to get growth metrics:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve growth metrics',
+      message: (error as Error).message
+    });
+  }
+});
+
+/**
  * GET /api/growth/overview
  * 意識成長の概要を取得
  */
@@ -28,7 +49,7 @@ router.get('/overview', async (req, res) => {
       lastUpdate: new Date().toISOString(),
       personalityTraits: consciousnessBackend.getPersonalityTraits(),
       dpdEvolution: consciousnessBackend.getDPDEvolution(),
-      growthMetrics: consciousnessBackend.getGrowthMetrics()
+      growthMetrics: await consciousnessBackend.getGrowthMetrics()
     };
 
     res.json(overview);
@@ -52,14 +73,21 @@ router.get('/thoughts', async (req, res) => {
     }
 
     const limit = parseInt(req.query.limit as string) || 50;
+    console.log(`📊 Growth API: Getting significant thoughts with limit ${limit}`);
+
     const thoughts = consciousnessBackend.getSignificantThoughts(limit);
+    console.log(`📊 Growth API: Retrieved ${thoughts.length} significant thoughts`);
+
+    if (thoughts.length > 0) {
+      console.log(`📊 First thought sample:`, thoughts[0]);
+    }
 
     res.json({
       thoughts,
       count: thoughts.length
     });
   } catch (error) {
-    console.error('Failed to get significant thoughts:', error);
+    console.error('❌ Failed to get significant thoughts:', error);
     res.status(500).json({
       error: 'Failed to retrieve thoughts',
       message: (error as Error).message
@@ -78,14 +106,21 @@ router.get('/unresolved', async (req, res) => {
     }
 
     const limit = parseInt(req.query.limit as string) || 50;
-    const unresolvedIdeas = consciousnessBackend.getUnresolvedIdeas(limit);
+    console.log(`📊 Growth API: Getting unresolved ideas with limit ${limit}`);
+
+    const unresolvedIdeas = await consciousnessBackend.getUnresolvedIdeasAsync(limit);
+    console.log(`📊 Growth API: Retrieved ${unresolvedIdeas.length} unresolved ideas`);
+
+    if (unresolvedIdeas.length > 0) {
+      console.log(`📊 First idea sample:`, unresolvedIdeas[0]);
+    }
 
     res.json({
       unresolvedIdeas,
       count: unresolvedIdeas.length
     });
   } catch (error) {
-    console.error('Failed to get unresolved ideas:', error);
+    console.error('❌ Failed to get unresolved ideas:', error);
     res.status(500).json({
       error: 'Failed to retrieve unresolved ideas',
       message: (error as Error).message
@@ -135,15 +170,16 @@ router.get('/full', async (req, res) => {
     const fullData = {
       overview: {
         lastUpdate: new Date().toISOString(),
-        version: '2.0.0'
+        version: '2.1.0' // Memory evolution update
       },
       significantThoughts: consciousnessBackend.getSignificantThoughts(100),
       personalityEvolution: {
         currentTraits: consciousnessBackend.getPersonalityTraits()
       },
       dpdEvolution: consciousnessBackend.getDPDEvolution(),
-      unresolvedIdeas: consciousnessBackend.getUnresolvedIdeas(100),
-      growthMetrics: consciousnessBackend.getGrowthMetrics(),
+      unresolvedIdeas: await consciousnessBackend.getUnresolvedIdeasAsync(100),
+      growthMetrics: await consciousnessBackend.getGrowthMetrics(),
+      beliefEvolution: consciousnessBackend.getBeliefEvolutionMetrics(),
       preferences: {},
       communicationStyle: {}
     };
@@ -153,6 +189,52 @@ router.get('/full', async (req, res) => {
     console.error('Failed to get full growth data:', error);
     res.status(500).json({
       error: 'Failed to retrieve full growth data',
+      message: (error as Error).message
+    });
+  }
+});
+
+/**
+ * POST /api/growth/consolidate
+ * 手動でメモリー統合を実行
+ */
+router.post('/consolidate', async (req, res) => {
+  try {
+    if (!consciousnessBackend) {
+      return res.status(503).json({ error: 'Consciousness backend not initialized' });
+    }
+
+    console.log('🧠 Manual memory consolidation requested');
+    const result = await consciousnessBackend.consolidateMemory();
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Failed to consolidate memory:', error);
+    res.status(500).json({
+      error: 'Failed to consolidate memory',
+      message: (error as Error).message
+    });
+  }
+});
+
+/**
+ * GET /api/growth/beliefs
+ * 核心的信念の一覧を取得
+ */
+router.get('/beliefs', async (req, res) => {
+  try {
+    if (!consciousnessBackend) {
+      return res.status(503).json({ error: 'Consciousness backend not initialized' });
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const beliefs = consciousnessBackend.getBeliefEvolutionMetrics();
+
+    res.json(beliefs);
+  } catch (error) {
+    console.error('❌ Failed to get beliefs:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve beliefs',
       message: (error as Error).message
     });
   }

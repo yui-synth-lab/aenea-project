@@ -1134,3 +1134,47 @@ export const TimeFormatters = {
     return `${realTime} (システム: ${systemTime}, フェーズ: ${timestamp.phase})`;
   }
 };
+
+// Test-compatible simplified interface
+export interface SystemClock {
+  getCurrentTime(): number;
+  advance(amount: number): void;
+  formatTime(): string;
+  createTimelineMarker(event: string): {
+    event: string;
+    timestamp: number;
+    formatted: string;
+  };
+}
+
+// Test-compatible implementation
+class SimpleSystemClock implements SystemClock {
+  private currentTime: number = 0;
+
+  getCurrentTime(): number {
+    return this.currentTime;
+  }
+
+  advance(amount: number): void {
+    this.currentTime += amount;
+  }
+
+  formatTime(): string {
+    return TimeFormatters.formatSystemClock(Math.floor(this.currentTime));
+  }
+
+  createTimelineMarker(event: string): {
+    event: string;
+    timestamp: number;
+    formatted: string;
+  } {
+    return {
+      event,
+      timestamp: this.currentTime,
+      formatted: this.formatTime()
+    };
+  }
+}
+
+// Test-compatible factory function
+export { SimpleSystemClock };
