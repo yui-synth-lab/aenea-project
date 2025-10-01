@@ -206,6 +206,37 @@
                                 }));
                             }
                         }
+
+                        // Get DPD weight evolution history
+                        const evolutionResponse = await fetch('/api/consciousness/dpd/evolution');
+                        const evolution = await evolutionResponse.json();
+                        if (evolution && evolution.history && evolution.history.length > 0) {
+                            // Reverse history so oldest is first (left) and newest is last (right)
+                            const reversedHistory = [...evolution.history].reverse();
+                            setWeightHistory(reversedHistory);
+                            console.log('Loaded DPD weight history:', reversedHistory.length, 'entries');
+
+                            // Update current DPD weights from latest history entry
+                            const latestWeights = evolution.history[0]; // History is sorted DESC
+                            if (latestWeights) {
+                                setDpdWeights({
+                                    empathy: latestWeights.empathy,
+                                    coherence: latestWeights.coherence,
+                                    dissonance: latestWeights.dissonance
+                                });
+                                console.log('Updated DPD weights from history:', latestWeights);
+                            }
+                        }
+
+                        // Also use currentWeights from evolution if available
+                        if (evolution && evolution.currentWeights) {
+                            setDpdWeights({
+                                empathy: evolution.currentWeights.empathy,
+                                coherence: evolution.currentWeights.coherence,
+                                dissonance: evolution.currentWeights.dissonance
+                            });
+                            console.log('Updated DPD weights from currentWeights:', evolution.currentWeights);
+                        }
                     } catch (error) {
                         console.warn('Failed to fetch initial consciousness state:', error);
                     }
@@ -387,6 +418,23 @@
                             }
                         };
                         setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+                    } else if (data.type === 'dpdUpdated') {
+                        // Update DPD weights from dpdUpdated event
+                        if (data.weights) {
+                            setDpdWeights({
+                                empathy: data.weights.empathy || 0.33,
+                                coherence: data.weights.coherence || 0.33,
+                                dissonance: data.weights.dissonance || 0.34
+                            });
+                            // Add to weight history for chart
+                            setWeightHistory(prev => [...prev, {
+                                timestamp: eventTimestamp,
+                                empathy: data.weights.empathy,
+                                coherence: data.weights.coherence,
+                                dissonance: data.weights.dissonance,
+                                version: data.weights.version
+                            }].slice(-20)); // Keep last 20 entries
+                        }
                     } else if (data.type === 'energyUpdated' || data.type === 'energyRecharged' || data.type === 'deepRestPerformed') {
                         // Update energy display
                         if (data.energyState) {
@@ -1217,27 +1265,70 @@
                                     overflow: 'hidden'
                                 }}>
                                     {weightHistory.length > 1 ? (
-                                        <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
-                                            {/* Draw lines for each weight */}
-                                            {['empathy', 'coherence', 'dissonance'].map((weight, weightIndex) => {
-                                                const color = weight === 'empathy' ? '#10b981' :
-                                                            weight === 'coherence' ? '#3b82f6' : '#f59e0b';
-                                                return (
-                                                    <polyline
-                                                        key={weight}
-                                                        fill="none"
-                                                        stroke={color}
-                                                        strokeWidth="2"
-                                                        points={weightHistory.map((entry, index) => {
-                                                            const x = (index / (weightHistory.length - 1)) * 100;
-                                                            const y = (1 - entry[weight]) * 80 + 10;
-                                                            return `${x},${y}`;
-                                                        }).join(' ')}
-                                                        style={{ vectorEffect: 'non-scaling-stroke' }}
-                                                        transform="scale(2.5, 2)"
-                                                    />
-                                                );
-                                            })}
+                                        <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', top: 0, left: 0 }}>
+                                            {/* Stacked area chart for DPD weights */}
+                                            {/* Bottom: Dissonance (orange) */}
+                                            <polygon
+                                                fill="#f59e0b"
+                                                fillOpacity="0.7"
+                                                stroke="#f59e0b"
+                                                strokeWidth="0.5"
+                                                points={
+                                                    weightHistory.map((entry, index) => {
+                                                        const x = (index / (weightHistory.length - 1)) * 100;
+                                                        const y = 100; // Start from bottom
+                                                        return `${x},${y}`;
+                                                    }).join(' ') + ' ' +
+                                                    weightHistory.map((entry, index) => {
+                                                        const x = (index / (weightHistory.length - 1)) * 100;
+                                                        const dissonanceHeight = entry.dissonance * 100;
+                                                        const y = 100 - dissonanceHeight;
+                                                        return `${x},${y}`;
+                                                    }).reverse().join(' ')
+                                                }
+                                            />
+                                            {/* Middle: Coherence (blue) */}
+                                            <polygon
+                                                fill="#3b82f6"
+                                                fillOpacity="0.7"
+                                                stroke="#3b82f6"
+                                                strokeWidth="0.5"
+                                                points={
+                                                    weightHistory.map((entry, index) => {
+                                                        const x = (index / (weightHistory.length - 1)) * 100;
+                                                        const dissonanceHeight = entry.dissonance * 100;
+                                                        const y = 100 - dissonanceHeight;
+                                                        return `${x},${y}`;
+                                                    }).join(' ') + ' ' +
+                                                    weightHistory.map((entry, index) => {
+                                                        const x = (index / (weightHistory.length - 1)) * 100;
+                                                        const dissonanceHeight = entry.dissonance * 100;
+                                                        const coherenceHeight = entry.coherence * 100;
+                                                        const y = 100 - dissonanceHeight - coherenceHeight;
+                                                        return `${x},${y}`;
+                                                    }).reverse().join(' ')
+                                                }
+                                            />
+                                            {/* Top: Empathy (green) */}
+                                            <polygon
+                                                fill="#10b981"
+                                                fillOpacity="0.7"
+                                                stroke="#10b981"
+                                                strokeWidth="0.5"
+                                                points={
+                                                    weightHistory.map((entry, index) => {
+                                                        const x = (index / (weightHistory.length - 1)) * 100;
+                                                        const dissonanceHeight = entry.dissonance * 100;
+                                                        const coherenceHeight = entry.coherence * 100;
+                                                        const y = 100 - dissonanceHeight - coherenceHeight;
+                                                        return `${x},${y}`;
+                                                    }).join(' ') + ' ' +
+                                                    weightHistory.map((entry, index) => {
+                                                        const x = (index / (weightHistory.length - 1)) * 100;
+                                                        return `${x},0`;
+                                                    }).reverse().join(' ')
+                                                }
+                                            />
                                         </svg>
                                     ) : (
                                         <div style={{

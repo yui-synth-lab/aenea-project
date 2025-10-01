@@ -102,12 +102,7 @@ class ConsciousnessBackend extends EventEmitter {
     this.databaseManager = new DatabaseManager();
     this.energyManager = getEnergyManager();
 
-    // Try to restore from previous consciousness state
-    this.restoreFromDatabase();
-
-    // Philosophical questions are seeded automatically by DatabaseManager on first run
-
-    // Initialize DPD weights (temporary, will be loaded from DB in initialize())
+    // Initialize DPD weights with defaults (will be overwritten by restoreFromDatabase if data exists)
     this.dpdWeights = {
       empathy: 0.33,
       coherence: 0.33,
@@ -115,6 +110,11 @@ class ConsciousnessBackend extends EventEmitter {
       version: 1,
       timestamp: Date.now()
     };
+
+    // Try to restore from previous consciousness state (must come AFTER dpdWeights initialization)
+    this.restoreFromDatabase();
+
+    // Philosophical questions are seeded automatically by DatabaseManager on first run
 
     // Initialize AI agents with configurable providers
     const aiProvider = process.env.AI_PROVIDER || 'mock';
@@ -176,7 +176,10 @@ class ConsciousnessBackend extends EventEmitter {
 
   private restoreFromDatabase(): void {
     try {
+      console.log('[DEBUG] restoreFromDatabase called');
       const consciousnessState = this.databaseManager.getConsciousnessState();
+      console.log('[DEBUG] consciousnessState:', consciousnessState);
+
       if (consciousnessState) {
         this.systemClock = consciousnessState.systemClock || 0;
 
@@ -211,8 +214,11 @@ class ConsciousnessBackend extends EventEmitter {
 
   private inheritConsciousnessFromDatabase(): void {
     try {
+      console.log('[DEBUG] inheritConsciousnessFromDatabase called');
+
       // 1. Load latest DPD weights from database
       const latestWeights = this.databaseManager.getLatestDPDWeights();
+      console.log('[DEBUG] latestWeights:', latestWeights);
 
       if (latestWeights) {
         this.dpdWeights = {
@@ -223,7 +229,9 @@ class ConsciousnessBackend extends EventEmitter {
           version: latestWeights.version
         };
         log.info('Consciousness', `🧠 Loaded DPD weights from database: version=${latestWeights.version}, empathy=${latestWeights.empathy.toFixed(3)}, coherence=${latestWeights.coherence.toFixed(3)}, dissonance=${latestWeights.dissonance.toFixed(3)}`);
+        console.log('[DEBUG] DPD weights set to:', this.dpdWeights);
       } else {
+        console.log('[DEBUG] No weights found in database, using defaults');
         // 2. Initialize default DPD weights if none exist in database
         this.dpdWeights = {
           empathy: 0.33,
@@ -408,8 +416,11 @@ class ConsciousnessBackend extends EventEmitter {
   private async processThoughtCycle(): Promise<void> {
     // Calculate minimum energy required for a thought cycle
     // Critical mode minimum: S0(1.0) + S1(1.0) + S5(0.8) + S6(0.3) + U(0.2) = 3.3
+    // Plus minEnergy reserve (5.0) = 8.3 total needed
     const energyState = this.energyManager.getEnergyState();
-    const minimumEnergyRequired = 3.3;
+    const minimumCycleEnergy = 3.3;
+    const minEnergyReserve = 5.0; // Must maintain minimum energy reserve
+    const minimumEnergyRequired = minimumCycleEnergy + minEnergyReserve;
 
     // If insufficient energy, enter dormancy mode with automatic recovery
     if (energyState.available < minimumEnergyRequired) {
@@ -508,6 +519,13 @@ class ConsciousnessBackend extends EventEmitter {
     log.info('ThoughtCycle', `${executionMode === 'full' ? 'Full' : executionMode === 'low' ? 'Low' : 'Critical'} energy mode: reserved ${requiredEnergy.toFixed(1)} energy for complete cycle`);
 
     try {
+      // S0: Trigger Generation (already completed, consume energy)
+      const s0EnergyCost = 1.0;
+      await this.energyManager.consumeEnergy(s0EnergyCost, 'stage_S0');
+      thoughtCycle.totalEnergy += s0EnergyCost;
+      thoughtCycle.totalStages++;
+      log.info('StageS0', `Internal trigger generated: "${trigger.question.substring(0, 60)}..."`);
+
       // Stage execution based on energy mode
       await this.executeIndividualThought(thoughtCycle);
 
@@ -555,12 +573,36 @@ class ConsciousnessBackend extends EventEmitter {
       // Perform memory consolidation periodically (every 5 thought cycles)
       await this.performPeriodicConsolidation();
 
-      // Emit completion event with additional context
+      // Emit completion event with minimal essential data (not full thoughtCycle)
       const currentState = this.getState();
       const statistics = this.getStatistics();
       this.emit('thoughtCycleCompleted', {
-        ...thoughtCycle,
-        dpdWeights: this.dpdWeights,
+        id: thoughtCycle.id,
+        timestamp: thoughtCycle.timestamp,
+        status: thoughtCycle.status,
+        duration: thoughtCycle.duration,
+        totalEnergy: thoughtCycle.totalEnergy,
+        totalStages: thoughtCycle.totalStages,
+        // Minimal trigger info
+        trigger: {
+          question: thoughtCycle.trigger.question.substring(0, 100),
+          category: thoughtCycle.trigger.category
+        },
+        // DPD scores (numeric only)
+        dpdScores: thoughtCycle.dpdScores ? {
+          empathy: thoughtCycle.dpdScores.empathy.toFixed(3),
+          coherence: thoughtCycle.dpdScores.coherence.toFixed(3),
+          dissonance: thoughtCycle.dpdScores.dissonance.toFixed(3),
+          weightedTotal: thoughtCycle.dpdScores.weightedTotal.toFixed(3)
+        } : null,
+        // Current DPD weights
+        dpdWeights: {
+          empathy: this.dpdWeights.empathy.toFixed(3),
+          coherence: this.dpdWeights.coherence.toFixed(3),
+          dissonance: this.dpdWeights.dissonance.toFixed(3),
+          version: this.dpdWeights.version
+        },
+        // System statistics
         systemClock: currentState.systemClock,
         totalQuestions: statistics.totalQuestions,
         totalThoughts: statistics.totalThoughts,
@@ -622,29 +664,25 @@ class ConsciousnessBackend extends EventEmitter {
 
     log.info('StageS2', 'Mutual Reflection completed');
 
-    // Emit stage completion event for UI
+    // Emit stage completion event for UI (minimal data)
     this.emit('stageCompleted', {
       stage: 'S2',
       name: 'Mutual Reflection',
       status: 'completed',
       timestamp: Date.now(),
       confidence: thoughtCycle.mutualReflection?.confidence || 0.5,
-      crossAgentFeedback: crossAgentFeedback.map(feedback => ({
-        fromAgent: feedback.fromAgent,
-        toAgent: feedback.toAgent,
-        content: feedback.content,
-        contentPreview: feedback.content.substring(0, 120) + (feedback.content.length > 120 ? '...' : ''),
-        sentiment: feedback.sentiment
-      })),
-      conflictPoints: conflictPoints.map(conflict =>
-        conflict.substring(0, 100) + (conflict.length > 100 ? '...' : '')
-      ),
-      consensusPoints: consensusPoints.map(consensus =>
-        consensus.substring(0, 100) + (consensus.length > 100 ? '...' : '')
-      ),
       feedbackCount: crossAgentFeedback.length,
       conflictCount: conflictPoints.length,
-      consensusCount: consensusPoints.length
+      consensusCount: consensusPoints.length,
+      // Only send preview of first 2 items, not all feedback
+      feedbackPreviews: crossAgentFeedback.slice(0, 2).map(feedback => ({
+        fromAgent: feedback.fromAgent,
+        toAgent: feedback.toAgent,
+        preview: feedback.content.substring(0, 80) + '...',
+        sentiment: feedback.sentiment
+      })),
+      conflictPreview: conflictPoints.length > 0 ? conflictPoints[0].substring(0, 80) + '...' : null,
+      consensusPreview: consensusPoints.length > 0 ? consensusPoints[0].substring(0, 80) + '...' : null
     });
   }
 
@@ -663,7 +701,7 @@ class ConsciousnessBackend extends EventEmitter {
 
     log.info('StageS3', 'Auditor completed');
 
-    // Emit stage completion event for UI
+    // Emit stage completion event for UI (minimal data)
     this.emit('stageCompleted', {
       stage: 'S3',
       name: 'Auditor',
@@ -671,14 +709,13 @@ class ConsciousnessBackend extends EventEmitter {
       timestamp: Date.now(),
       safetyScore: auditorResult.safetyScore,
       approved: auditorResult.approved,
-      warnings: (auditorResult as any).warnings?.map((warning: string) =>
-        warning.substring(0, 100) + (warning.length > 100 ? '...' : '')
-      ) || [],
-      recommendations: auditorResult.recommendations?.map(rec =>
-        rec.substring(0, 100) + (rec.length > 100 ? '...' : '')
-      ) || [],
       warningCount: (auditorResult as any).warnings?.length || 0,
-      recommendationCount: auditorResult.recommendations?.length || 0
+      recommendationCount: auditorResult.recommendations?.length || 0,
+      // Only send preview of first item, not all warnings/recommendations
+      warningPreview: (auditorResult as any).warnings?.length > 0 ?
+        (auditorResult as any).warnings[0].substring(0, 80) + '...' : null,
+      recommendationPreview: auditorResult.recommendations?.length > 0 ?
+        auditorResult.recommendations[0].substring(0, 80) + '...' : null
     });
   }
 
@@ -708,14 +745,13 @@ class ConsciousnessBackend extends EventEmitter {
 
     log.info('StageS4', 'DPD Assessment completed');
 
-    // Emit stage completion event for UI
+    // Emit stage completion event for UI (with size limits to prevent JSON errors)
     this.emit('stageCompleted', {
       stage: 'S4',
       name: 'DPD Assessment',
       status: 'completed',
       timestamp: Date.now(),
-      dpdScores: result.scores,
-      // Add detailed DPD Assessment outputs for Activity Log
+      // Only include essential DPD scores (not the full assessment object)
       empathy: result.scores.empathy.toFixed(3),
       coherence: result.scores.coherence.toFixed(3),
       dissonance: result.scores.dissonance.toFixed(3),
@@ -744,7 +780,7 @@ class ConsciousnessBackend extends EventEmitter {
 
     log.info('StageS5', 'Compiler completed');
 
-    // Emit stage completion event for UI
+    // Emit stage completion event for UI (minimal data)
     this.emit('stageCompleted', {
       stage: 'S5',
       name: 'Compiler',
@@ -752,13 +788,14 @@ class ConsciousnessBackend extends EventEmitter {
       timestamp: Date.now(),
       confidence: synthesis.confidence,
       insightsCount: synthesis.keyInsights?.length || 0,
-      integratedThought: (synthesis.integratedThought || '').substring(0, 150) + ((synthesis.integratedThought?.length || 0) > 150 ? '...' : ''),
-      keyInsights: (synthesis.keyInsights || []).map(insight =>
-        typeof insight === 'string' ? (insight.substring(0, 80) + (insight.length > 80 ? '...' : '')) : String(insight || '')
-      ),
-      emergentThemes: (synthesis as any).emergentThemes || [],
       contradictionsCount: synthesis.contradictions?.length || 0,
-      unresolvedQuestionsCount: synthesis.unresolvedQuestions?.length || 0
+      unresolvedQuestionsCount: synthesis.unresolvedQuestions?.length || 0,
+      // Only send preview of integrated thought, not all insights
+      integratedThoughtPreview: (synthesis.integratedThought || '').substring(0, 100) + '...',
+      firstInsight: synthesis.keyInsights?.length > 0 ?
+        (typeof synthesis.keyInsights[0] === 'string' ?
+          synthesis.keyInsights[0].substring(0, 80) + '...' :
+          String(synthesis.keyInsights[0] || '')) : null
     });
   }
 
@@ -777,26 +814,26 @@ class ConsciousnessBackend extends EventEmitter {
 
     log.info('StageS6', 'Scribe completed');
 
-    // Emit stage completion event for UI
+    // Emit stage completion event for UI (minimal data)
     this.emit('stageCompleted', {
       stage: 'S6',
       name: 'Scribe',
       status: 'completed',
       timestamp: Date.now(),
-      narrative: documentation.narrative,
+      narrativePreview: documentation.narrative.substring(0, 150) + '...',
       questionsCount: documentation.futureQuestions.length,
-      philosophicalNotes: documentation.philosophicalNotes.map(note =>
-        note.substring(0, 100) + (note.length > 100 ? '...' : '')
-      ),
-      emotionalObservations: documentation.emotionalObservations.map(obs =>
-        obs.substring(0, 100) + (obs.length > 100 ? '...' : '')
-      ),
-      growthObservations: documentation.growthObservations.map(growth =>
-        growth.substring(0, 100) + (growth.length > 100 ? '...' : '')
-      ),
-      futureQuestions: documentation.futureQuestions.map(q =>
-        q.substring(0, 120) + (q.length > 120 ? '...' : '')
-      )
+      philosophicalCount: documentation.philosophicalNotes.length,
+      emotionalCount: documentation.emotionalObservations.length,
+      growthCount: documentation.growthObservations.length,
+      // Only send first item from each category
+      firstPhilosophical: documentation.philosophicalNotes.length > 0 ?
+        documentation.philosophicalNotes[0].substring(0, 80) + '...' : null,
+      firstEmotional: documentation.emotionalObservations.length > 0 ?
+        documentation.emotionalObservations[0].substring(0, 80) + '...' : null,
+      firstGrowth: documentation.growthObservations.length > 0 ?
+        documentation.growthObservations[0].substring(0, 80) + '...' : null,
+      firstQuestion: documentation.futureQuestions.length > 0 ?
+        documentation.futureQuestions[0].substring(0, 100) + '...' : null
     });
   }
 
@@ -820,10 +857,20 @@ class ConsciousnessBackend extends EventEmitter {
       // Save DPD weights to database
       this.databaseManager.saveDPDWeights(updatedWeights);
 
-      // Emit DPD update event
+      // Emit DPD update event (minimal data only)
       this.emit('dpdUpdated', {
-        weights: updatedWeights,
-        scores: thoughtCycle.dpdScores,
+        weights: {
+          empathy: updatedWeights.empathy,
+          coherence: updatedWeights.coherence,
+          dissonance: updatedWeights.dissonance,
+          version: updatedWeights.version
+        },
+        scores: thoughtCycle.dpdScores ? {
+          empathy: thoughtCycle.dpdScores.empathy,
+          coherence: thoughtCycle.dpdScores.coherence,
+          dissonance: thoughtCycle.dpdScores.dissonance,
+          weightedTotal: thoughtCycle.dpdScores.weightedTotal
+        } : null,
         timestamp: Date.now()
       });
     }
@@ -1071,8 +1118,8 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async generateInternalTrigger(): Promise<InternalTrigger | null> {
-    const energyCost = 1.0;
-    await this.energyManager.consumeEnergy(energyCost, 'internal_trigger');
+    // Note: Energy consumption for trigger generation (S0) is handled by executeAdaptiveThoughtCycle
+    // Don't consume energy here to avoid double-counting
 
     // Generate evolved questions from previous discussions (70% chance when data available)
     const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(10);
@@ -1085,9 +1132,12 @@ class ConsciousnessBackend extends EventEmitter {
       if (evolvedTrigger) {
         this.databaseManager.saveQuestion(evolvedTrigger);
 
-        // Emit trigger generation event for UI
+        // Emit trigger generation event for UI (minimal data)
         this.emit('triggerGenerated', {
-          trigger: evolvedTrigger,
+          id: evolvedTrigger.id,
+          question: evolvedTrigger.question.substring(0, 150),
+          category: evolvedTrigger.category,
+          importance: evolvedTrigger.importance,
           source: 'evolved_from_discussions',
           timestamp: Date.now()
         });
@@ -1133,11 +1183,13 @@ class ConsciousnessBackend extends EventEmitter {
     this.databaseManager.saveQuestion(trigger);
     log.info('Trigger', `📚 Selected from DB [${selectedIdea.category}]: "${selectedIdea.question.substring(0, 40)}..."`);
 
-    // Emit trigger generation event for UI
+    // Emit trigger generation event for UI (minimal data)
     this.emit('triggerGenerated', {
-      trigger,
+      id: trigger.id,
+      question: trigger.question.substring(0, 150),
+      category: trigger.category,
+      importance: trigger.importance,
       source: 'database_unresolved',
-      category: selectedIdea.category,
       timestamp: Date.now()
     });
 
@@ -1210,6 +1262,9 @@ class ConsciousnessBackend extends EventEmitter {
   getDPDEvolution(): any {
     // Get DPD weights history from database
     const history = this.databaseManager.getDPDWeightsHistory(100);
+
+    console.log('[DEBUG] getDPDEvolution - this.dpdWeights:', this.dpdWeights);
+    console.log('[DEBUG] getDPDEvolution - history.length:', history.length);
 
     return {
       currentWeights: this.dpdWeights,
@@ -1343,6 +1398,12 @@ class ConsciousnessBackend extends EventEmitter {
 
         log.info('MemoryEvolution', `✅ Consolidation complete: ${result.beliefs_created} beliefs created, ${result.beliefs_updated} updated`);
 
+        // Generate memory patterns from recent thoughts
+        this.generateMemoryPatterns();
+
+        // Generate consciousness insights from beliefs
+        this.generateConsciousnessInsights();
+
         this.lastConsolidationTime = this.systemClock;
 
         // Emit consolidation event for UI
@@ -1357,6 +1418,130 @@ class ConsciousnessBackend extends EventEmitter {
       } catch (error) {
         log.error('MemoryEvolution', 'Consolidation failed', error);
       }
+    }
+  }
+
+  private generateMemoryPatterns(): void {
+    try {
+      log.info('MemoryEvolution', '🔍 Analyzing memory patterns...');
+
+      // Get recent significant thoughts
+      const recentThoughts = this.databaseManager.getSignificantThoughts(50);
+
+      // Analyze patterns: agent distribution
+      const agentCounts: { [key: string]: number } = {};
+      const categoryCounts: { [key: string]: number } = {};
+
+      recentThoughts.forEach((t: any) => {
+        agentCounts[t.agent_id] = (agentCounts[t.agent_id] || 0) + 1;
+        if (t.category) {
+          categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
+        }
+      });
+
+      // Save agent affinity pattern
+      if (Object.keys(agentCounts).length > 0) {
+        const dominantAgent = Object.entries(agentCounts).sort((a, b) => b[1] - a[1])[0];
+        const significance = dominantAgent[1] / recentThoughts.length;
+        this.databaseManager.saveMemoryPattern(
+          'agent_affinity',
+          { agent: dominantAgent[0], count: dominantAgent[1], percentage: significance },
+          significance
+        );
+        log.info('MemoryEvolution', `  📊 Agent affinity: ${dominantAgent[0]} (${(significance * 100).toFixed(1)}%)`);
+      }
+
+      // Save category distribution pattern
+      if (Object.keys(categoryCounts).length > 0) {
+        const dominantCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
+        const significance = dominantCategory[1] / recentThoughts.length;
+        this.databaseManager.saveMemoryPattern(
+          'category_focus',
+          { category: dominantCategory[0], count: dominantCategory[1], percentage: significance },
+          significance
+        );
+        log.info('MemoryEvolution', `  📊 Category focus: ${dominantCategory[0]} (${(significance * 100).toFixed(1)}%)`);
+      }
+
+      // DPD evolution pattern
+      const dpdHistory = this.databaseManager.getDPDWeightsHistory(10);
+      if (dpdHistory.length >= 2) {
+        const latest = dpdHistory[0];
+        const previous = dpdHistory[dpdHistory.length - 1];
+        const trend = {
+          empathy: latest.empathy - previous.empathy,
+          coherence: latest.coherence - previous.coherence,
+          dissonance: latest.dissonance - previous.dissonance
+        };
+        const maxChange = Math.max(Math.abs(trend.empathy), Math.abs(trend.coherence), Math.abs(trend.dissonance));
+        this.databaseManager.saveMemoryPattern(
+          'dpd_evolution',
+          { trend, cycles: dpdHistory.length },
+          maxChange
+        );
+        log.info('MemoryEvolution', `  📈 DPD trend: E${trend.empathy > 0 ? '+' : ''}${trend.empathy.toFixed(3)} C${trend.coherence > 0 ? '+' : ''}${trend.coherence.toFixed(3)} D${trend.dissonance > 0 ? '+' : ''}${trend.dissonance.toFixed(3)}`);
+      }
+
+    } catch (error) {
+      log.error('MemoryEvolution', 'Failed to generate memory patterns', error);
+    }
+  }
+
+  private generateConsciousnessInsights(): void {
+    try {
+      log.info('MemoryEvolution', '💡 Generating consciousness insights...');
+
+      const beliefs = this.databaseManager.getCoreBeliefs(20);
+
+      // Insight: Strongest belief
+      if (beliefs.length > 0) {
+        const strongest = beliefs[0]; // Already sorted by strength
+        this.databaseManager.saveConsciousnessInsight(
+          'dominant_belief',
+          `最強の信念: "${strongest.belief_content}" (強度: ${strongest.strength.toFixed(2)}, 強化回数: ${strongest.reinforcement_count})`,
+          strongest.confidence,
+          [strongest.id]
+        );
+        log.info('MemoryEvolution', `  💎 Dominant belief: "${strongest.belief_content}"`);
+      }
+
+      // Insight: Category distribution
+      const categoryGroups: { [key: string]: any[] } = {};
+      beliefs.forEach(b => {
+        if (!categoryGroups[b.category]) categoryGroups[b.category] = [];
+        categoryGroups[b.category].push(b);
+      });
+
+      if (Object.keys(categoryGroups).length > 0) {
+        const categoryInsights = Object.entries(categoryGroups)
+          .map(([cat, bels]) => `${cat}(${bels.length})`)
+          .join(', ');
+        const avgConfidence = beliefs.reduce((sum, b) => sum + b.confidence, 0) / beliefs.length;
+        this.databaseManager.saveConsciousnessInsight(
+          'belief_distribution',
+          `信念の分布: ${categoryInsights}`,
+          avgConfidence
+        );
+        log.info('MemoryEvolution', `  📚 Belief distribution: ${categoryInsights}`);
+      }
+
+      // Insight: DPD alignment with beliefs
+      const empathyBeliefs = beliefs.filter(b => b.category === 'ethical' || b.category === 'consciousness');
+      const coherenceBeliefs = beliefs.filter(b => b.category === 'epistemological' || b.category === 'metacognitive');
+      const alignmentScore = (
+        (empathyBeliefs.length * this.dpdWeights.empathy) +
+        (coherenceBeliefs.length * this.dpdWeights.coherence)
+      ) / Math.max(beliefs.length, 1);
+
+      this.databaseManager.saveConsciousnessInsight(
+        'dpd_belief_alignment',
+        `DPDと信念の整合性: ${(alignmentScore * 100).toFixed(1)}% (共感系${empathyBeliefs.length}個, 論理系${coherenceBeliefs.length}個)`,
+        alignmentScore
+      );
+      log.info('MemoryEvolution', `  🎯 DPD-Belief alignment: ${(alignmentScore * 100).toFixed(1)}%`);
+
+    } catch (error) {
+      log.error('MemoryEvolution', 'Failed to generate consciousness insights', error);
     }
   }
 

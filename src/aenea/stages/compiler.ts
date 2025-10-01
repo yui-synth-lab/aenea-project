@@ -187,7 +187,23 @@ ${reflectionsText}
   }
 
   private extractUnresolved(thoughts: StructuredThought[]): string[] {
-    return thoughts.filter(t => (t.logicalCoherence ?? 0.5) < 0.6).map(t => t.content);
+    // Extract questions or unresolved topics from low-coherence thoughts
+    // Look for question marks or extract key topics (not full content)
+    return thoughts
+      .filter(t => (t.logicalCoherence ?? 0.5) < 0.6)
+      .map(t => {
+        // If content contains a question, extract it
+        const questionMatch = t.content.match(/「([^」]*[？?])」/);
+        if (questionMatch) {
+          return questionMatch[1];
+        }
+        // Otherwise, extract first sentence or topic (max 100 chars)
+        const firstSentence = t.content.split(/[。\n]/)[0];
+        return firstSentence.length > 100
+          ? firstSentence.substring(0, 100) + '...'
+          : firstSentence;
+      })
+      .filter(q => q && q.length > 0);
   }
 }
 

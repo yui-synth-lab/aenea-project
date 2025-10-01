@@ -73,6 +73,28 @@ router.get('/scores', (_req, res) => {
   }
 });
 
+// GET /api/consciousness/dpd/evolution - DPD Weight Evolution History
+router.get('/evolution', (_req, res) => {
+  try {
+    if (!consciousnessBackend) {
+      return res.status(503).json({ error: 'Consciousness backend not initialized' });
+    }
+
+    const evolution = consciousnessBackend.getDPDEvolution();
+    res.json({
+      currentWeights: evolution.currentWeights,
+      history: evolution.history,
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    console.error('Failed to get DPD evolution:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve DPD evolution',
+      message: (error as Error).message
+    });
+  }
+});
+
 export default router;
 
 

@@ -339,10 +339,45 @@ router.get('/events', (req, res) => {
         timestamp: Date.now(),
         ...data
       };
-      console.log(`📤 SSE event: ${eventType}`);
-      res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+
+      // Try to stringify and check size
+      const jsonStr = JSON.stringify(eventData);
+
+      // If JSON string is too large (> 500KB), truncate data
+      if (jsonStr.length > 500000) {
+        console.warn(`⚠️ SSE event ${eventType} too large (${jsonStr.length} bytes), truncating...`);
+
+        // Create a truncated version with only essential fields
+        const truncatedData = {
+          type: eventType,
+          timestamp: eventData.timestamp,
+          stage: eventData.stage,
+          name: eventData.name,
+          status: eventData.status,
+          // Note about truncation
+          _truncated: true,
+          _originalSize: jsonStr.length
+        };
+
+        res.write(`data: ${JSON.stringify(truncatedData)}\n\n`);
+      } else {
+        console.log(`📤 SSE event: ${eventType} (${jsonStr.length} bytes)`);
+        res.write(`data: ${jsonStr}\n\n`);
+      }
     } catch (error) {
       console.error(`❌ Error sending SSE event ${eventType}:`, error);
+
+      // Send minimal error event
+      try {
+        res.write(`data: ${JSON.stringify({
+          type: eventType,
+          timestamp: Date.now(),
+          error: 'Failed to serialize event data',
+          _fallback: true
+        })}\n\n`);
+      } catch (fallbackError) {
+        console.error(`❌ Failed to send fallback event:`, fallbackError);
+      }
     }
   };
 

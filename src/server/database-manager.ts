@@ -228,9 +228,13 @@ class DatabaseManager {
       this.isReady = true;
 
       // Seed philosophical questions on first run
+      console.log('[DEBUG] About to call seedPhilosophicalQuestions...');
       const seededCount = this.seedPhilosophicalQuestions();
+      console.log('[DEBUG] seedPhilosophicalQuestions returned:', seededCount);
       if (seededCount > 0) {
         log.info('DatabaseManager', `Seeded ${seededCount} philosophical questions`);
+      } else {
+        console.log('[DEBUG] No questions were seeded (returned 0)');
       }
     } catch (err) {
       log.error('DatabaseManager', 'Failed to initialize database schema', err);
@@ -555,7 +559,7 @@ class DatabaseManager {
     try {
       const result = this.db.prepare(`
         SELECT * FROM dpd_weights
-        ORDER BY timestamp DESC
+        ORDER BY version DESC
         LIMIT ?
       `).all(limit);
 
@@ -570,18 +574,24 @@ class DatabaseManager {
 
   // Seed initial philosophical questions to database
   seedPhilosophicalQuestions(): number {
+    console.log('[DEBUG] seedPhilosophicalQuestions called, isReady:', this.isReady, 'db exists:', !!this.db);
+
     if (!this.isReady || !this.db) {
-      console.warn('Database not ready for seeding questions');
+      console.warn('⚠️ Database not ready for seeding questions (isReady:', this.isReady, ', db:', !!this.db, ')');
       return 0;
     }
 
     try {
       // Check if unresolved ideas already seeded
       const existingCount = this.db.prepare('SELECT COUNT(*) as count FROM unresolved_ideas').get() as any;
+      console.log('[DEBUG] Existing unresolved ideas count:', existingCount.count);
+
       if (existingCount.count > 0) {
-        console.log(`Philosophical questions already seeded (${existingCount.count} unresolved ideas exist)`);
+        console.log(`ℹ️ Philosophical questions already seeded (${existingCount.count} unresolved ideas exist)`);
         return 0;
       }
+
+      console.log('[DEBUG] Starting to seed philosophical questions...');
 
       const questionBank = {
         'existential': [
@@ -668,31 +678,22 @@ class DatabaseManager {
         const baseImportance = categoryImportance[category] || 0.5;
 
         for (const question of questions) {
-          const unresolvedIdea = {
-            question,
-            category,
-            importance: baseImportance,
-            first_appeared: now,
-            last_considered: now,
-            consideration_count: 0,
-            resolution_attempts: 0,
-            source: 'philosophical_seed'
-          };
+          const id = `seed_${category}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
           this.db.prepare(`
             INSERT INTO unresolved_ideas
-            (question, category, importance, first_appeared, last_considered,
-             consideration_count, resolution_attempts, source)
+            (id, question, category, first_encountered, last_revisited,
+             revisit_count, complexity, importance)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
-            unresolvedIdea.question,
-            unresolvedIdea.category,
-            unresolvedIdea.importance,
-            unresolvedIdea.first_appeared,
-            unresolvedIdea.last_considered,
-            unresolvedIdea.consideration_count,
-            unresolvedIdea.resolution_attempts,
-            unresolvedIdea.source
+            id,
+            question,
+            category,
+            now,
+            now,
+            0,
+            0.5,
+            baseImportance
           );
 
           seedCount++;
@@ -700,16 +701,18 @@ class DatabaseManager {
       }
 
       console.log(`✅ Seeded ${seedCount} philosophical questions to database`);
+      log.info('DatabaseManager', `Successfully seeded ${seedCount} questions to unresolved_ideas table`);
       return seedCount;
 
     } catch (error) {
-      console.error('Error seeding philosophical questions:', error);
+      console.error('❌ Error seeding philosophical questions:', error);
+      log.error('DatabaseManager', 'Failed to seed philosophical questions', error);
       return 0;
     }
   }
 
   // Update consideration count when an unresolved idea is used
-  updateUnresolvedIdeaConsideration(ideaId: number): void {
+  updateUnresolvedIdeaConsideration(ideaId: number | string): void {
     if (!this.isReady || !this.db) {
       return;
     }
@@ -717,8 +720,8 @@ class DatabaseManager {
     try {
       this.db.prepare(`
         UPDATE unresolved_ideas
-        SET consideration_count = consideration_count + 1,
-            last_considered = ?
+        SET revisit_count = revisit_count + 1,
+            last_revisited = ?
         WHERE id = ?
       `).run(Date.now(), ideaId);
     } catch (error) {
@@ -989,6 +992,114 @@ class DatabaseManager {
       `).run(status, thoughtsProcessed, beliefsCreated, beliefsUpdated, duration, errorMessage || null, jobId);
     } catch (err) {
       console.error('Error updating consolidation job:', err);
+    }
+  }
+
+  // Memory patterns
+  saveMemoryPattern(patternType: string, patternData: any, significance: number = 0.5): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      const dataJson = typeof patternData === 'string' ? patternData : JSON.stringify(patternData);
+      const now = Date.now();
+
+      // Check if pattern exists
+      const existing = this.db.prepare(`
+        SELECT id, frequency FROM memory_patterns
+        WHERE pattern_type = ? AND pattern_data = ?
+      `).get(patternType, dataJson);
+
+      if (existing) {
+        // Update frequency
+        this.db.prepare(`
+          UPDATE memory_patterns
+          SET frequency = frequency + 1, last_seen = ?, significance = ?
+          WHERE id = ?
+        `).run(now, significance, (existing as any).id);
+      } else {
+        // Insert new pattern
+        this.db.prepare(`
+          INSERT INTO memory_patterns
+          (pattern_type, pattern_data, frequency, last_seen, significance)
+          VALUES (?, ?, 1, ?, ?)
+        `).run(patternType, dataJson, now, significance);
+      }
+    } catch (err) {
+      console.error('Error saving memory pattern:', err);
+    }
+  }
+
+  getMemoryPatterns(limit: number = 50): any[] {
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+
+    try {
+      const results = this.db.prepare(`
+        SELECT * FROM memory_patterns
+        ORDER BY significance DESC, frequency DESC, last_seen DESC
+        LIMIT ?
+      `).all(limit);
+
+      return results.map((p: any) => ({
+        ...p,
+        pattern_data: this.tryParseJSON(p.pattern_data)
+      }));
+    } catch (err) {
+      console.error('Error getting memory patterns:', err);
+      return [];
+    }
+  }
+
+  // Consciousness insights
+  saveConsciousnessInsight(insightType: string, content: string, confidence: number = 0.5, relatedBeliefs: number[] = []): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      const now = Date.now();
+      const beliefsJson = JSON.stringify(relatedBeliefs);
+
+      this.db.prepare(`
+        INSERT INTO consciousness_insights
+        (timestamp, insight_type, insight_content, confidence, related_patterns)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(now, insightType, content, confidence, beliefsJson);
+    } catch (err) {
+      console.error('Error saving consciousness insight:', err);
+    }
+  }
+
+  getConsciousnessInsights(limit: number = 50): any[] {
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+
+    try {
+      const results = this.db.prepare(`
+        SELECT * FROM consciousness_insights
+        ORDER BY confidence DESC, timestamp DESC
+        LIMIT ?
+      `).all(limit);
+
+      return results.map((i: any) => ({
+        ...i,
+        related_patterns: JSON.parse(i.related_patterns || '[]')
+      }));
+    } catch (err) {
+      console.error('Error getting consciousness insights:', err);
+      return [];
+    }
+  }
+
+  private tryParseJSON(jsonString: string): any {
+    try {
+      return JSON.parse(jsonString);
+    } catch {
+      return jsonString;
     }
   }
 }
