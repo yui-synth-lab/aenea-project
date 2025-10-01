@@ -576,10 +576,10 @@ class DatabaseManager {
     }
 
     try {
-      // Check if questions already seeded
-      const existingCount = this.db.prepare('SELECT COUNT(*) as count FROM questions').get() as any;
+      // Check if unresolved ideas already seeded
+      const existingCount = this.db.prepare('SELECT COUNT(*) as count FROM unresolved_ideas').get() as any;
       if (existingCount.count > 0) {
-        console.log(`Questions already seeded (${existingCount.count} questions exist)`);
+        console.log(`Philosophical questions already seeded (${existingCount.count} unresolved ideas exist)`);
         return 0;
       }
 
