@@ -188,7 +188,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           details: {
             confidence: data.confidence || 0.8,
             position: data.position,
-            fullThought: data.thought
+            fullThought: data.thought,
+            // Include Yui-specific metadata if present
+            yuiAgent: data.yuiAgent
           }
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
@@ -296,6 +298,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     if (diffSecs < 60) return `${diffSecs}s ago`;
     if (diffMins < 60) return `${diffMins}m ago`;
     return activityTime.toLocaleTimeString();
+  };
+
+  const getAgentCssClass = (agentName: string): string => {
+    // Map Yui Protocol agent names to CSS classes
+    if (agentName.includes('Yui:')) {
+      if (agentName.includes('慧露')) return 'yui-eiro';
+      if (agentName.includes('碧統')) return 'yui-hekito';
+      if (agentName.includes('観至')) return 'yui-kanshi';
+      if (agentName.includes('陽雅')) return 'yui-yoga';
+      if (agentName.includes('結心')) return 'yui-yui';
+    }
+    // Return agent name as-is for Aenea core agents (theoria, pathia, kinesis)
+    return agentName.toLowerCase();
   };
 
   return (
@@ -491,7 +506,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
                   <div key={item.id} className="activity-item">
                     <span className="activity-time">{formatActivityTime(item.timestamp)}</span>
                     {item.agent ? (
-                      <span className={`activity-agent ${item.agent}`}>{item.agent}</span>
+                      <span className={`activity-agent ${getAgentCssClass(item.agent)}`}>{item.agent}</span>
                     ) : (
                       <span className="activity-system">System</span>
                     )}
@@ -813,6 +828,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .activity-agent.kinesis {
           background: #7c2d12;
           color: #fed7aa;
+        }
+
+        /* Yui Protocol Agents - with distinctive borders */
+        .activity-agent.yui-eiro {
+          background: #5B7DB1;
+          color: #ffffff;
+          border: 2px solid #5B7DB1;
+          box-shadow: 0 0 8px rgba(91, 125, 177, 0.4);
+        }
+
+        .activity-agent.yui-hekito {
+          background: #2ECCB3;
+          color: #ffffff;
+          border: 2px solid #2ECCB3;
+          box-shadow: 0 0 8px rgba(46, 204, 179, 0.4);
+        }
+
+        .activity-agent.yui-kanshi {
+          background: #C0392B;
+          color: #ffffff;
+          border: 2px solid #C0392B;
+          box-shadow: 0 0 8px rgba(192, 57, 43, 0.4);
+        }
+
+        .activity-agent.yui-yoga {
+          background: #F39C12;
+          color: #ffffff;
+          border: 2px solid #F39C12;
+          box-shadow: 0 0 8px rgba(243, 156, 18, 0.4);
+        }
+
+        .activity-agent.yui-yui {
+          background: #E91E63;
+          color: #ffffff;
+          border: 2px solid #E91E63;
+          box-shadow: 0 0 8px rgba(233, 30, 99, 0.4);
         }
 
         .activity-system {

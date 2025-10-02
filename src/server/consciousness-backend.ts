@@ -18,6 +18,7 @@ import { StructuredThought, MutualReflection, AuditorResult, SynthesisResult, Do
 import { DPDScores, DPDWeights } from '../types/dpd-types.js';
 import { MemoryConsolidator } from '../aenea/memory/memory-consolidator.js';
 import { CoreBeliefs } from '../aenea/memory/core-beliefs.js';
+import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from '../integration/yui-agents-bridge.js';
 
 interface InternalTrigger {
   id: string;
@@ -86,6 +87,9 @@ class ConsciousnessBackend extends EventEmitter {
   private coreBeliefs: CoreBeliefs;
   private lastConsolidationTime: number;
 
+  // Yui Protocol 5 agents integration
+  private yuiAgentsBridge: YuiAgentsBridge;
+
   constructor() {
     super(); // Call EventEmitter constructor
 
@@ -153,6 +157,10 @@ class ConsciousnessBackend extends EventEmitter {
     this.memoryConsolidator = new MemoryConsolidator(this.databaseManager, theoriaAgent);
     this.coreBeliefs = new CoreBeliefs(this.databaseManager, 500);
     this.lastConsolidationTime = 0;
+
+    // Initialize Yui Agents bridge
+    this.yuiAgentsBridge = createYuiAgentsBridge();
+    log.info('Consciousness', 'Yui Protocol 5 agents initialized: 慧露, 碧統, 観至, 陽雅, 結心');
 
     console.log('DPD Engine initialized with enhanced weight evolution tracking');
 
@@ -320,6 +328,10 @@ class ConsciousnessBackend extends EventEmitter {
     };
   }
 
+  getDatabaseManager() {
+    return this.databaseManager;
+  }
+
   private saveConsciousnessState(): void {
     try {
       const state = {
@@ -385,7 +397,7 @@ class ConsciousnessBackend extends EventEmitter {
     this.isPaused = false;
     this.isDormant = false;
     this.saveConsciousnessState(); // Save final state
-    this.databaseManager.cleanup(); // Cleanup resources
+    // DB connection remains open - no cleanup needed
     this.emit('consciousnessStopped', this.getState());
     log.info('Consciousness', 'Stopped');
   }
@@ -1621,6 +1633,107 @@ class ConsciousnessBackend extends EventEmitter {
         systemUptime: 0,
         personalityEvolution: { currentTraits: {} },
         memoryPatterns: { significant: 0, unresolved: 0 }
+      };
+    }
+  }
+
+  // ============================================================================
+  // Yui Agents Internal Dialogue
+  // ============================================================================
+
+  /**
+   * Start internal dialogue with Yui Protocol's 5 agents
+   * This realizes the novel's vision where Aenea consults with:
+   * 慧露 (Eiro), 碧統 (Hekito), 観至 (Kanshi), 陽雅 (Yoga), 結心 (Yui)
+   */
+  async startYuiAgentsDialogue(question: string, category: string): Promise<InternalDialogueSession> {
+    log.info('YuiDialogue', `Starting internal dialogue with 5 agents: "${question.substring(0, 60)}..."`);
+
+    // AI executor wrapper for Yui agents
+    const aiExecutor = async (agentId: string, prompt: string, systemPrompt: string) => {
+      // Use existing agent execution infrastructure
+      const agent = this.agents.get('theoria'); // Use Theoria as default executor
+      if (!agent) {
+        throw new Error('No AI agent available for Yui dialogue');
+      }
+
+      try {
+        const result = await agent.execute(prompt, systemPrompt);
+        return {
+          success: result.success,
+          content: result.content,
+          error: result.error
+        };
+      } catch (error) {
+        return {
+          success: false,
+          content: undefined,
+          error: (error as Error).message
+        };
+      }
+    };
+
+    const session = await this.yuiAgentsBridge.startInternalDialogue(question, category, aiExecutor);
+
+    // Emit event for UI
+    this.emit('yuiDialogueCompleted', {
+      sessionId: session.id,
+      question: session.question,
+      category: session.category,
+      agentCount: session.responses.length,
+      timestamp: session.timestamp
+    });
+
+    log.info('YuiDialogue', `Internal dialogue completed with ${session.responses.length} agent responses`);
+
+    return session;
+  }
+
+  /**
+   * Get Yui agents information
+   */
+  getYuiAgents() {
+    return this.yuiAgentsBridge.getAgents();
+  }
+
+  /**
+   * Get recent internal dialogues
+   */
+  getRecentYuiDialogues(limit: number = 10) {
+    return this.yuiAgentsBridge.getRecentDialogueSessions(limit);
+  }
+
+  /**
+   * Get specific dialogue session
+   */
+  getYuiDialogueSession(sessionId: string) {
+    return this.yuiAgentsBridge.getDialogueSession(sessionId);
+  }
+
+  /**
+   * Execute agent chat (for individual agent conversation)
+   * Used by the agents route for direct user-agent chat
+   */
+  async executeAgentChat(agentId: string, userPrompt: string, systemPrompt: string): Promise<{ success: boolean; content?: string; error?: string }> {
+    const agent = this.agents.get('theoria'); // Use Theoria as executor
+    if (!agent) {
+      return {
+        success: false,
+        error: 'No AI agent available'
+      };
+    }
+
+    try {
+      const result = await agent.execute(userPrompt, systemPrompt);
+      return {
+        success: result.success,
+        content: result.content,
+        error: result.error
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: (error as Error).message
       };
     }
   }

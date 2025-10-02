@@ -19,6 +19,8 @@ import dpdRoutes, { initializeDPDRoutes } from './routes/dpd.js';
 import integrationRoutes from './routes/integration.js';
 import logsRoutes, { initializeLogs } from './routes/logs.js';
 import growthRoutes, { initializeGrowthRoutes } from './routes/growth.js';
+import agentsRoutes, { initializeAgentsRoute } from './routes/agents.js';
+import yuiDialogueRoutes, { initializeYuiDialogueRoute } from './routes/yui-dialogue.js';
 import { setupWebSocketHandlers } from './websocket-handler.js';
 
 const app = express();
@@ -35,6 +37,8 @@ initializeConsciousness(consciousness);
 initializeLogs(consciousness);
 initializeGrowthRoutes(consciousness);
 initializeDPDRoutes(consciousness);
+initializeAgentsRoute(consciousness);
+initializeYuiDialogueRoute(consciousness);
 
 // Middleware
 app.use(express.json());
@@ -60,6 +64,8 @@ app.use('/api/consciousness', consciousnessRoutes);
 app.use('/api/integration', integrationRoutes);
 app.use('/api/logs', logsRoutes);
 app.use('/api/growth', growthRoutes);
+app.use('/api/agents', agentsRoutes);
+app.use('/api/yui', yuiDialogueRoutes);
 
 // ============================================================================
 // WebSocket Integration
@@ -96,3 +102,30 @@ server.listen(PORT, () => {
   console.log('🏗️  Architecture: Route Separation Enabled');
   console.log('==========================================');
 });
+
+// ============================================================================
+// Graceful Shutdown
+// ============================================================================
+
+const gracefulShutdown = async (signal: string) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+  // Close server to stop accepting new connections
+  server.close(() => {
+    console.log('HTTP server closed');
+  });
+
+  // Close WebSocket connections
+  io.close(() => {
+    console.log('WebSocket server closed');
+  });
+
+  // Close database connection
+  consciousness.getDatabaseManager().cleanup();
+
+  console.log('Graceful shutdown completed');
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

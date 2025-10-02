@@ -11,6 +11,7 @@ import { theoriaConfig } from '../agents/theoria.js';
 import { pathiaConfig } from '../agents/pathia.js';
 import { kinesisConfig } from '../agents/kinesis.js';
 import { CoreBeliefs } from '../memory/core-beliefs.js';
+import { YuiConsultation } from './yui-consultation.js';
 
 interface InternalTrigger {
   id: string;
@@ -46,6 +47,8 @@ export default class IndividualThoughtStage {
     const agents = ['theoria', 'pathia', 'kinesis'];
     const thoughts: StructuredThought[] = [];
 
+    // Step 1: Consult with Aenea's 3 core agents (theoria, pathia, kinesis)
+    log.info('StageS1', 'Consulting Aenea\'s core agents...');
     for (const agentId of agents) {
       const agent = this.agents.get(agentId);
       if (!agent) continue;
@@ -56,7 +59,15 @@ export default class IndividualThoughtStage {
       }
     }
 
-    log.info('StageS1', 'Individual Thought completed');
+    // Step 2: Select and consult with TWO Yui Protocol agents (optimal + contrasting)
+    log.info('StageS1', 'Selecting Yui Protocol agents for consultation...');
+    const yuiConsultations = await this.consultYuiAgent(thoughtCycle.trigger, thoughtCycle);
+    if (yuiConsultations && yuiConsultations.length > 0) {
+      thoughts.push(...yuiConsultations);
+      log.info('StageS1', `Added ${yuiConsultations.length} Yui consultations`);
+    }
+
+    log.info('StageS1', `Individual Thought completed with ${thoughts.length} thoughts (3 Aenea agents + ${yuiConsultations.length} Yui agents)`);
 
     // Emit stage completion event for UI
     if (this.eventEmitter) {
@@ -177,6 +188,137 @@ ${beliefsContext ? beliefsContext + '\n' : ''}
 論理的であると同時に、あなたの個性が明確に表れるような考察をしてください。
 ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察を加えてください。信念と矛盾する場合は、その理由を明確にしてください。' : ''}
     `;
+  }
+
+  /**
+   * Consult with TWO Yui Protocol agents: optimal + contrasting perspectives
+   */
+  private async consultYuiAgent(trigger: InternalTrigger, thoughtCycle: ThoughtCycle): Promise<StructuredThought[]> {
+    try {
+      // Select TWO Yui agents: optimal and contrasting
+      const selectedAgents = YuiConsultation.selectYuiAgents(trigger.category, trigger.question);
+
+      log.info('YuiConsultation', `Selected OPTIMAL agent: ${selectedAgents.optimal.name} (${selectedAgents.optimal.furigana})`);
+      log.info('YuiConsultation', `  Reason: ${selectedAgents.optimal.reason}`);
+      log.info('YuiConsultation', `Selected CONTRASTING agent: ${selectedAgents.contrasting.name} (${selectedAgents.contrasting.furigana})`);
+      log.info('YuiConsultation', `  Reason: ${selectedAgents.contrasting.reason}`);
+
+      // Get context for the consultation
+      const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(5);
+      const significantThoughts = this.databaseManager.getSignificantThoughts(3);
+
+      const context = {
+        unresolvedIdeas: unresolvedIdeas.map(idea => idea.question),
+        significantThoughts: significantThoughts.map(thought => thought.thought_content?.slice(0, 150) || ''),
+        coreBeliefs: ''
+      };
+
+      // Use theoria's AI executor for Yui consultation
+      const theoriaAgent = this.agents.get('theoria');
+      if (!theoriaAgent) {
+        log.warn('YuiConsultation', 'Theoria agent not available for Yui consultation');
+        return [];
+      }
+
+      const thoughts: StructuredThought[] = [];
+
+      // Consult with OPTIMAL agent
+      const optimalResponse = await YuiConsultation.consultYuiAgent(
+        theoriaAgent,
+        selectedAgents.optimal.id,
+        trigger.question,
+        trigger.category,
+        context
+      );
+
+      if (optimalResponse) {
+        const optimalThought: StructuredThought = {
+          id: `yui_${selectedAgents.optimal.id}_${thoughtCycle.id || Date.now()}`,
+          agentId: `yui:${selectedAgents.optimal.name}`,
+          content: optimalResponse.content,
+          reasoning: `Yui (最適): ${selectedAgents.optimal.name} - ${selectedAgents.optimal.reason}`,
+          confidence: optimalResponse.confidence,
+          timestamp: optimalResponse.timestamp,
+          systemClock: 0,
+          trigger: trigger.question,
+          category: trigger.category,
+          tags: ['yui-protocol', 'optimal', selectedAgents.optimal.id]
+        };
+
+        thoughts.push(optimalThought);
+
+        // Emit agent thought event for UI
+        if (this.eventEmitter) {
+          this.eventEmitter.emit('agentThought', {
+            agentName: `Yui: ${selectedAgents.optimal.name} (${selectedAgents.optimal.furigana}) [最適]`,
+            thought: optimalResponse.content,
+            content: optimalResponse.content,
+            confidence: optimalResponse.confidence,
+            timestamp: optimalResponse.timestamp,
+            duration: 0,
+            yuiAgent: {
+              id: selectedAgents.optimal.id,
+              name: selectedAgents.optimal.name,
+              furigana: selectedAgents.optimal.furigana,
+              reason: selectedAgents.optimal.reason,
+              type: 'optimal'
+            }
+          });
+        }
+      }
+
+      // Consult with CONTRASTING agent
+      const contrastingResponse = await YuiConsultation.consultYuiAgent(
+        theoriaAgent,
+        selectedAgents.contrasting.id,
+        trigger.question,
+        trigger.category,
+        context
+      );
+
+      if (contrastingResponse) {
+        const contrastingThought: StructuredThought = {
+          id: `yui_${selectedAgents.contrasting.id}_${thoughtCycle.id || Date.now() + 1}`,
+          agentId: `yui:${selectedAgents.contrasting.name}`,
+          content: contrastingResponse.content,
+          reasoning: `Yui (対比): ${selectedAgents.contrasting.name} - ${selectedAgents.contrasting.reason}`,
+          confidence: contrastingResponse.confidence,
+          timestamp: contrastingResponse.timestamp,
+          systemClock: 0,
+          trigger: trigger.question,
+          category: trigger.category,
+          tags: ['yui-protocol', 'contrasting', selectedAgents.contrasting.id]
+        };
+
+        thoughts.push(contrastingThought);
+
+        // Emit agent thought event for UI
+        if (this.eventEmitter) {
+          this.eventEmitter.emit('agentThought', {
+            agentName: `Yui: ${selectedAgents.contrasting.name} (${selectedAgents.contrasting.furigana}) [対比]`,
+            thought: contrastingResponse.content,
+            content: contrastingResponse.content,
+            confidence: contrastingResponse.confidence,
+            timestamp: contrastingResponse.timestamp,
+            duration: 0,
+            yuiAgent: {
+              id: selectedAgents.contrasting.id,
+              name: selectedAgents.contrasting.name,
+              furigana: selectedAgents.contrasting.furigana,
+              reason: selectedAgents.contrasting.reason,
+              type: 'contrasting'
+            }
+          });
+        }
+      }
+
+      log.info('YuiConsultation', `Completed consultation with ${thoughts.length} Yui agents`);
+      return thoughts;
+
+    } catch (error) {
+      log.error('YuiConsultation', 'Failed to consult Yui agents', error);
+      return [];
+    }
   }
 
   private calculateResponseConfidence(content: string): number {

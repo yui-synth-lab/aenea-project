@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import BetterSqlite3 from 'better-sqlite3';
-import { log } from './logger';
+import { log } from './logger.js';
 type Database = BetterSqlite3.Database;
 
 interface ConsciousnessState {

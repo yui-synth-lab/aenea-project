@@ -45,7 +45,7 @@
     "typescript": "^5.0.0",
     "undici": "^7.16.0",
     "ws": "^8.13.0",
-    "yui-protocol": "file:../yui-protocol"
+    "yui-protocol": "file:./yui-protocol"
   },
   "devDependencies": {
     "@types/crypto-js": "^4.1.0",
