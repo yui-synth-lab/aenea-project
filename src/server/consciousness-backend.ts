@@ -942,6 +942,51 @@ class ConsciousnessBackend extends EventEmitter {
     log.info('Consciousness', '🔍 Finished recording significant thoughts from cycle');
   }
 
+  /**
+   * Validates if a text is a proper question
+   *
+   * Valid questions satisfy ONE of:
+   * 1. End with question mark (？ or ?)
+   * 2. Start with interrogative words (何、どう、なぜ、いつ、どこ、誰、どの、どれ、いかに)
+   *    - Even without question mark: "何が真実か", "どう生きるべきか"
+   *
+   * Rejected patterns:
+   * - Poetic descriptions: （指先で...）, 「静寂を破り...」
+   * - Assertions without interrogatives: 存在は記憶から生じる。
+   * - Too short (< 3 characters)
+   */
+  private isValidQuestion(text: string): boolean {
+    const trimmed = text.trim();
+
+    // Too short
+    if (trimmed.length < 3) return false;
+
+    // Reject poetic descriptions (parentheses at start)
+    if (trimmed.startsWith('（') || trimmed.startsWith('(')) return false;
+
+    // Reject quoted descriptions (often poetic)
+    if (trimmed.startsWith('「') && !trimmed.includes('？') && !trimmed.includes('?')) {
+      return false;
+    }
+
+    // Check for question mark ending (strongest signal)
+    if (trimmed.endsWith('？') || trimmed.endsWith('?')) return true;
+
+    // Check for interrogative word at start (Japanese)
+    const interrogatives = ['何', 'どう', 'なぜ', 'いつ', 'どこ', '誰', 'どの', 'どれ', 'いかに'];
+    const hasInterrogative = interrogatives.some(word => trimmed.startsWith(word));
+
+    if (hasInterrogative) {
+      // Valid question: "何が真実か", "どう生きるべきか"
+      return true;
+    }
+
+    // Reject assertions ending with period (no interrogative, no question mark)
+    if (trimmed.endsWith('。') || trimmed.endsWith('.') || trimmed.endsWith('」')) return false;
+
+    return false; // Default: not a valid question
+  }
+
   private extractUnresolvedIdeasFromCycle(thoughtCycle: ThoughtCycle): void {
     const unresolvedIdeas: any[] = [];
 
@@ -955,6 +1000,12 @@ class ConsciousnessBackend extends EventEmitter {
     if (thoughtCycle.synthesis?.unresolvedQuestions) {
       thoughtCycle.synthesis.unresolvedQuestions.forEach((question: string) => {
         const questionLower = question.toLowerCase().trim();
+
+        // Validate that it's actually a question
+        if (!this.isValidQuestion(question)) {
+          log.debug('Consciousness', `⚠️ Rejected non-question from synthesis: ${question.substring(0, 50)}...`);
+          return;
+        }
 
         // Only add if it's not already recorded as a significant thought
         if (!significantQuestions.has(questionLower)) {
@@ -975,6 +1026,12 @@ class ConsciousnessBackend extends EventEmitter {
     if (thoughtCycle.documentation?.futureQuestions) {
       thoughtCycle.documentation.futureQuestions.forEach((question: string) => {
         const questionLower = question.toLowerCase().trim();
+
+        // Validate that it's actually a question
+        if (!this.isValidQuestion(question)) {
+          log.debug('Consciousness', `⚠️ Rejected non-question from documentation: ${question.substring(0, 50)}...`);
+          return;
+        }
 
         // Only add if it's not already recorded as a significant thought
         if (!significantQuestions.has(questionLower)) {
@@ -1736,6 +1793,55 @@ class ConsciousnessBackend extends EventEmitter {
         error: (error as Error).message
       };
     }
+  }
+
+  // ============================================================================
+  // Stimulus-Response System
+  // ============================================================================
+
+  /**
+   * Process external stimulus (human question, environmental trigger, etc.)
+   */
+  async processStimulus(stimulus: { source: string; content: string; metadata?: any }): Promise<{ stimulusId: string; thoughtCycleId: string }> {
+    // TODO: Implement full stimulus processing
+    // For now, return stub response
+    const stimulusId = `stim_${Date.now()}`;
+    const thoughtCycleId = `cycle_${Date.now()}`;
+
+    log.info('Consciousness', `📨 Received stimulus from ${stimulus.source}: ${stimulus.content.substring(0, 50)}...`);
+
+    // Save stimulus to database (when table is ready)
+    // const interpretation = await this.stimulusReceptionStage.run(stimulus);
+    // const thoughtCycle = await this.runThoughtCycle(interpretation);
+
+    return { stimulusId, thoughtCycleId };
+  }
+
+  /**
+   * Get observable response for a thought cycle
+   */
+  async getObservableResponse(cycleId: string): Promise<any | null> {
+    // TODO: Implement observable response retrieval from database
+    log.info('Consciousness', `🔍 Retrieving observable response for cycle: ${cycleId}`);
+    return null;
+  }
+
+  /**
+   * Get dialogue history (interactions with humans)
+   */
+  async getDialogueHistory(limit: number = 20, offset: number = 0): Promise<any[]> {
+    // TODO: Implement dialogue history retrieval from database
+    log.info('Consciousness', `📚 Retrieving dialogue history (limit: ${limit}, offset: ${offset})`);
+    return [];
+  }
+
+  /**
+   * Get latest observable response
+   */
+  async getLatestObservableResponse(): Promise<any | null> {
+    // TODO: Implement latest response retrieval from database
+    log.info('Consciousness', `🔍 Retrieving latest observable response`);
+    return null;
   }
 }
 

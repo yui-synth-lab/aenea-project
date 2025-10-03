@@ -66,8 +66,15 @@ ${reflectionsText}
 統合思考: [簡潔な統一見解]
 核心洞察: [洞察1] | [洞察2]
 建設的矛盾: [矛盾の統合方法]
-未解決探求: [探求すべき問い1] | [探求すべき問い2]
-信頼度: [0.0-1.0]`;
+未解決探求: [探求すべき問い1？] | [探求すべき問い2？]
+信頼度: [0.0-1.0]
+
+**重要制約**:
+- 「未解決探求」には問いのみを記載すること（疑問符で終わるか、疑問詞で始まること）
+- ポエティックな描写、主張文、断片的な文章は記載しないこと
+- 例: ✅「存在とは何か？」「何が真実か」「どう生きるべきか」
+- 例: ❌「（指先で震える感覚を想像する）」（描写）
+- 例: ❌「存在は記憶から生まれる」（主張文、疑問詞なし）`;
 
     const result = await this.synthesisAgent.execute(synthesisPrompt,
       "You are a consciousness integration specialist. Synthesize multiple AI agent perspectives into coherent, insightful understanding. Focus on finding deeper truth through integration rather than simple combination."
@@ -132,8 +139,19 @@ ${reflectionsText}
       }
 
       if (lowerLine.includes('未解決探求') || lowerLine.includes('unresolved')) {
-        const questions = line.split(/[:：]/)[1]?.split('|') || [];
-        unresolvedQuestions.push(...questions.map(q => q.trim()).filter(q => q));
+        const rawQuestions = line.split(/[:：]/)[1]?.split('|') || [];
+        // VALIDATE: Accept questions with ? or starting with interrogatives
+        const validQuestions = rawQuestions
+          .map(q => q.trim())
+          .filter(q => {
+            if (!q || q.length < 3) return false;
+            // Question mark ending
+            if (q.endsWith('？') || q.endsWith('?')) return true;
+            // Interrogative word at start (Japanese)
+            const interrogatives = ['何', 'どう', 'なぜ', 'いつ', 'どこ', '誰', 'どの', 'どれ', 'いかに'];
+            return interrogatives.some(word => q.startsWith(word));
+          });
+        unresolvedQuestions.push(...validQuestions);
       }
 
       if (lowerLine.includes('信頼度') || lowerLine.includes('confidence')) {
@@ -186,24 +204,58 @@ ${reflectionsText}
     return reflections.filter(r => (r.agreementLevel ?? 0) < 0).map(r => r.criticism).filter(c => c != null);
   }
 
+  /**
+   * Extract only valid questions from low-coherence thoughts
+   * IMPORTANT: Must return ONLY questions
+   * Valid questions: ending with ? or ？, OR starting with interrogatives (何、どう、なぜ...)
+   * Non-questions (assertions, fragments, poetic descriptions) are rejected
+   */
   private extractUnresolved(thoughts: StructuredThought[]): string[] {
-    // Extract questions or unresolved topics from low-coherence thoughts
-    // Look for question marks or extract key topics (not full content)
+    const interrogatives = ['何', 'どう', 'なぜ', 'いつ', 'どこ', '誰', 'どの', 'どれ', 'いかに'];
+
     return thoughts
       .filter(t => (t.logicalCoherence ?? 0.5) < 0.6)
       .map(t => {
-        // If content contains a question, extract it
+        // Extract questions from quoted text: 「...？」or 「何...」
         const questionMatch = t.content.match(/「([^」]*[？?])」/);
         if (questionMatch) {
           return questionMatch[1];
         }
-        // Otherwise, extract first sentence or topic (max 100 chars)
-        const firstSentence = t.content.split(/[。\n]/)[0];
-        return firstSentence.length > 100
-          ? firstSentence.substring(0, 100) + '...'
-          : firstSentence;
+
+        // Try to match interrogative-starting quoted text: 「何が...」
+        const interrogativeQuoteMatch = t.content.match(/「([何どうなぜいつどこ誰どのどれいかに][^」]+)」/);
+        if (interrogativeQuoteMatch) {
+          return interrogativeQuoteMatch[1];
+        }
+
+        // Extract direct questions: ...？ or ...?
+        const directQuestionMatch = t.content.match(/([^。\n]+[？?])/);
+        if (directQuestionMatch) {
+          return directQuestionMatch[1].trim();
+        }
+
+        // Try to match interrogative-starting sentences: 何が..., どう...
+        for (const word of interrogatives) {
+          const interrogativeMatch = t.content.match(new RegExp(`(${word}[^。\n]+)`));
+          if (interrogativeMatch) {
+            const candidate = interrogativeMatch[1].trim();
+            // Only if it doesn't end with period (likely a question)
+            if (!candidate.endsWith('。') && !candidate.endsWith('.')) {
+              return candidate;
+            }
+          }
+        }
+
+        // No question found - return null (will be filtered out)
+        return null;
       })
-      .filter(q => q && q.length > 0);
+      .filter((q): q is string => {
+        // Only keep valid questions
+        if (!q || q.length < 3) return false;
+        // Must end with question mark OR start with interrogative
+        if (q.endsWith('？') || q.endsWith('?')) return true;
+        return interrogatives.some(word => q.startsWith(word));
+      });
   }
 }
 

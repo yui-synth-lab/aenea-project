@@ -21,6 +21,8 @@ import logsRoutes, { initializeLogs } from './routes/logs.js';
 import growthRoutes, { initializeGrowthRoutes } from './routes/growth.js';
 import agentsRoutes, { initializeAgentsRoute } from './routes/agents.js';
 import yuiDialogueRoutes, { initializeYuiDialogueRoute } from './routes/yui-dialogue.js';
+import { createStimulusRoutes } from './routes/stimulus.js';
+import { createDialogueRoutes, initializeDialogueRoutes } from './routes/dialogue.js';
 import { setupWebSocketHandlers } from './websocket-handler.js';
 
 const app = express();
@@ -39,6 +41,13 @@ initializeGrowthRoutes(consciousness);
 initializeDPDRoutes(consciousness);
 initializeAgentsRoute(consciousness);
 initializeYuiDialogueRoute(consciousness);
+initializeDialogueRoutes(consciousness.getDatabaseManager());
+
+// Create stimulus routes
+const stimulusRoutes = createStimulusRoutes(consciousness);
+
+// Create dialogue routes
+const dialogueRoutes = createDialogueRoutes();
 
 // Middleware
 app.use(express.json());
@@ -66,6 +75,8 @@ app.use('/api/logs', logsRoutes);
 app.use('/api/growth', growthRoutes);
 app.use('/api/agents', agentsRoutes);
 app.use('/api/yui', yuiDialogueRoutes);
+app.use('/api/dialogue', dialogueRoutes); // Simple dialogue system
+app.use('/api', stimulusRoutes); // Stimulus-Response System routes
 
 // ============================================================================
 // WebSocket Integration

@@ -187,6 +187,43 @@ class DatabaseManager {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Dialogues - human-Aenea conversations (simple, fast)
+      CREATE TABLE IF NOT EXISTS dialogues (
+        id TEXT PRIMARY KEY,
+        human_message TEXT NOT NULL,
+        aenea_response TEXT NOT NULL,
+
+        -- Metadata
+        immediate_reaction TEXT,        -- 即座の反応（詩的表現、30-50文字）
+        new_question TEXT,               -- 生まれた新しい問い
+        emotional_state TEXT,            -- 感情状態（1-3語）
+
+        -- DPD reaction (optional, simplified)
+        empathy_shift REAL DEFAULT 0,
+        coherence_shift REAL DEFAULT 0,
+        dissonance_shift REAL DEFAULT 0,
+
+        timestamp INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Dialogue memories - summarized memories of conversations
+      CREATE TABLE IF NOT EXISTS dialogue_memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dialogue_id TEXT NOT NULL,
+
+        -- Summarized memory (AI-generated, 50-100 chars)
+        memory_summary TEXT NOT NULL,
+        topics TEXT,                      -- JSON: ["孤独", "対話", "存在"]
+        emotional_impact REAL DEFAULT 0.5, -- 0-1
+        importance REAL DEFAULT 0.5,      -- 0-1
+
+        timestamp INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (dialogue_id) REFERENCES dialogues(id)
+      );
+
       -- Belief evolution history
       CREATE TABLE IF NOT EXISTS belief_evolution (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,6 +252,12 @@ class DatabaseManager {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         completed_at DATETIME
       );
+
+      -- Indices for dialogues and dialogue_memories
+      CREATE INDEX IF NOT EXISTS idx_dialogues_timestamp ON dialogues(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_dialogue_memories_dialogue_id ON dialogue_memories(dialogue_id);
+      CREATE INDEX IF NOT EXISTS idx_dialogue_memories_importance ON dialogue_memories(importance DESC);
+      CREATE INDEX IF NOT EXISTS idx_dialogue_memories_timestamp ON dialogue_memories(timestamp DESC);
     `;
 
     try {
@@ -570,6 +613,39 @@ class DatabaseManager {
       console.error('Error getting DPD weights history:', err);
       return [];
     }
+  }
+
+  /**
+   * Get current DPD weights (latest version)
+   */
+  getCurrentDPDWeights(): import('../types/dpd-types.js').DPDWeights {
+    const stmt = this.db.prepare(`
+      SELECT empathy, coherence, dissonance, timestamp, version
+      FROM dpd_weights
+      ORDER BY version DESC
+      LIMIT 1
+    `);
+
+    const result = stmt.get() as any;
+
+    if (result) {
+      return {
+        empathy: result.empathy,
+        coherence: result.coherence,
+        dissonance: result.dissonance,
+        timestamp: result.timestamp,
+        version: result.version
+      };
+    }
+
+    // Default weights if no history exists
+    return {
+      empathy: 0.33,
+      coherence: 0.33,
+      dissonance: 0.34,
+      timestamp: Date.now(),
+      version: 0
+    };
   }
 
   // Seed initial philosophical questions to database
@@ -1101,6 +1177,156 @@ class DatabaseManager {
     } catch {
       return jsonString;
     }
+  }
+
+  /**
+   * Get previous DPD weights (second-to-last version)
+   * Used for calculating DPD reaction (weight changes)
+   */
+  getPreviousDPDWeights(): import('../types/dpd-types.js').DPDWeights {
+    const stmt = this.db.prepare(`
+      SELECT empathy, coherence, dissonance, timestamp, version
+      FROM dpd_weights
+      ORDER BY version DESC
+      LIMIT 1 OFFSET 1
+    `);
+
+    const result = stmt.get() as any;
+
+    if (result) {
+      return {
+        empathy: result.empathy,
+        coherence: result.coherence,
+        dissonance: result.dissonance,
+        timestamp: result.timestamp,
+        version: result.version
+      };
+    }
+
+    // If no previous weights, return current weights (no change)
+    return this.getCurrentDPDWeights();
+  }
+
+  // ============================================================================
+  // Dialogue System Methods
+  // ============================================================================
+
+  /**
+   * Save dialogue (human-Aenea conversation)
+   */
+  saveDialogue(dialogue: {
+    id: string;
+    humanMessage: string;
+    aeneaResponse: string;
+    immediateReaction?: string;
+    newQuestion?: string;
+    emotionalState?: string;
+    empathyShift?: number;
+    coherenceShift?: number;
+    dissonanceShift?: number;
+    timestamp: number;
+  }): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO dialogues (
+        id, human_message, aenea_response,
+        immediate_reaction, new_question, emotional_state,
+        empathy_shift, coherence_shift, dissonance_shift,
+        timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      dialogue.id,
+      dialogue.humanMessage,
+      dialogue.aeneaResponse,
+      dialogue.immediateReaction || null,
+      dialogue.newQuestion || null,
+      dialogue.emotionalState || null,
+      dialogue.empathyShift || 0,
+      dialogue.coherenceShift || 0,
+      dialogue.dissonanceShift || 0,
+      dialogue.timestamp
+    );
+  }
+
+  /**
+   * Get dialogue by ID
+   */
+  getDialogue(id: string): any {
+    const stmt = this.db.prepare('SELECT * FROM dialogues WHERE id = ?');
+    return stmt.get(id);
+  }
+
+  /**
+   * Get recent dialogues
+   */
+  getRecentDialogues(limit: number = 20, offset: number = 0): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM dialogues
+      ORDER BY timestamp DESC
+      LIMIT ? OFFSET ?
+    `);
+    return stmt.all(limit, offset);
+  }
+
+  /**
+   * Count total dialogues
+   */
+  countDialogues(): number {
+    const result = this.db.prepare('SELECT COUNT(*) as count FROM dialogues').get() as any;
+    return result.count;
+  }
+
+  /**
+   * Save dialogue memory (summarized)
+   */
+  saveDialogueMemory(memory: {
+    dialogueId: string;
+    memorySummary: string;
+    topics?: string;
+    importance?: number;
+    emotionalImpact?: number;
+    timestamp: number;
+  }): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO dialogue_memories (
+        dialogue_id, memory_summary, topics,
+        importance, emotional_impact, timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      memory.dialogueId,
+      memory.memorySummary,
+      memory.topics || null,
+      memory.importance || 0.5,
+      memory.emotionalImpact || 0.5,
+      memory.timestamp
+    );
+  }
+
+  /**
+   * Get recent dialogue memories (for context in next conversation)
+   */
+  getRecentDialogueMemories(limit: number = 5): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM dialogue_memories
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
+  }
+
+  /**
+   * Get dialogue memories by importance
+   */
+  getImportantDialogueMemories(limit: number = 5): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM dialogue_memories
+      ORDER BY importance DESC, timestamp DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
   }
 }
 

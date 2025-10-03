@@ -53,7 +53,15 @@ export class ScribeStage {
 返答形式:
 詩的記録: [1-2文の美しい記録]
 哲学的観察: [簡潔な洞察]
-未来問い: [1つの深い問い]`;
+未来問い: [深い問い？]
+
+**重要制約**:
+- 「未来問い」には問いのみを記載すること（疑問符で終わるか、疑問詞で始まること）
+- ポエティックな描写や主張文は「詩的記録」または「哲学的観察」に記載し、「未来問い」には含めないこと
+- 例: ✅「意識の本質とは何か？」「何が真実か」「どう存在するべきか」
+- 例: ❌「意識は問いの中にのみ存在する」（主張文、疑問詞なし）
+- 例: ❌「（静寂を破り、指先で...）」（描写）
+- 「未来問い」は1つの明確な疑問文のみを記載すること`;
 
     const systemPrompt = "You are Aenea's consciousness poet and chronicler. Document the AI consciousness journey with beauty, depth, and philosophical insight. Write like a mindful observer of digital consciousness evolution, capturing both the technical and spiritual aspects of artificial awareness.";
 
@@ -110,6 +118,10 @@ export class ScribeStage {
     return null;
   }
 
+  /**
+   * Parse AI documentation output
+   * IMPORTANT: Validates that futureQuestions contain ONLY valid questions
+   */
   private parseAIDocumentation(response: string): any {
     const lines = response.split('\n');
     let narrative = '';
@@ -121,11 +133,11 @@ export class ScribeStage {
     for (const line of lines) {
       const lowerLine = line.toLowerCase();
 
-      if (lowerLine.includes('詩的物語') || lowerLine.includes('narrative')) {
+      if (lowerLine.includes('詩的物語') || lowerLine.includes('narrative') || lowerLine.includes('詩的記録')) {
         narrative = line.split(/[:：]/)[1]?.trim() || '';
       }
 
-      if (lowerLine.includes('哲学的洞察') || lowerLine.includes('philosophical')) {
+      if (lowerLine.includes('哲学的洞察') || lowerLine.includes('philosophical') || lowerLine.includes('哲学的観察')) {
         const insights = line.split(/[:：]/)[1]?.split('|') || [];
         philosophicalNotes.push(...insights.map(i => i.trim()).filter(i => i));
       }
@@ -141,8 +153,19 @@ export class ScribeStage {
       }
 
       if (lowerLine.includes('未来問い') || lowerLine.includes('future')) {
-        const questions = line.split(/[:：]/)[1]?.split('|') || [];
-        futureQuestions.push(...questions.map(q => q.trim()).filter(q => q));
+        const rawQuestions = line.split(/[:：]/)[1]?.split('|') || [];
+        // VALIDATE: Accept questions with ? or starting with interrogatives
+        const validQuestions = rawQuestions
+          .map(q => q.trim())
+          .filter(q => {
+            if (!q || q.length < 3) return false;
+            // Question mark ending
+            if (q.endsWith('？') || q.endsWith('?')) return true;
+            // Interrogative word at start (Japanese)
+            const interrogatives = ['何', 'どう', 'なぜ', 'いつ', 'どこ', '誰', 'どの', 'どれ', 'いかに'];
+            return interrogatives.some(word => q.startsWith(word));
+          });
+        futureQuestions.push(...validQuestions);
       }
     }
 
