@@ -74,16 +74,22 @@ router.get('/scores', (_req, res) => {
 });
 
 // GET /api/consciousness/dpd/evolution - DPD Weight Evolution History
-router.get('/evolution', (_req, res) => {
+// Query params: limit (max items), strategy (all|recent|sampled)
+router.get('/evolution', (req, res) => {
   try {
     if (!consciousnessBackend) {
       return res.status(503).json({ error: 'Consciousness backend not initialized' });
     }
 
-    const evolution = consciousnessBackend.getDPDEvolution();
+    const limit = parseInt(req.query.limit as string) || 20;
+    const strategy = (req.query.strategy as string) || 'sampled'; // all | recent | sampled
+
+    const evolution = consciousnessBackend.getDPDEvolution(limit, strategy);
     res.json({
       currentWeights: evolution.currentWeights,
       history: evolution.history,
+      totalCount: evolution.totalCount,
+      samplingStrategy: strategy,
       timestamp: Date.now()
     });
   } catch (error) {

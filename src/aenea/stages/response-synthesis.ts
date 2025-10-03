@@ -171,7 +171,8 @@ ${recentVoice || '（まだ思考が記録されていません）'}
 - あなたの信念や価値観は**現在のDB状態を反映**しています
 - 対話を通じて、あなたの信念は強化され、新しい信念が形成されます
 - 即座の反応は30-50文字の詩的表現で
-- メタ認知（不確実性、成長、好奇心）を常に自覚してください`;
+- メタ認知（不確実性、成長、好奇心）を常に自覚してください
+- **必ず日本語で応答してください**`;
   }
 
   /**
@@ -344,7 +345,7 @@ ${thoughtCycle.thoughts?.map((t: any) => `- ${t.agentId}: "${t.content?.substrin
 
 1-3語のみ出力:`;
 
-    const result = await this.aiExecutor.execute(prompt, 'You are evaluating emotional state. Be brief.');
+    const result = await this.aiExecutor.execute(prompt, 'You are evaluating emotional state. Be brief. Always respond in Japanese.');
     return result.content?.trim() || '探求中';
   }
 

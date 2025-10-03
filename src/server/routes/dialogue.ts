@@ -10,11 +10,19 @@ import { Router, Request, Response } from 'express';
 import { DialogueHandler } from '../dialogue-handler.js';
 import { DatabaseManager } from '../database-manager.js';
 import { createAIExecutor } from '../ai-executor.js';
+import { aeneaConfig } from '../../aenea/agents/aenea.js';
 
 let dialogueHandler: DialogueHandler | null = null;
 
 export function initializeDialogueRoutes(db: DatabaseManager): void {
-  const aiExecutor = createAIExecutor('theoria');
+  // Use Aenea agent configuration for dialogue
+  const aiExecutor = createAIExecutor(
+    aeneaConfig.id,
+    {
+      provider: aeneaConfig.provider as any,
+      model: aeneaConfig.model
+    }
+  );
   dialogueHandler = new DialogueHandler(db, aiExecutor);
 }
 

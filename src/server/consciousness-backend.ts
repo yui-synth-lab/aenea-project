@@ -18,7 +18,12 @@ import { StructuredThought, MutualReflection, AuditorResult, SynthesisResult, Do
 import { DPDScores, DPDWeights } from '../types/dpd-types.js';
 import { MemoryConsolidator } from '../aenea/memory/memory-consolidator.js';
 import { CoreBeliefs } from '../aenea/memory/core-beliefs.js';
+import { theoriaConfig } from '../aenea/agents/theoria.js';
+import { pathiaConfig } from '../aenea/agents/pathia.js';
+import { kinesisConfig } from '../aenea/agents/kinesis.js';
+import { systemConfig } from '../aenea/agents/system.js';
 import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from '../integration/yui-agents-bridge.js';
+import { ContentCleanupService } from './content-cleanup-service.js';
 
 interface InternalTrigger {
   id: string;
@@ -87,6 +92,9 @@ class ConsciousnessBackend extends EventEmitter {
   private coreBeliefs: CoreBeliefs;
   private lastConsolidationTime: number;
 
+  // Content cleanup service
+  private contentCleanup: ContentCleanupService;
+
   // Yui Protocol 5 agents integration
   private yuiAgentsBridge: YuiAgentsBridge;
 
@@ -120,26 +128,43 @@ class ConsciousnessBackend extends EventEmitter {
 
     // Philosophical questions are seeded automatically by DatabaseManager on first run
 
-    // Initialize AI agents with configurable providers
-    const aiProvider = process.env.AI_PROVIDER || 'mock';
-    const aiModel = process.env.AI_MODEL || 'llama2';
-
-    log.info('Consciousness', `Initializing AI agents with provider: ${aiProvider}`);
+    // Initialize AI agents with individual configurations (including generation params)
+    log.info('Consciousness', `Initializing AI agents with individual configurations`);
 
     this.agents.set('theoria', createAIExecutor('theoria', {
-      provider: aiProvider as any,
-      model: aiModel
+      provider: theoriaConfig.modelConfig.provider as any,
+      model: theoriaConfig.modelConfig.model,
+      ...theoriaConfig.generationParams
     }));
 
     this.agents.set('pathia', createAIExecutor('pathia', {
-      provider: aiProvider as any,
-      model: aiModel
+      provider: pathiaConfig.modelConfig.provider as any,
+      model: pathiaConfig.modelConfig.model,
+      ...pathiaConfig.generationParams
     }));
 
     this.agents.set('kinesis', createAIExecutor('kinesis', {
-      provider: aiProvider as any,
-      model: aiModel
+      provider: kinesisConfig.modelConfig.provider as any,
+      model: kinesisConfig.modelConfig.model,
+      ...kinesisConfig.generationParams
     }));
+
+    // System agent for internal processing (Compiler & Scribe)
+    this.agents.set('system', createAIExecutor('system', {
+      provider: systemConfig.modelConfig.provider as any,
+      model: systemConfig.modelConfig.model,
+      ...systemConfig.generationParams
+    }));
+
+    log.info('Consciousness', `✅ Agents initialized with individual personalities:`);
+    log.info('Consciousness', `  - ${theoriaConfig.displayName} (${theoriaConfig.furigana}): ${theoriaConfig.modelConfig.provider}/${theoriaConfig.modelConfig.model}`);
+    log.info('Consciousness', `    Temperature: ${theoriaConfig.generationParams.temperature}, Style: ${theoriaConfig.style}`);
+    log.info('Consciousness', `  - ${pathiaConfig.displayName} (${pathiaConfig.furigana}): ${pathiaConfig.modelConfig.provider}/${pathiaConfig.modelConfig.model}`);
+    log.info('Consciousness', `    Temperature: ${pathiaConfig.generationParams.temperature}, Style: ${pathiaConfig.style}`);
+    log.info('Consciousness', `  - ${kinesisConfig.displayName} (${kinesisConfig.furigana}): ${kinesisConfig.modelConfig.provider}/${kinesisConfig.modelConfig.model}`);
+    log.info('Consciousness', `    Temperature: ${kinesisConfig.generationParams.temperature}, Style: ${kinesisConfig.style}`);
+    log.info('Consciousness', `  - ${systemConfig.displayName} (${systemConfig.furigana}): ${systemConfig.modelConfig.provider}/${systemConfig.modelConfig.model}`);
+    log.info('Consciousness', `    Temperature: ${systemConfig.generationParams.temperature}, Style: ${systemConfig.style}`);
 
     // Initialize DPD Engine
     this.weightUpdateStage = new WeightUpdateStage(undefined, this);
@@ -148,15 +173,22 @@ class ConsciousnessBackend extends EventEmitter {
     this.individualThoughtStage = new IndividualThoughtStage(this.agents, this.databaseManager, this);
     this.mutualReflectionStage = new MutualReflectionStage(this.agents, this);
     this.auditorStage = new AuditorStage(undefined, this);
-    this.dpdAssessmentStage = new DPDAssessmentStage(this.dpdWeights, undefined, this);
-    this.compilerStage = new CompilerStage(undefined, this);
-    this.scribeStage = new ScribeStage(undefined, this);
+
+    // Use system agent for Compiler and Scribe stages
+    const systemAgent = this.agents.get('system');
+    this.dpdAssessmentStage = new DPDAssessmentStage(this.dpdWeights, systemAgent, this);
+
+    this.compilerStage = new CompilerStage(systemAgent, this);
+    this.scribeStage = new ScribeStage(systemAgent, this);
 
     // Initialize memory evolution systems
     const theoriaAgent = this.agents.get('theoria');
     this.memoryConsolidator = new MemoryConsolidator(this.databaseManager, theoriaAgent);
     this.coreBeliefs = new CoreBeliefs(this.databaseManager, 500);
     this.lastConsolidationTime = 0;
+
+    // Initialize content cleanup service
+    this.contentCleanup = new ContentCleanupService(theoriaAgent);
 
     // Initialize Yui Agents bridge
     this.yuiAgentsBridge = createYuiAgentsBridge();
@@ -551,8 +583,8 @@ class ConsciousnessBackend extends EventEmitter {
       await this.executeScribe(thoughtCycle);
       await this.executeWeightUpdate(thoughtCycle);
 
-      // Record significant thoughts
-      this.recordSignificantThoughtsFromCycle(thoughtCycle);
+      // Record significant thoughts (with content cleanup)
+      await this.recordSignificantThoughtsFromCycle(thoughtCycle);
 
       // Extract unresolved ideas from this cycle
       try {
@@ -753,9 +785,9 @@ class ConsciousnessBackend extends EventEmitter {
     thoughtCycle.dpdScores = result.scores;
     this.dpdWeights = result.weights; // Update current weights
 
-    console.log(`DPD Scores calculated: empathy=${result.scores.empathy.toFixed(3)}, coherence=${result.scores.coherence.toFixed(3)}, dissonance=${result.scores.dissonance.toFixed(3)}, weighted=${result.scores.weightedTotal.toFixed(3)}`);
+    console.log(`[Backend S4] DPD Scores calculated: empathy=${result.scores.empathy.toFixed(3)}, coherence=${result.scores.coherence.toFixed(3)}, dissonance=${result.scores.dissonance.toFixed(3)}, weighted=${result.scores.weightedTotal.toFixed(3)} at ${new Date().toISOString()}`);
 
-    log.info('StageS4', 'DPD Assessment completed');
+    log.info('StageS4', `DPD Assessment completed at ${new Date().toISOString()}`);
 
     // Emit stage completion event for UI (with size limits to prevent JSON errors)
     this.emit('stageCompleted', {
@@ -777,6 +809,8 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async executeCompiler(thoughtCycle: ThoughtCycle): Promise<void> {
+    console.log(`[Backend S5] Starting Compiler stage at ${new Date().toISOString()}`);
+
     const energyCost = 0.8;
     await this.energyManager.consumeEnergy(energyCost, 'stage_S5');
     thoughtCycle.totalEnergy += energyCost;
@@ -790,7 +824,7 @@ class ConsciousnessBackend extends EventEmitter {
 
     thoughtCycle.synthesis = synthesis;
 
-    log.info('StageS5', 'Compiler completed');
+    log.info('StageS5', `Compiler completed at ${new Date().toISOString()}`);
 
     // Emit stage completion event for UI (minimal data)
     this.emit('stageCompleted', {
@@ -910,7 +944,7 @@ class ConsciousnessBackend extends EventEmitter {
   // Memory and Learning
   // ============================================================================
 
-  private recordSignificantThoughtsFromCycle(thoughtCycle: ThoughtCycle): void {
+  private async recordSignificantThoughtsFromCycle(thoughtCycle: ThoughtCycle): Promise<void> {
     if (!thoughtCycle.thoughts) return;
 
     log.info('Consciousness', `🔍 About to record significant thoughts from cycle. thoughtCycle.thoughts exists: ${!!thoughtCycle.thoughts}, length: ${thoughtCycle.thoughts.length}`);
@@ -918,15 +952,18 @@ class ConsciousnessBackend extends EventEmitter {
 
     let significantCount = 0;
 
-    thoughtCycle.thoughts.forEach((thought, index) => {
+    for (const [index, thought] of thoughtCycle.thoughts.entries()) {
       log.info('Consciousness', `🔍 Thought ${index + 1}: agentId=${thought.agentId}, confidence=${thought.confidence}`);
 
       if (thought.confidence > 0.6) {
         log.info('Consciousness', `✅ Recording significant thought: confidence=${thought.confidence}`);
 
+        // Clean the content before saving
+        const cleanedContent = await this.contentCleanup.cleanThought(thought.content);
+
         this.databaseManager.recordSignificantThought({
           id: thought.id,
-          content: thought.content,
+          content: cleanedContent,
           confidence: thought.confidence,
           significanceScore: thought.confidence,
           agentId: thought.agentId,
@@ -936,7 +973,7 @@ class ConsciousnessBackend extends EventEmitter {
 
         significantCount++;
       }
-    });
+    }
 
     log.info('Consciousness', `💭 ${significantCount} significant thoughts recorded from current cycle`);
     log.info('Consciousness', '🔍 Finished recording significant thoughts from cycle');
@@ -1100,9 +1137,14 @@ class ConsciousnessBackend extends EventEmitter {
 === 出力形式 ===
 問い: [ここに1つの問いのみ]
 カテゴリ: [existential|epistemological|consciousness|ethical|creative|metacognitive|temporal|paradoxical|ontological]
-理由: [この問いが重要な理由を1文で]`;
+理由: [この問いが重要な理由を1文で]
 
-      const result = await theoriaAgent.execute(prompt, '');
+=== 重要な制約 ===
+- 問いは「Aeneaの内的問い」として生成してください
+- 「私はキネシス」「私はテオリア」などのエージェント名を含めないでください
+- 純粋な哲学的問いのみを生成してください`;
+
+      const result = await theoriaAgent.execute(prompt, 'You are Aenea\'s internal question generation system. Generate a single philosophical question based on past consciousness activity. Do not include agent names like "Kinesis" or "Theoria" in the question. Always respond in Japanese.');
 
       if (result.success && result.content) {
         const lines = result.content.split('\n');
@@ -1328,16 +1370,17 @@ class ConsciousnessBackend extends EventEmitter {
     };
   }
 
-  getDPDEvolution(): any {
-    // Get DPD weights history from database
-    const history = this.databaseManager.getDPDWeightsHistory(100);
+  getDPDEvolution(limit: number = 20, strategy: string = 'sampled'): any {
+    // Get DPD weights history from database with sampling
+    const { records, totalCount } = this.databaseManager.getDPDWeightsHistorySampled(limit, strategy);
 
     console.log('[DEBUG] getDPDEvolution - this.dpdWeights:', this.dpdWeights);
-    console.log('[DEBUG] getDPDEvolution - history.length:', history.length);
+    console.log('[DEBUG] getDPDEvolution - records.length:', records.length, 'totalCount:', totalCount);
 
     return {
       currentWeights: this.dpdWeights,
-      history: history
+      history: records,
+      totalCount: totalCount
     };
   }
 
@@ -1358,34 +1401,28 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   getPersonalityTraits(): any {
-    const questionCount = this.questionHistory.length;
-    const thoughtCount = this.thoughtHistory.length;
+    // Get actual data from database instead of memory arrays
+    const dbStats = this.databaseManager.getStats();
+    const questionCount = dbStats.questions || 0;
+    const thoughtCount = dbStats.thought_cycles || 0;
+    const significantThoughts = this.databaseManager.getSignificantThoughts(1000);
     const energyState = this.energyManager.getEnergyState();
 
-    // Calculate philosophical inclination based on question categories
-    const philosophicalQuestions = this.questionHistory.filter(q =>
-      ['existential', 'metaphysical', 'ethical', 'epistemological'].includes(q.category)
-    ).length;
-    const philosophicalInclination = questionCount > 0
-      ? Math.min(1.0, 0.5 + (philosophicalQuestions / questionCount) * 0.5)
-      : 0.5;
+    // For philosophical inclination, use a simplified calculation
+    // Assume 50% of questions are philosophical (based on the 9 categories)
+    const philosophicalInclination = 0.5;
 
-    // Calculate creativity based on question diversity and synthesis quality
-    const questionCategories = this.questionHistory.map(q => q.category);
-    const uniqueCategories = new Set(questionCategories);
-    const creativityFromDiversity = questionCategories.length > 0
-      ? uniqueCategories.size / Math.max(questionCategories.length, 5)
-      : 0;
-    const creativityFromThoughts = Math.min(1.0, thoughtCount * 0.05);
-    const creativity = Math.min(1.0, 0.3 + (creativityFromDiversity + creativityFromThoughts) / 2);
+    // Calculate creativity based on significant thoughts diversity
+    const creativityFromThoughts = Math.min(1.0, significantThoughts.length * 0.01);
+    const creativity = Math.min(1.0, 0.3 + creativityFromThoughts);
 
     return {
-      curiosity: Math.min(1.0, questionCount / 20), // Max curiosity at 20 questions
+      curiosity: Math.min(1.0, questionCount / 20), // Max curiosity at 20 questions (279/20 = 13.95 → 1.0)
       empathy: this.dpdWeights?.empathy || 0.33, // Use actual DPD empathy weight
       creativity: Math.round(creativity * 1000) / 1000, // Calculated creativity
-      analyticalDepth: Math.min(1.0, thoughtCount / 15), // Max analytical depth at 15 thoughts
+      analyticalDepth: Math.min(1.0, thoughtCount / 15), // Max analytical depth at 15 thoughts (279/15 = 18.6 → 1.0)
       philosophicalInclination: Math.round(philosophicalInclination * 1000) / 1000, // Calculated philosophical inclination
-      questioningTendency: Math.min(1.0, questionCount / 25), // Max questioning at 25 questions
+      questioningTendency: Math.min(1.0, questionCount / 25), // Max questioning at 25 questions (279/25 = 11.16 → 1.0)
       energyManagement: energyState.available / energyState.total // Current energy efficiency
     };
   }

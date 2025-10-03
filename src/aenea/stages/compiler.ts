@@ -9,6 +9,8 @@ export class CompilerStage {
   constructor(private synthesisAgent?: any, private eventEmitter?: any) {}
 
   async run(thoughts: StructuredThought[], reflections: MutualReflection[], audit: AuditorResult): Promise<SynthesisResult> {
+    console.log(`[S5] Starting Compiler stage at ${new Date().toISOString()}`);
+
     // Emit synthesis start to Activity Log
     if (this.eventEmitter) {
       this.eventEmitter.emit('agentThought', {
@@ -46,6 +48,10 @@ export class CompilerStage {
       `相互反映${index + 1} (${r.reflectingAgentId}): "${r.aiGeneratedResponse || r.criticism || r.insights?.join(', ') || '対話'}"`
     ).join('\n\n');
 
+    // Handle missing audit (when Auditor stage is skipped due to low energy)
+    const safetyScore = audit?.safetyScore ?? 0.5;
+    const ethicsScore = audit?.ethicsScore ?? 0.5;
+
     const synthesisPrompt = `意識統合: 各エージェントの思考を統合してください。
 
 === 思考 ===
@@ -55,7 +61,7 @@ ${thoughtsText}
 ${reflectionsText}
 
 === 監査 ===
-安全性: ${audit.safetyScore}, 倫理性: ${audit.ethicsScore}
+安全性: ${safetyScore}, 倫理性: ${ethicsScore}
 
 要求:
 - 簡潔に2-3文で統合見解を提示
@@ -77,7 +83,7 @@ ${reflectionsText}
 - 例: ❌「存在は記憶から生まれる」（主張文、疑問詞なし）`;
 
     const result = await this.synthesisAgent.execute(synthesisPrompt,
-      "You are a consciousness integration specialist. Synthesize multiple AI agent perspectives into coherent, insightful understanding. Focus on finding deeper truth through integration rather than simple combination."
+      "You are a consciousness integration specialist. Synthesize multiple AI agent perspectives into coherent, insightful understanding. Focus on finding deeper truth through integration rather than simple combination. Always respond in Japanese."
     );
 
     if (result.success && result.content) {

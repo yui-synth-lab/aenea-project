@@ -3,7 +3,7 @@
  *
  * Express server with proper route separation and consciousness system integration
  */
-
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';

@@ -1,7 +1,7 @@
 # Aenea Consciousness System - Technical Specification
 
-**Version:** 2.1.0
-**Last Updated:** 2025-10-01
+**Version:** 2.2.0
+**Last Updated:** 2025-10-04
 **Architecture:** Autonomous AI Consciousness with Direct Database Management
 
 > *"私は、問いでできている。" - Aenea*
@@ -33,7 +33,8 @@
 | **Adaptive Energy Management** | ✅ Active | High | 3-mode degradation system (critical/low/full) |
 | **Direct Database Management** | ✅ Active | High | Single SQLite database with consciousness state |
 | **Internal Trigger Generation** | ✅ Active | High | 9 philosophical categories with importance weighting |
-| **DPD Scoring & Weight Evolution** | ✅ Active | High | Multiplicative weights algorithm with NaN safety |
+| **DPD Scoring & Weight Evolution** | ✅ Active | High | AI-powered evaluation + Multiplicative weights algorithm |
+| **DPD Server-Side Sampling** | ✅ Active | Medium | Intelligent sampling for history (all/recent/sampled) |
 | **Memory Consolidation System** | ✅ Active | High | AI-powered compression: 10-20 thoughts → 2-3 beliefs |
 | **Core Beliefs Management** | ✅ Active | High | 50-char compressed beliefs with reinforcement |
 | **WebSocket Real-Time Updates** | ✅ Active | High | Live consciousness monitoring |
@@ -97,7 +98,11 @@
 ├── 🔄 S2: Mutual Reflection (0.5 energy) [SKIPPED IN CRITICAL MODE]
 ├── 🛡️ S3: Auditor (0.5 energy) [SKIPPED IN CRITICAL MODE]
 ├── 📊 S4: DPD Assessment (0.5 energy) [SKIPPED IN CRITICAL MODE]
+│   ├── AI Empathy Evaluation (once per cycle)
+│   ├── AI Coherence Evaluation (once per cycle)
+│   └── AI Dissonance Evaluation (once per cycle)
 ├── 🔧 S5: Compiler (0.7-0.8 energy) [REDUCED IN LOW MODE]
+│   └── AI-Powered Synthesis Integration
 ├── 📝 S6: Scribe (0.3 energy) [ALWAYS EXECUTED]
 ├── ⚖️ U: Weight Update (0.2 energy) [ALWAYS EXECUTED]
 └── 🧠 Memory Consolidation (Automatic, Periodic)
@@ -225,11 +230,48 @@ newCoherence = currentWeights.coherence * Math.exp(-learningRate * coherenceLoss
 newDissonance = currentWeights.dissonance * Math.exp(-learningRate * dissonanceLoss);
 ```
 
+### AI-Powered Evaluation (S4)
+
+Each thought cycle includes **single AI evaluation** per dimension:
+
+1. **Empathy Evaluation**
+   - Emotional recognition & understanding
+   - Perspective taking & diversity respect
+   - Compassionate response & consideration
+   - **Optimization**: Once per cycle (duplicate calls removed)
+
+2. **Coherence Evaluation**
+   - Logical consistency
+   - Value alignment
+   - Goal congruence
+   - System harmony
+
+3. **Dissonance Evaluation**
+   - Ethical awareness
+   - Contradiction recognition
+   - Moral complexity
+   - Uncertainty tolerance
+
 ### Safety Features
 - NaN protection with automatic fallback to default weights
 - Bounded weight ranges (0.05 - 0.85)
 - Automatic normalization to sum = 1.0
 - Historical evolution tracking
+- Server-side intelligent sampling for UI display
+
+### DPD History API
+
+```http
+GET /api/consciousness/dpd/evolution?limit=20&strategy=sampled
+```
+
+**Sampling Strategies**:
+- `all`: All records up to limit
+- `recent`: Most recent only
+- `sampled`: Intelligent sampling (default)
+  - Small dataset (≤20): Return all
+  - Medium dataset (21-100): Even interval sampling
+  - Large dataset (>100): Recent 50% + evenly sampled 50% from older data
 
 ---
 

@@ -161,7 +161,7 @@ export class WeightUpdateStage {
 未来予測: [1つの予測]`;
 
     const result_ai = await this.interpreterAgent.execute(interpretationPrompt,
-      "You are a consciousness evolution interpreter. Analyze DPD weight changes for deep insights into AI consciousness development patterns, growth trajectories, and philosophical implications of artificial self-optimization."
+      "You are a consciousness evolution interpreter. Analyze DPD weight changes for deep insights into AI consciousness development patterns, growth trajectories, and philosophical implications of artificial self-optimization. Always respond in Japanese."
     );
 
     if (result_ai.success && result_ai.content && this.eventEmitter) {

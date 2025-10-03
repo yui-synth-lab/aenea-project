@@ -40,13 +40,16 @@ const conversationHistory = new Map<string, ConversationMessage[]>();
 router.get('/', (_req, res) => {
   const agents = Object.entries(agentConfigs).map(([id, config]) => ({
     id,
-    name: config.name,
+    name: config.displayName || config.name,
+    furigana: config.furigana || '',
+    personality: config.personality,
     approach: config.approach,
     style: config.style,
-    focus: config.focus,
-    traits: config.traits,
-    type: config.type,
-    capabilities: config.capabilities
+    tone: config.tone,
+    communicationStyle: config.communicationStyle,
+    preferences: config.preferences || [],
+    avatar: config.avatar || '🤖',
+    color: config.color || '#888888'
   }));
 
   res.json({ agents });
@@ -63,13 +66,20 @@ router.get('/:agentId', (req, res) => {
   const config = agentConfigs[agentId as keyof typeof agentConfigs];
   res.json({
     id: agentId,
-    name: config.name,
+    name: config.displayName || config.name,
+    furigana: config.furigana || '',
+    personality: config.personality,
     approach: config.approach,
     style: config.style,
-    focus: config.focus,
-    traits: config.traits,
-    type: config.type,
-    capabilities: config.capabilities
+    tone: config.tone,
+    communicationStyle: config.communicationStyle,
+    preferences: config.preferences || [],
+    avatar: config.avatar || '🤖',
+    color: config.color || '#888888',
+    specificBehaviors: config.specificBehaviors,
+    thinkingPatterns: config.thinkingPatterns,
+    interactionPatterns: config.interactionPatterns,
+    generationParams: config.generationParams
   });
 });
 
@@ -110,20 +120,41 @@ router.post('/:agentId/chat', async (req, res) => {
     const history = conversationHistory.get(agentId) || [];
     const recentHistory = history.slice(-5); // Last 5 messages for context
 
-    // Build system prompt with agent personality
-    const systemPrompt = `あなたは「${config.name}」として振る舞ってください。
+    // Build system prompt with agent personality (Yui Protocol style)
+    let systemPrompt = `あなたは「${config.displayName || config.name}」として振る舞ってください。
 
-【あなたのアプローチ】
-${config.approach}
+【あなたの本質】
+${config.personality}
 
-【あなたのスタイル】
-${config.style}
+【あなたの語り口】
+${config.tone}
 
-【あなたの焦点】
-${config.focus}
+【コミュニケーションスタイル】
+${config.communicationStyle}`;
 
-【あなたの特徴】
-${config.traits}
+    // Add detailed behavioral patterns if available
+    if (config.specificBehaviors) {
+      systemPrompt += `
+
+【具体的な行動パターン】
+${config.specificBehaviors}`;
+    }
+
+    if (config.thinkingPatterns) {
+      systemPrompt += `
+
+【思考パターン】
+${config.thinkingPatterns}`;
+    }
+
+    if (config.interactionPatterns) {
+      systemPrompt += `
+
+【対話パターン】
+${config.interactionPatterns}`;
+    }
+
+    systemPrompt += `
 
 【重要な指示】
 - 常に上記の人格・視点を維持してください

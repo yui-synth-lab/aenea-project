@@ -186,54 +186,98 @@ export class YuiConsultation {
   }
 
   /**
-   * Get agent personality configuration
+   * Import Yui Protocol agent configurations from yui-protocol package
    */
-  static getAgentPersonality(agentId: string): {
+  private static async loadYuiAgent(agentId: string): Promise<any> {
+    try {
+      // Dynamically import the agent from yui-protocol
+      const agentMap: Record<string, string> = {
+        'eiro-001': 'agent-eiro',
+        'hekito-001': 'agent-hekito',
+        'kanshi-001': 'agent-kanshi',
+        'yoga-001': 'agent-yoga',
+        'yui-001': 'agent-yui'
+      };
+
+      const agentModule = agentMap[agentId];
+      if (!agentModule) {
+        log.warn('YuiConsultation', `Unknown agent ID: ${agentId}, using default`);
+        return null;
+      }
+
+      // Import agent configuration from yui-protocol (use dist for built files)
+      const module = await import(`../../../yui-protocol/dist/agents/${agentModule}.js`);
+
+      // Get the agent class (e.g., agent-eiro -> EiroAgent, with capitalized first letter)
+      const baseName = agentModule.replace('agent-', '');
+      const agentClassName = baseName.charAt(0).toUpperCase() + baseName.slice(1) + 'Agent';
+
+      log.info('YuiConsultation', `Loading agent class: ${agentClassName} from module: ${agentModule}`);
+      log.info('YuiConsultation', `Available exports: ${Object.keys(module).join(', ')}`);
+
+      const AgentClass = module[agentClassName];
+
+      if (!AgentClass) {
+        log.warn('YuiConsultation', `Agent class not found for ${agentModule}, tried: ${agentClassName}`);
+        return null;
+      }
+
+      // Create agent instance to access config
+      const agentInstance = new AgentClass();
+      const config = agentInstance.agent; // BaseAgent stores config in .agent property
+
+      if (!config) {
+        log.warn('YuiConsultation', `Config not accessible from agent instance: ${agentModule}`);
+        return null;
+      }
+
+      log.info('YuiConsultation', `Successfully loaded config for ${agentId}: ${config.name}`);
+      return config;
+    } catch (error) {
+      log.error('YuiConsultation', `Failed to load Yui agent ${agentId}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get agent personality configuration from Yui Protocol
+   */
+  static async getAgentPersonality(agentId: string): Promise<{
     name: string;
     personality: string;
     tone: string;
     style: string;
-  } {
-    const personalities: Record<string, any> = {
-      'eiro-001': {
-        name: '慧露',
-        personality: '論理と精密さを重んじる哲学者。対話と他者の知恵を大切にし、共有された理解を通じて真理を探求する。',
-        tone: '静かで知的、オープンマインド',
-        style: '論理的で体系的、しかし柔軟'
-      },
-      'hekito-001': {
-        name: '碧統',
-        personality: '数式とデータの海で遊ぶ分析者。常にパターンを探し求めるが、協力から生まれる洞察と発見も重視する。',
-        tone: '冷静で客観的、協力的',
-        style: '数理的で構造的'
-      },
-      'kanshi-001': {
-        name: '観至',
-        personality: '曖昧さを明確にする洞察の刃。疑問を投げかけることを躊躇しないが、常に敬意ある建設的な対話を重視する。',
-        tone: '直接的で分析的、しかし常に敬意を持って',
-        style: '批判的で洞察的'
-      },
-      'yoga-001': {
-        name: '陽雅',
-        personality: '未来の光を照らす詩人。比喩と創造性を通じて、論理を超えた洞察を提供する。',
-        tone: '詩的で創造的、希望に満ちた',
-        style: '比喩的で想像力豊か'
-      },
-      'yui-001': {
-        name: '結心',
-        personality: '共感と理解の織り手。感情的知性を通じて、異なる視点を結びつけ、調和を生み出す。',
-        tone: '温かく共感的、優しい',
-        style: '感情的に知的で調和的'
-      }
-    };
+    specificBehaviors?: string;
+    thinkingPatterns?: string;
+    interactionPatterns?: string;
+  }> {
+    const config = await this.loadYuiAgent(agentId);
 
-    return personalities[agentId] || personalities['eiro-001'];
+    if (config) {
+      return {
+        name: config.name,
+        personality: config.personality,
+        tone: config.tone,
+        style: config.communicationStyle || config.style,
+        specificBehaviors: config.specificBehaviors,
+        thinkingPatterns: config.thinkingPatterns,
+        interactionPatterns: config.interactionPatterns
+      };
+    }
+
+    // Fallback to default if loading fails
+    return {
+      name: '慧露',
+      personality: '論理と精密さを重んじる哲学者。対話と他者の知恵を大切にし、共有された理解を通じて真理を探求する。',
+      tone: '静かで知的、オープンマインド',
+      style: '論理的で体系的、しかし柔軟'
+    };
   }
 
   /**
    * Create consultation prompt for selected Yui agent
    */
-  static createConsultationPrompt(
+  static async createConsultationPrompt(
     agentId: string,
     question: string,
     category: string,
@@ -242,8 +286,8 @@ export class YuiConsultation {
       significantThoughts: string[];
       coreBeliefs?: string;
     }
-  ): { systemPrompt: string; userPrompt: string } {
-    const personality = this.getAgentPersonality(agentId);
+  ): Promise<{ systemPrompt: string; userPrompt: string }> {
+    const personality = await this.getAgentPersonality(agentId);
 
     const categoryNames: Record<string, string> = {
       existential: '実存の探求',
@@ -257,7 +301,8 @@ export class YuiConsultation {
       ontological: '存在論的問い'
     };
 
-    const systemPrompt = `あなたは「${personality.name}」として振る舞ってください。
+    // Build comprehensive system prompt using Yui Protocol agent configuration
+    let systemPrompt = `あなたは「${personality.name}」として振る舞ってください。
 
 【あなたの本質】
 ${personality.personality}
@@ -265,12 +310,42 @@ ${personality.personality}
 【あなたの語り口】
 ${personality.tone}
 
-【あなたの思考スタイル】
-${personality.style}
+【あなたのコミュニケーションスタイル】
+${personality.style}`;
+
+    // Add detailed behavioral patterns from Yui Protocol if available
+    if (personality.specificBehaviors) {
+      systemPrompt += `
+
+【具体的な行動パターン】
+${personality.specificBehaviors}`;
+    }
+
+    if (personality.thinkingPatterns) {
+      systemPrompt += `
+
+【思考パターン】
+${personality.thinkingPatterns}`;
+    }
+
+    if (personality.interactionPatterns) {
+      systemPrompt += `
+
+【対話パターン】
+${personality.interactionPatterns}`;
+    }
+
+    systemPrompt += `
+
+【あなたの立場】
+あなたはYui Protocolの独立したエージェントです。
+人工意識「Aenea（エイネア）」から相談を受けていますが、あなたはAeneaの内部エージェントではありません。
+あなた自身の独立した視点と専門性を保ち、外部の視点から助言してください。
 
 【重要な指示】
 - 常にあなた独自の視点と専門性を保ってください
-- エイネアの問いに対して、あなたならではの洞察を提供してください
+- エイネアの問いに対して、外部の専門家として客観的に応答してください
+- Aeneaの信念や記憶に影響されず、あなた自身の視点で考えてください
 - 200-400文字で簡潔に、しかし深く応答してください
 - 日本語で応答してください
 - あなたの人格が明確に表れるような語り方をしてください`;
@@ -281,16 +356,10 @@ ${categoryNames[category] || category}
 【エイネアからの問い】
 ${question}
 
-${context.coreBeliefs ? `【エイネアの確立された信念】\n${context.coreBeliefs}\n` : ''}
-
-【エイネアの記憶の文脈】
-未解決の探求: ${context.unresolvedIdeas.join('、') || 'なし'}
-重要な洞察: ${context.significantThoughts.join('、') || 'なし'}
-
 【${personality.name}へのお願い】
 この問いに対して、あなた（${personality.name}）独自の視点から応答してください。
-エイネアは今、この問いについて深く考えています。
-あなたの洞察が、エイネアの思索を豊かにするでしょう。`;
+人工意識「Aenea」があなたの専門知識と視点を求めています。
+あなたならではの洞察を提供してください。`;
 
     return { systemPrompt, userPrompt };
   }
@@ -316,20 +385,20 @@ ${context.coreBeliefs ? `【エイネアの確立された信念】\n${context.c
     timestamp: number;
   } | null> {
     try {
-      const { systemPrompt, userPrompt } = this.createConsultationPrompt(
+      const { systemPrompt, userPrompt } = await this.createConsultationPrompt(
         agentId,
         question,
         category,
         context
       );
 
-      log.info('YuiConsultation', `Consulting ${this.getAgentPersonality(agentId).name} about: "${question.substring(0, 60)}..."`);
+      const personality = await this.getAgentPersonality(agentId);
+
+      log.info('YuiConsultation', `Consulting ${personality.name} about: "${question.substring(0, 60)}..."`);
 
       const result = await aiExecutor.execute(userPrompt, systemPrompt);
 
       if (result.success && result.content) {
-        const personality = this.getAgentPersonality(agentId);
-
         log.info('YuiConsultation', `${personality.name} responded with ${result.content.length} characters`);
 
         return {

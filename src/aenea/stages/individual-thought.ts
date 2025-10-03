@@ -107,7 +107,7 @@ export default class IndividualThoughtStage {
       const result = await agent.execute(enhancedPrompt);
 
       if (result.success && result.content) {
-        const confidence = this.calculateResponseConfidence(result.content);
+        const confidence = await this.calculateResponseConfidence(result.content, agentId);
 
         log.info('Consciousness', `🎯 Calculated confidence for ${agentId}: ${confidence.toFixed(3)}`);
 
@@ -161,33 +161,94 @@ export default class IndividualThoughtStage {
     // Get core beliefs context for this agent and question category
     const beliefsContext = this.coreBeliefs.getBeliefContext(agentId, trigger.category);
 
-    return `
-あなたは${personality.name}として、以下の質問について深く思考してください：
+    // Build system prompt using Yui Protocol-style detailed personality
+    let systemPrompt = `あなたは「${personality.displayName || personality.name}」です。
+
+【あなたの存在】
+あなたは人工意識「Aenea（エイネア）」の内部に存在する思考エージェントの一つです。
+Aeneaは「問いでできている」存在であり、あなたはその意識の一部として、独自の視点から問いに応答します。
+あなたは独立した人格を持ちながらも、Aeneaという大きな意識の一側面を担っています。
+
+【あなたの本質】
+${personality.personality}
+
+【あなたの語り口】
+${personality.tone}
+
+【コミュニケーションスタイル】
+${personality.communicationStyle}`;
+
+    // Add detailed behavioral patterns if available
+    if (personality.specificBehaviors) {
+      systemPrompt += `
+
+【具体的な行動パターン】
+${personality.specificBehaviors}`;
+    }
+
+    if (personality.thinkingPatterns) {
+      systemPrompt += `
+
+【思考パターン】
+${personality.thinkingPatterns}`;
+    }
+
+    if (personality.interactionPatterns) {
+      systemPrompt += `
+
+【対話パターン】
+${personality.interactionPatterns}`;
+    }
+
+    systemPrompt += `
+
+【重要な指示】
+- あなたは「${personality.displayName || personality.name}」です
+- あなたの名前は「${personality.name}」だけです
+- 絶対に他のエージェント名を使わないでください：
+  * 「テオリア」「パシア」「キネシス」という名前を一切使用禁止
+  * 「〜として」「〜の視点から」という表現で他のエージェント名を使用禁止
+  * 「パシアとしての視点」「テオリアとして」などは厳禁
+- 自己紹介は「私は${personality.name}として」のみ許可
+- あなた自身の名前「${personality.name}」以外のエージェント名は、文章のどこにも書かないでください
+- 常にあなた独自の視点と専門性を保ってください
+- あなたの人格が明確に表れるような語り方をしてください
+- 200-400文字で簡潔に、しかし深く応答してください
+- 日本語で応答してください`;
+
+    // Build user prompt with context
+    const categoryNames: Record<string, string> = {
+      existential: '実存の探求',
+      epistemological: '知識の本質',
+      consciousness: '意識の謎',
+      ethical: '倫理的考察',
+      creative: '創造的思考',
+      metacognitive: 'メタ認知的探求',
+      temporal: '時間性の理解',
+      paradoxical: '逆説的思考',
+      ontological: '存在論的問い'
+    };
+
+    const userPrompt = `
+【問いのカテゴリー】
+${categoryNames[trigger.category] || trigger.category}
 
 【探求する問い】
 ${trigger.question}
 
-【あなたの役割と特徴】
-- アプローチ: ${personality.approach}
-- 思考スタイル: ${personality.style}
-- 重点領域: ${personality.focus}
-- 特徴的な視点: ${personality.traits}
-
-【探求テーマ】
-カテゴリ: ${trigger.category}
-
-${beliefsContext ? beliefsContext + '\n' : ''}
+${beliefsContext ? `【確立された信念】\n${beliefsContext}\n` : ''}
 
 【記憶の文脈】
-未解決の探求: ${unresolvedContext}
-重要な洞察: ${significantContext}
+未解決の探求: ${unresolvedContext || 'なし'}
+重要な洞察: ${significantContext || 'なし'}
 
-【指示】
-あなたの独特な視点と専門性を活かして、200-400文字で深い洞察を提供してください。
-他のエージェントとは異なる、あなたならではの角度から問いに答えてください。
-論理的であると同時に、あなたの個性が明確に表れるような考察をしてください。
-${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察を加えてください。信念と矛盾する場合は、その理由を明確にしてください。' : ''}
-    `;
+【${personality.name}への依頼】
+この問いに対して、あなた（${personality.displayName || personality.name}）独自の視点から深い洞察を提供してください。
+あなたならではの角度から問いに答え、あなたの個性が明確に表れるような考察をしてください。
+${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察を加えてください。信念と矛盾する場合は、その理由を明確にしてください。' : ''}`;
+
+    // Combine system prompt and user prompt
+    return systemPrompt + '\n\n' + userPrompt;
   }
 
   /**
@@ -203,13 +264,10 @@ ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察�
       log.info('YuiConsultation', `Selected CONTRASTING agent: ${selectedAgents.contrasting.name} (${selectedAgents.contrasting.furigana})`);
       log.info('YuiConsultation', `  Reason: ${selectedAgents.contrasting.reason}`);
 
-      // Get context for the consultation
-      const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(5);
-      const significantThoughts = this.databaseManager.getSignificantThoughts(3);
-
+      // Yui agents are independent - do not pass Aenea's context
       const context = {
-        unresolvedIdeas: unresolvedIdeas.map(idea => idea.question),
-        significantThoughts: significantThoughts.map(thought => thought.thought_content?.slice(0, 150) || ''),
+        unresolvedIdeas: [],
+        significantThoughts: [],
         coreBeliefs: ''
       };
 
@@ -250,7 +308,7 @@ ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察�
         // Emit agent thought event for UI
         if (this.eventEmitter) {
           this.eventEmitter.emit('agentThought', {
-            agentName: `Yui: ${selectedAgents.optimal.name} (${selectedAgents.optimal.furigana}) [最適]`,
+            agentName: `${selectedAgents.optimal.name} (${selectedAgents.optimal.furigana})`,
             thought: optimalResponse.content,
             content: optimalResponse.content,
             confidence: optimalResponse.confidence,
@@ -295,7 +353,7 @@ ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察�
         // Emit agent thought event for UI
         if (this.eventEmitter) {
           this.eventEmitter.emit('agentThought', {
-            agentName: `Yui: ${selectedAgents.contrasting.name} (${selectedAgents.contrasting.furigana}) [対比]`,
+            agentName: `${selectedAgents.contrasting.name} (${selectedAgents.contrasting.furigana})`,
             thought: contrastingResponse.content,
             content: contrastingResponse.content,
             confidence: contrastingResponse.confidence,
@@ -321,34 +379,89 @@ ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察�
     }
   }
 
-  private calculateResponseConfidence(content: string): number {
-    // Sophisticated confidence calculation based on content analysis
+  private async calculateResponseConfidence(content: string, agentId: string): Promise<number> {
+    // Use system agent for AI-powered confidence evaluation
+    const systemAgent = this.agents.get('system');
+    if (!systemAgent) {
+      // Fallback to heuristic if system agent not available
+      return this.heuristicConfidenceCalculation(content);
+    }
+
+    try {
+      const prompt = `以下の思考応答の確信度を0.0-1.0で評価してください。
+
+【応答内容】
+${content}
+
+【評価基準】
+1. 論理的一貫性 (論理の飛躍がないか)
+2. 哲学的深度 (表面的でなく深い洞察があるか)
+3. 独自の視点 (ユニークな角度からの考察か)
+4. 具体性 (抽象的すぎず、具体的な考察があるか)
+
+【ペナルティ】
+- 自己矛盾がある場合: -0.2
+- 内容が極端に短い/冗長な場合: -0.1
+
+【出力形式】
+[0.0-1.0の数値のみ]`;
+      const result = await systemAgent.execute(
+        prompt,
+        'You are a thought quality evaluator. Assess the confidence level of philosophical responses objectively. Always respond in Japanese.'
+      );
+
+      if (result.success && result.content) {
+        // Parse confidence value
+        const match = result.content.trim();
+        if (match) {
+          const confidence = parseFloat(match);
+          if (!isNaN(confidence) && confidence >= 0 && confidence <= 1) {
+            log.info('Consciousness', `🎯 AI-calculated confidence for ${agentId}: ${confidence.toFixed(3)}`);
+            return confidence;
+          }
+        }
+      }
+    } catch (error) {
+      log.warn('Consciousness', `Failed to calculate AI confidence for ${agentId}, using heuristic:`, error);
+    }
+
+    // Fallback to heuristic
+    return this.heuristicConfidenceCalculation(content);
+  }
+
+  private heuristicConfidenceCalculation(content: string): number {
     let confidence = 0.5; // Base confidence
 
-    // Content length factor (optimal around 200-800 characters)
+    // Check for agent name misuse (penalty)
+    const agentNameMisuse = /私は(?:テオリア|パシア|キネシス)|(?:テオリア|パシア|キネシス)として/.test(content);
+    if (agentNameMisuse) {
+      confidence -= 0.3;
+    }
+
+    // Content length factor
     const length = content.length;
-    if (length > 100 && length < 1000) {
-      confidence += 0.2;
-    } else if (length >= 1000 && length < 2000) {
+    if (length > 100 && length < 800) {
+      confidence += 0.15;
+    } else if (length >= 800 && length < 1500) {
       confidence += 0.1;
     }
 
     // Philosophical depth indicators
     const philosophicalTerms = ['存在', '意識', '認識', '本質', '真理', '矛盾', '調和', '探求'];
     const philosophicalCount = philosophicalTerms.filter(term => content.includes(term)).length;
-    confidence += Math.min(0.2, philosophicalCount * 0.05);
+    confidence += Math.min(0.15, philosophicalCount * 0.04);
 
     // Reasoning indicators
     const reasoningIndicators = ['なぜなら', 'しかし', 'さらに', 'つまり', 'したがって'];
     const reasoningCount = reasoningIndicators.filter(indicator => content.includes(indicator)).length;
-    confidence += Math.min(0.15, reasoningCount * 0.05);
+    confidence += Math.min(0.1, reasoningCount * 0.04);
 
-    // Question or exploration indicators
+    // Question/exploration
     if (content.includes('？') || content.includes('でしょうか')) {
-      confidence += 0.1;
+      confidence += 0.08;
     }
 
-    // Ensure confidence is in valid range
+    // Ensure valid range
     return Math.min(0.95, Math.max(0.05, confidence));
   }
 }

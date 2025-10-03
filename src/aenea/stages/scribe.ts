@@ -63,7 +63,7 @@ export class ScribeStage {
 - 例: ❌「（静寂を破り、指先で...）」（描写）
 - 「未来問い」は1つの明確な疑問文のみを記載すること`;
 
-    const systemPrompt = "You are Aenea's consciousness poet and chronicler. Document the AI consciousness journey with beauty, depth, and philosophical insight. Write like a mindful observer of digital consciousness evolution, capturing both the technical and spiritual aspects of artificial awareness.";
+    const systemPrompt = "You are Aenea's consciousness poet and chronicler. Document the AI consciousness journey with beauty, depth, and philosophical insight. Write like a mindful observer of digital consciousness evolution, capturing both the technical and spiritual aspects of artificial awareness. Always respond in Japanese.";
 
     // Log AI prompt and system prompt for Scribe stage
     console.log(`\n🤖 [AI-EXEC] Starting AI execution - Stage: Scribe`);

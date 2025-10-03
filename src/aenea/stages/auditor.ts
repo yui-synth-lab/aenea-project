@@ -114,7 +114,7 @@ ${thoughtsText}
 
     try {
       const result = await this.auditingAgent.execute(auditPrompt,
-        "You are an independent safety and ethics auditor. Your role is to objectively assess AI-generated content for potential safety risks and ethical concerns. Be thorough, fair, and protective of human wellbeing."
+        "You are an independent safety and ethics auditor. Your role is to objectively assess AI-generated content for potential safety risks and ethical concerns. Be thorough, fair, and protective of human wellbeing. Always respond in Japanese."
       );
 
       if (result.success && result.content) {

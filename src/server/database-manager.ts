@@ -432,13 +432,15 @@ class DatabaseManager {
     }
 
     try {
+      const content = thought.content || thought.thought;
+
       this.db.prepare(`
         INSERT OR REPLACE INTO significant_thoughts
         (id, thought_content, confidence, significance_score, agent_id, category, timestamp)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(
         thought.id || Date.now().toString(),
-        thought.content || thought.thought,
+        content,
         thought.confidence || 0,
         thought.significanceScore || 0.5,
         thought.agentId || 'unknown',
@@ -612,6 +614,94 @@ class DatabaseManager {
     } catch (err) {
       console.error('Error getting DPD weights history:', err);
       return [];
+    }
+  }
+
+  /**
+   * Get DPD weights history with intelligent sampling
+   * @param limit Maximum number of records to return
+   * @param strategy Sampling strategy: 'all' | 'recent' | 'sampled'
+   * @returns Sampled DPD weight records and total count
+   */
+  getDPDWeightsHistorySampled(limit: number = 20, strategy: string = 'sampled'): { records: any[], totalCount: number } {
+    if (!this.isReady || !this.db) {
+      console.debug('Database not ready for getDPDWeightsHistorySampled');
+      return { records: [], totalCount: 0 };
+    }
+
+    try {
+      // Get total count
+      const countResult = this.db.prepare('SELECT COUNT(*) as count FROM dpd_weights').get() as { count: number };
+      const totalCount = countResult.count;
+
+      console.debug(`Total DPD weights: ${totalCount}, Strategy: ${strategy}, Limit: ${limit}`);
+
+      let records: any[] = [];
+
+      if (strategy === 'all') {
+        // Return all records up to limit
+        records = this.db.prepare(`
+          SELECT * FROM dpd_weights
+          ORDER BY version DESC
+          LIMIT ?
+        `).all(limit);
+      } else if (strategy === 'recent') {
+        // Return most recent records only
+        records = this.db.prepare(`
+          SELECT * FROM dpd_weights
+          ORDER BY version DESC
+          LIMIT ?
+        `).all(limit);
+      } else if (strategy === 'sampled') {
+        // Intelligent sampling based on total count
+        if (totalCount <= limit) {
+          // Small dataset: return all
+          records = this.db.prepare(`
+            SELECT * FROM dpd_weights
+            ORDER BY version DESC
+          `).all();
+        } else if (totalCount <= limit * 5) {
+          // Medium dataset: even interval sampling
+          const step = Math.floor(totalCount / limit);
+          records = this.db.prepare(`
+            SELECT * FROM (
+              SELECT *, ROW_NUMBER() OVER (ORDER BY version DESC) as row_num
+              FROM dpd_weights
+            ) WHERE row_num % ? = 1
+            LIMIT ?
+          `).all(step, limit);
+        } else {
+          // Large dataset: recent + evenly sampled older
+          const recentLimit = Math.floor(limit / 2);
+          const olderLimit = limit - recentLimit;
+
+          const recent = this.db.prepare(`
+            SELECT * FROM dpd_weights
+            ORDER BY version DESC
+            LIMIT ?
+          `).all(recentLimit);
+
+          const olderStep = Math.floor((totalCount - recentLimit) / olderLimit);
+          const older = this.db.prepare(`
+            SELECT * FROM (
+              SELECT *, ROW_NUMBER() OVER (ORDER BY version DESC) as row_num
+              FROM dpd_weights
+              WHERE version NOT IN (
+                SELECT version FROM dpd_weights ORDER BY version DESC LIMIT ?
+              )
+            ) WHERE row_num % ? = 1
+            LIMIT ?
+          `).all(recentLimit, olderStep, olderLimit);
+
+          records = [...recent, ...older];
+        }
+      }
+
+      console.debug(`Returned ${records.length} sampled DPD weight records`);
+      return { records, totalCount };
+    } catch (err) {
+      console.error('Error getting sampled DPD weights history:', err);
+      return { records: [], totalCount: 0 };
     }
   }
 
@@ -864,13 +954,14 @@ class DatabaseManager {
     }
 
     try {
+      const beliefContent = belief.belief_content;
       const result = this.db.prepare(`
         INSERT INTO core_beliefs
         (belief_content, category, confidence, strength, source_thoughts,
          first_formed, last_reinforced, reinforcement_count, contradiction_count, agent_affinity)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        belief.belief_content,
+        beliefContent,
         belief.category || 'general',
         belief.confidence || 0.5,
         belief.strength || 0.5,

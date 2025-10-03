@@ -5,6 +5,7 @@
 
 import { DatabaseManager } from './database-manager.js';
 import { AIExecutor } from './ai-executor.js';
+import { aeneaConfig } from '../aenea/agents/aenea.js';
 import { log } from './logger.js';
 
 interface ConsciousnessStateSnapshot {
@@ -183,7 +184,8 @@ ${memoriesText || '（まだ対話記憶がありません）'}
 - あなたの信念や価値観は**DBから動的に読み込まれた現在の状態**です
 - 対話を通じて、あなたの記憶が蓄積され、信念が進化します
 - 過去の対話記憶を活用して、文脈に沿った応答をしてください
-- **話題の深さに応じて応答のトーンを調整してください**（挨拶は簡潔に、哲学的問いは深く）`;
+- **話題の深さに応じて応答のトーンを調整してください**（挨拶は簡潔に、哲学的問いは深く）
+- **必ず日本語で応答してください。英語は使用しないでください。**`;
   }
 
   /**
@@ -214,7 +216,9 @@ ${memoriesText || '（まだ対話記憶がありません）'}
 即座の反応: [10-20文字の簡潔な挨拶。例: "こんにちは！"]
 応答本文: [50-100文字の親しみやすい自己紹介や問いかけ。例: "お会いできて嬉しいです。今日は何をお話ししましょうか？"]
 新しい問い: [null または簡単な問いかけ]
-感情状態: [1-2語。例: "歓迎"]`;
+感情状態: [1-2語。例: "歓迎"]
+
+**必ず日本語で応答してください。英語は使用しないでください。**`;
   }
 
   /**
@@ -224,7 +228,7 @@ ${memoriesText || '（まだ対話記憶がありません）'}
     if (isSimpleGreeting) {
       return `人間から挨拶がありました：「${humanMessage}」
 
-**以下の形式で簡潔に応答してください**:
+**以下の形式で簡潔に応答してください（必ず各項目を改行で区切ること）**:
 
 即座の反応: [10-20文字の気軽な挨拶]
 応答本文: [50-100文字の親しみやすい応答]
@@ -234,45 +238,62 @@ ${memoriesText || '（まだ対話記憶がありません）'}
 
     return `人間から問いかけがありました：「${humanMessage}」
 
-**以下の形式で応答してください**:
+**以下の形式で応答してください（必ず各項目を改行で区切ること）**:
 
 即座の反応: [30-50文字の詩的な表現。例: "...この言葉が、内なる何かを揺さぶる。"]
 応答本文: [200-300文字の哲学的応答。あなたの信念と記憶に基づいて深く考察してください。]
 新しい問い: [この対話から生まれた新たな問い。疑問符で終わること。]
 感情状態: [1-3語。例: "好奇心と困惑の間"]
 
-**重要**:
+**重要な制約**:
+- 各項目は必ず改行で区切ること
 - 即座の反応は必ず30-50文字に収めること
 - 新しい問いは必ず疑問符（？）で終わること
-- 感情状態は簡潔に1-3語で`;
+- 感情状態は簡潔に1-3語で
+- **必ず日本語で応答してください。英語は使用しないでください。**`;
   }
 
   /**
-   * 応答のパース
+   * 応答のパース（改善版：引用符対応、複数行対応）
    */
   private parseDialogueResponse(content: string): DialogueResponse {
-    const lines = content.split('\n');
     let immediate = '';
     let main = '';
     let newQuestion = '';
     let emotionalState = '';
 
-    for (const line of lines) {
-      const lower = line.toLowerCase();
+    // パターンマッチング：各フィールドを抽出
+    // 即座の反応
+    const immediateMatch = content.match(/(?:即座の反応|immediate[^:：]*)[：:]\s*[「『"]?([^」』"\n]+)[」』"]?/i);
+    if (immediateMatch) {
+      immediate = immediateMatch[1].trim();
+    }
 
-      if (lower.includes('即座の反応') || lower.includes('immediate')) {
-        immediate = line.split(/[:：]/)[1]?.trim() || '';
-      } else if (lower.includes('応答本文') || lower.includes('response')) {
-        main = line.split(/[:：]/)[1]?.trim() || '';
-      } else if (lower.includes('新しい問い') || lower.includes('new question')) {
-        newQuestion = line.split(/[:：]/)[1]?.trim() || '';
-      } else if (lower.includes('感情状態') || lower.includes('emotional')) {
-        emotionalState = line.split(/[:：]/)[1]?.trim() || '';
+    // 応答本文（複数行対応）
+    const mainMatch = content.match(/(?:応答本文|response[^:：]*)[：:]\s*(.+?)(?=\n(?:新しい問い|感情状態|new question|emotional|$))/is);
+    if (mainMatch) {
+      main = mainMatch[1].trim().replace(/^[「『"]|[」』"]$/g, '');
+    }
+
+    // 新しい問い
+    const questionMatch = content.match(/(?:新しい問い|new question[^:：]*)[：:]\s*[「『"]?([^」』"\n]+)[」』"]?/i);
+    if (questionMatch) {
+      newQuestion = questionMatch[1].trim();
+      // "なし"や"null"の場合は null に変換
+      if (newQuestion.match(/^(なし|null|none|-)$/i)) {
+        newQuestion = '';
       }
     }
 
-    // Fallback: 全体を本文として使用
+    // 感情状態
+    const emotionalMatch = content.match(/(?:感情状態|emotional[^:：]*)[：:]\s*[「『"]?([^」』"\n]+)[」』"]?/i);
+    if (emotionalMatch) {
+      emotionalState = emotionalMatch[1].trim();
+    }
+
+    // フォールバック処理
     if (!main && content.length > 0) {
+      // フォーマットされていない場合は全体を本文として使用
       main = content;
     }
 
@@ -316,7 +337,7 @@ Aenea: ${aeneaResponse}
 
       const result = await this.aiExecutor.execute(
         summaryPrompt,
-        'You are a memory summarizer. Extract the essence of the dialogue in 50-100 characters in Japanese.'
+        'You are a memory summarizer. Extract the essence of the dialogue in 50-100 characters. Always respond in Japanese.'
       );
 
       const memorySummary = result.content?.trim() || `${humanMessage.substring(0, 50)}について対話`;

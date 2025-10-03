@@ -25,7 +25,9 @@ import {
   WeightAdjustment,
   MultiplicativeWeightParams,
   DPDMetrics,
-  DPDEvolution
+  DPDEvolution,
+  DPDComponent,
+  IndividualDPDScores
 } from '../../types/dpd-types.js';
 
 import {
@@ -138,10 +140,17 @@ export class DPDEngine {
     auditorResult: AuditorResult
   ): Promise<DPDScores> {
     try {
+      console.log(`[DPD] Starting DPD score calculation at ${new Date().toISOString()}`);
+
       // Calculate individual component scores with AI evaluation
       const empathyScore = await this.calculateEmpathyScore(thoughts, reflections);
+      console.log(`[DPD] Empathy score calculated: ${empathyScore.toFixed(3)} at ${new Date().toISOString()}`);
+
       const coherenceScore = await this.calculateCoherenceScore(thoughts);
+      console.log(`[DPD] Coherence score calculated: ${coherenceScore.toFixed(3)} at ${new Date().toISOString()}`);
+
       const dissonanceScore = await this.calculateDissonanceScore(thoughts, reflections, auditorResult);
+      console.log(`[DPD] Dissonance score calculated: ${dissonanceScore.toFixed(3)} at ${new Date().toISOString()}`);
       
       // Calculate weighted total
       const weightedTotal = (
@@ -172,8 +181,8 @@ export class DPDEngine {
       // Update metrics
       this.updateMetrics(scores);
       
-      console.log(`DPD Scores calculated: empathy=${empathyScore.toFixed(3)}, coherence=${coherenceScore.toFixed(3)}, dissonance=${dissonanceScore.toFixed(3)}, weighted=${weightedTotal.toFixed(3)}`);
-      
+      console.log(`[DPD] All DPD scores calculated: empathy=${empathyScore.toFixed(3)}, coherence=${coherenceScore.toFixed(3)}, dissonance=${dissonanceScore.toFixed(3)}, weighted=${weightedTotal.toFixed(3)} at ${new Date().toISOString()}`);
+
       return scores;
     } catch (error) {
       console.error('Failed to calculate DPD scores:', error);
@@ -232,12 +241,34 @@ export class DPDEngine {
     auditorResult: AuditorResult
   ): Promise<DPDAssessment> {
     try {
-      // Calculate scores
+      // Calculate scores (includes AI evaluation)
       const scores = await this.calculateDPDScores(thoughts, reflections, auditorResult);
-      
-      // Calculate individual component scores
-      const individualScores = this.calculateIndividualScores(thoughts, reflections, auditorResult);
-      
+
+      // Use already calculated scores for individual component analysis
+      const individualScores: IndividualDPDScores[] = [
+        {
+          component: DPDComponent.EMPATHY,
+          score: scores.empathy,
+          reasoning: 'Calculated from emotional recognition, perspective taking, compassionate response, and social awareness',
+          evidence: ['Emotional tone analysis', 'Alternative perspective detection'],
+          confidence: 0.8
+        },
+        {
+          component: DPDComponent.COHERENCE,
+          score: scores.coherence,
+          reasoning: 'Calculated from logical consistency, value alignment, goal congruence, and system harmony',
+          evidence: ['Logical coherence analysis', 'Value alignment assessment'],
+          confidence: 0.7
+        },
+        {
+          component: DPDComponent.DISSONANCE,
+          score: scores.dissonance,
+          reasoning: 'Calculated from ethical awareness, contradiction recognition, moral complexity, and uncertainty tolerance',
+          evidence: ['Ethical assessment', 'Contradiction analysis'],
+          confidence: 0.6
+        }
+      ];
+
       // Perform analysis
       const analysis = this.performAnalysis(scores, individualScores);
       
@@ -808,38 +839,6 @@ ${reflectionsText}
   // Analysis and Recommendations
   // ============================================================================
 
-  /**
-   * Calculate individual component scores
-   */
-  private calculateIndividualScores(
-    thoughts: StructuredThought[],
-    reflections: MutualReflection[],
-    auditorResult: AuditorResult
-  ): any[] {
-    return [
-      {
-        component: 'empathy',
-        score: this.calculateEmpathyScore(thoughts, reflections),
-        reasoning: 'Calculated from emotional recognition, perspective taking, compassionate response, and social awareness',
-        evidence: ['Emotional tone analysis', 'Alternative perspective detection'],
-        confidence: 0.8
-      },
-      {
-        component: 'coherence',
-        score: this.calculateCoherenceScore(thoughts),
-        reasoning: 'Calculated from logical consistency, value alignment, goal congruence, and system harmony',
-        evidence: ['Logical coherence analysis', 'Value alignment assessment'],
-        confidence: 0.7
-      },
-      {
-        component: 'dissonance',
-        score: this.calculateDissonanceScore(thoughts, reflections, auditorResult),
-        reasoning: 'Calculated from ethical awareness, contradiction recognition, moral complexity, and uncertainty tolerance',
-        evidence: ['Ethical assessment', 'Contradiction analysis'],
-        confidence: 0.6
-      }
-    ];
-  }
 
   /**
    * Perform analysis of DPD scores
