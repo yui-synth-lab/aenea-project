@@ -1100,12 +1100,12 @@
                                             color: '#ecfdf5',
                                             marginBottom: '4px'
                                         }}>
-                                            {((dpdWeights.empathy + dpdWeights.coherence + dpdWeights.dissonance) * 100).toFixed(1)}%
+                                            {Math.round((dpdWeights.empathy + dpdWeights.coherence + dpdWeights.dissonance) * 100)}%
                                         </div>
                                         <div style={{ fontSize: '12px', color: '#a7f3d0' }}>
                                             Total (should be 100%)
                                         </div>
-                                    </div>
+                                    </div>  
                                 </div>
                             </div>
 
