@@ -38,7 +38,7 @@ export const DPDScoreDisplay: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
-    // サーバーからDPD履歴を取得
+    // サーバーからDPD履歴を取得（常にサンプリングされた最新データを取得）
     const fetchDPDEvolution = async () => {
       try {
         const response = await fetch('/api/consciousness/dpd/evolution?limit=20&strategy=sampled');
@@ -55,7 +55,7 @@ export const DPDScoreDisplay: React.FC = () => {
             });
           }
 
-          // 履歴を変換
+          // 履歴を完全に置き換え（サンプリングされたデータセット）
           const historyData = (data.history || []).map((item: any) => ({
             timestamp: item.timestamp,
             scores: {
@@ -78,10 +78,40 @@ export const DPDScoreDisplay: React.FC = () => {
     // 初回取得
     fetchDPDEvolution();
 
-    // 5秒ごとに更新
-    const updateInterval = setInterval(fetchDPDEvolution, 5000);
+    // EventSource で DPD 更新イベントを受け取る
+    let eventSource: EventSource | null = null;
 
-    return () => clearInterval(updateInterval);
+    try {
+      eventSource = new EventSource('/api/consciousness/events');
+
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        // DPD 更新イベントまたは思考サイクル完了時に再取得
+        if (data.type === 'dpdUpdate' || data.type === 'thoughtCycleComplete' || data.type === 'weightUpdate') {
+          fetchDPDEvolution();
+        }
+      };
+
+      eventSource.onerror = () => {
+        console.warn('DPD EventSource connection failed, using polling fallback');
+        eventSource?.close();
+
+        // フォールバック: 10秒ごとにポーリング
+        const fallbackInterval = setInterval(fetchDPDEvolution, 10000);
+        return () => clearInterval(fallbackInterval);
+      };
+    } catch (error) {
+      console.warn('Failed to connect to EventSource, using polling fallback');
+
+      // フォールバック: 10秒ごとにポーリング
+      const fallbackInterval = setInterval(fetchDPDEvolution, 10000);
+      return () => clearInterval(fallbackInterval);
+    }
+
+    return () => {
+      eventSource?.close();
+    };
   }, []);
 
   const generateRandomContext = (): string => {
@@ -138,19 +168,20 @@ export const DPDScoreDisplay: React.FC = () => {
   );
 
   return (
-    <div className="dpd-score-display">
-      <div className="dpd-header">
-        <div className="header-title">
-          <h3>DPD Scores</h3>
-          <span className="subtitle">Dynamic Prime Directive</span>
+    <>
+      <div className="dpd-score-display">
+        <div className="dpd-header">
+          <div className="header-title">
+            <h3>DPD Scores</h3>
+            <span className="subtitle">Dynamic Prime Directive</span>
+          </div>
+          <button
+            className="expand-toggle"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? '▼' : '▶'}
+          </button>
         </div>
-        <button
-          className="expand-toggle"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? '▼' : '▶'}
-        </button>
-      </div>
 
       {isExpanded && (
         <div className="dpd-content">
@@ -249,7 +280,270 @@ export const DPDScoreDisplay: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+      </div>
+
+      <style>{`
+        .dpd-score-display {
+          background: #1f2937;
+          border-radius: 12px;
+          padding: 24px;
+          border: 1px solid #374151;
+        }
+
+        .dpd-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        .header-title h3 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 600;
+          color: #f9fafb;
+        }
+
+        .subtitle {
+          color: #9ca3af;
+          font-size: 12px;
+        }
+
+        .expand-toggle {
+          background: #374151;
+          border: none;
+          border-radius: 4px;
+          padding: 4px 8px;
+          color: #f9fafb;
+          cursor: pointer;
+          font-size: 14px;
+        }
+
+        .expand-toggle:hover {
+          background: #4b5563;
+        }
+
+        .dpd-content {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .dpd-dimension {
+          margin-bottom: 12px;
+        }
+
+        .dimension-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 4px;
+        }
+
+        .dimension-label {
+          font-size: 14px;
+          color: #e5e7eb;
+        }
+
+        .dimension-weight {
+          font-size: 12px;
+          color: #9ca3af;
+        }
+
+        .dimension-value {
+          font-size: 14px;
+          font-weight: 600;
+          color: #f9fafb;
+        }
+
+        .dimension-bar {
+          height: 8px;
+          background: #374151;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+
+        .dimension-fill {
+          height: 100%;
+          transition: width 0.3s ease;
+        }
+
+        .weight-evolution {
+          background: #374151;
+          padding: 16px;
+          border-radius: 8px;
+        }
+
+        .section-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #f9fafb;
+          margin-bottom: 12px;
+        }
+
+        .weight-display {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .weight-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .weight-item span {
+          min-width: 60px;
+          font-size: 12px;
+          color: #e5e7eb;
+        }
+
+        .weight-bar {
+          height: 6px;
+          border-radius: 3px;
+          transition: width 0.3s ease;
+        }
+
+        .weight-timestamp {
+          margin-top: 8px;
+          font-size: 11px;
+          color: #9ca3af;
+          text-align: right;
+        }
+
+        .score-history {
+          background: #374151;
+          padding: 16px;
+          border-radius: 8px;
+          max-height: 300px;
+          overflow-y: auto;
+        }
+
+        .history-count {
+          font-size: 12px;
+          color: #9ca3af;
+          font-weight: 400;
+        }
+
+        .history-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .history-item {
+          background: #1f2937;
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+        }
+
+        .history-time {
+          color: #9ca3af;
+          font-family: 'Courier New', monospace;
+          margin-bottom: 4px;
+        }
+
+        .history-scores {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 4px;
+        }
+
+        .history-scores span {
+          color: #e5e7eb;
+        }
+
+        .history-scores .total {
+          color: #3b82f6;
+          font-weight: 600;
+        }
+
+        .history-context {
+          color: #9ca3af;
+          font-style: italic;
+        }
+
+        .dpd-insights {
+          background: #1e3a8a;
+          padding: 16px;
+          border-radius: 8px;
+          border: 1px solid #3b82f6;
+        }
+
+        .insights-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .insight {
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 13px;
+        }
+
+        .insight.empathy {
+          background: #064e3b;
+          color: #10b981;
+          border-left: 3px solid #10b981;
+        }
+
+        .insight.coherence {
+          background: #1e3a8a;
+          color: #3b82f6;
+          border-left: 3px solid #3b82f6;
+        }
+
+        .insight.dissonance {
+          background: #451a03;
+          color: #f59e0b;
+          border-left: 3px solid #f59e0b;
+        }
+
+        .insight.total {
+          background: #065f46;
+          color: #34d399;
+          border-left: 3px solid #34d399;
+        }
+
+        .insight.warning {
+          background: #7f1d1d;
+          color: #ef4444;
+          border-left: 3px solid #ef4444;
+        }
+
+        @media (max-width: 640px) {
+          .dpd-score-display {
+            padding: 16px;
+          }
+
+          .header-title h3 {
+            font-size: 16px;
+          }
+
+          .dimension-label,
+          .dimension-value {
+            font-size: 12px;
+          }
+
+          .weight-item span {
+            min-width: 50px;
+            font-size: 11px;
+          }
+
+          .history-item {
+            padding: 6px 10px;
+          }
+
+          .history-scores {
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+        }
+      `}</style>
+    </>
   );
 };
 

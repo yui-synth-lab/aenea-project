@@ -99,9 +99,10 @@ export default class IndividualThoughtStage {
       // Get context from database
       const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(5);
       const significantThoughts = this.databaseManager.getSignificantThoughts(3);
+      const coreBeliefs = this.databaseManager.getCoreBeliefs(5); // Get top 5 core beliefs
 
       // Create enhanced prompt with context and agent-specific personality
-      const enhancedPrompt = this.createEnhancedPrompt(trigger, unresolvedIdeas, significantThoughts, agentId);
+      const enhancedPrompt = this.createEnhancedPrompt(trigger, unresolvedIdeas, significantThoughts, coreBeliefs, agentId);
 
       // Execute AI agent
       const result = await agent.execute(enhancedPrompt);
@@ -145,9 +146,10 @@ export default class IndividualThoughtStage {
     return null;
   }
 
-  private createEnhancedPrompt(trigger: InternalTrigger, unresolvedIdeas: any[], significantThoughts: any[], agentId: string): string {
+  private createEnhancedPrompt(trigger: InternalTrigger, unresolvedIdeas: any[], significantThoughts: any[], coreBeliefs: any[], agentId: string): string {
     const unresolvedContext = unresolvedIdeas.map(idea => idea.question).join('、');
     const significantContext = significantThoughts.map(thought => thought.thought_content?.slice(0, 200)).join('、');
+    const beliefsContext = coreBeliefs.map(belief => belief.belief_text).join('、');
 
     // Get agent configuration from agent modules
     const agentConfigs: { [key: string]: any } = {
@@ -157,9 +159,6 @@ export default class IndividualThoughtStage {
     };
 
     const personality = agentConfigs[agentId] || theoriaConfig;
-
-    // Get core beliefs context for this agent and question category
-    const beliefsContext = this.coreBeliefs.getBeliefContext(agentId, trigger.category);
 
     // Build system prompt using Yui Protocol-style detailed personality
     let systemPrompt = `あなたは「${personality.displayName || personality.name}」です。

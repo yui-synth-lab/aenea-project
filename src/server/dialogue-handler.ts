@@ -78,8 +78,9 @@ export class DialogueHandler {
     // 5. 応答をパース
     const response = this.parseDialogueResponse(result.content || '');
 
-    // 6. DB保存
+    // 6. DB保存（DBから最新のsystem_clockを取得して保存）
     const dialogueId = `dialogue_${Date.now()}`;
+    const currentSystemClock = this.db.getCurrentSystemClock();
     this.db.saveDialogue({
       id: dialogueId,
       humanMessage,
@@ -87,6 +88,7 @@ export class DialogueHandler {
       immediateReaction: response.immediate,
       newQuestion: response.newQuestion || undefined,
       emotionalState: response.emotionalState,
+      systemClock: currentSystemClock,
       timestamp: Date.now()
     });
 

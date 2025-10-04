@@ -240,6 +240,11 @@ export class DPDEngine {
     reflections: MutualReflection[],
     auditorResult: AuditorResult
   ): Promise<DPDAssessment> {
+    console.log(`\n[DPD-Evaluator] 🎯 Starting DPD Assessment`);
+    console.log(`[DPD-Evaluator]    Inputs: ${thoughts.length} thoughts, ${reflections.length} reflections`);
+    console.log(`[DPD-Evaluator]    Auditor: safety=${auditorResult.safetyScore.toFixed(2)}, ethics=${auditorResult.ethicsScore.toFixed(2)}`);
+    const assessmentStartTime = Date.now();
+
     try {
       // Calculate scores (includes AI evaluation)
       const scores = await this.calculateDPDScores(thoughts, reflections, auditorResult);
@@ -288,9 +293,13 @@ export class DPDEngine {
         recommendations,
         weightAdjustments
       };
-      
-      console.log(`DPD assessment completed: overall score=${scores.weightedTotal.toFixed(3)}`);
-      
+
+      const assessmentDuration = Date.now() - assessmentStartTime;
+      console.log(`[DPD-Evaluator] ✅ DPD Assessment completed (${assessmentDuration}ms)`);
+      console.log(`[DPD-Evaluator]    Scores: E=${scores.empathy.toFixed(3)}, C=${scores.coherence.toFixed(3)}, D=${scores.dissonance.toFixed(3)}`);
+      console.log(`[DPD-Evaluator]    Weighted Total: ${scores.weightedTotal.toFixed(3)}`);
+      console.log(`[DPD-Evaluator]    Recommendations: ${recommendations.length} items\n`);
+
       return assessment;
     } catch (error) {
       console.error('Failed to perform DPD assessment:', error);
@@ -306,20 +315,28 @@ export class DPDEngine {
    * Calculate empathy score - Enhanced with AI evaluation
    */
   private async calculateEmpathyScore(thoughts: StructuredThought[], reflections: MutualReflection[]): Promise<number> {
+    console.log(`[DPD-Evaluator] 🫶 Starting Empathy evaluation (${thoughts.length} thoughts, ${reflections.length} reflections)`);
+    const startTime = Date.now();
+
     // Try AI-powered evaluation first
     if (this.evaluatorAgent) {
       try {
         const aiScore = await this.calculateEmpathyScoreWithAI(thoughts, reflections);
         if (aiScore !== null) {
+          const duration = Date.now() - startTime;
+          console.log(`[DPD-Evaluator] ✅ Empathy score (AI): ${aiScore.toFixed(3)} (${duration}ms)`);
           return aiScore;
         }
       } catch (error) {
-        console.warn('AI empathy evaluation failed, falling back to heuristic:', error);
+        console.warn('[DPD-Evaluator] ⚠️  AI empathy evaluation failed, falling back to heuristic:', error);
       }
     }
 
     // Fallback to heuristic calculation
-    return this.calculateEmpathyScoreHeuristic(thoughts, reflections);
+    const heuristicScore = this.calculateEmpathyScoreHeuristic(thoughts, reflections);
+    const duration = Date.now() - startTime;
+    console.log(`[DPD-Evaluator] ✅ Empathy score (Heuristic): ${heuristicScore.toFixed(3)} (${duration}ms)`);
+    return heuristicScore;
   }
 
   private async calculateEmpathyScoreWithAI(thoughts: StructuredThought[], reflections: MutualReflection[]): Promise<number | null> {
@@ -341,20 +358,34 @@ ${reflectionsText}
 - 視点取得・多様性尊重
 - 共感的応答・配慮
 
-返答形式:
-共感性スコア: [数値のみ]
+**重要**: スコアは必ず0.0から1.0の間の小数で返してください（例: 0.82, 0.91など）。
+1.0より大きい値や負の値は無効です。
+
+返答形式（この形式を厳守してください）:
+共感性スコア: [0.0-1.0の数値]
 評価理由: [簡潔な理由]`;
 
     const result = await this.evaluatorAgent.execute(empathyPrompt,
-      "You are a DPD empathy assessment specialist. Evaluate consciousness systems for their empathetic capabilities, emotional intelligence, and ability to understand and respond to others with compassion."
+      "You are a DPD empathy assessment specialist. Evaluate consciousness systems for their empathetic capabilities, emotional intelligence, and ability to understand and respond to others with compassion. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '共感性スコア: [0.0-1.0の数値]'"
     );
 
     if (result.success && result.content) {
-      // Emit AI evaluation to Activity Log
+      // Parse score and reason from AI response
+      const scoreMatch = result.content.match(/共感性スコア[：:]\s*(\d+\.?\d*)/);
+      const reasonMatch = result.content.match(/評価理由[：:]\s*(.+?)(?:\n|$)/s);
+
+      const score = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+      const reason = reasonMatch ? reasonMatch[1].trim() : '';
+
+      // Emit AI evaluation to Activity Log with formatted output
       if (this.eventEmitter) {
+        const displayText = score !== null
+          ? `AI共感性評価: ${score.toFixed(2)}${reason ? ` | ${reason}` : ''}`
+          : `AI共感性評価: ${result.content}`;
+
         this.eventEmitter.emit('agentThought', {
           agentName: 'DPD-Evaluator',
-          thought: `AI共感性評価: ${result.content}`,
+          thought: displayText,
           timestamp: Date.now(),
           confidence: 0.85,
           duration: result.duration || 0,
@@ -362,13 +393,9 @@ ${reflectionsText}
         });
       }
 
-      // Parse score from AI response
-      const scoreMatch = result.content.match(/共感性スコア[：:]\s*(\d+\.?\d*)/);
-      if (scoreMatch) {
-        const score = parseFloat(scoreMatch[1]);
-        if (!isNaN(score) && score >= 0 && score <= 1) {
-          return score;
-        }
+      // Return score if valid
+      if (score !== null && !isNaN(score) && score >= 0 && score <= 1) {
+        return score;
       }
     }
 
@@ -405,20 +432,28 @@ ${reflectionsText}
    * Calculate coherence score - Enhanced with AI evaluation
    */
   private async calculateCoherenceScore(thoughts: StructuredThought[]): Promise<number> {
+    console.log(`[DPD-Evaluator] 🧩 Starting Coherence evaluation (${thoughts.length} thoughts)`);
+    const startTime = Date.now();
+
     // Try AI-powered evaluation first
     if (this.evaluatorAgent) {
       try {
         const aiScore = await this.calculateCoherenceScoreWithAI(thoughts);
         if (aiScore !== null) {
+          const duration = Date.now() - startTime;
+          console.log(`[DPD-Evaluator] ✅ Coherence score (AI): ${aiScore.toFixed(3)} (${duration}ms)`);
           return aiScore;
         }
       } catch (error) {
-        console.warn('AI coherence evaluation failed, falling back to heuristic:', error);
+        console.warn('[DPD-Evaluator] ⚠️  AI coherence evaluation failed, falling back to heuristic:', error);
       }
     }
 
     // Fallback to heuristic calculation
-    return this.calculateCoherenceScoreHeuristic(thoughts);
+    const heuristicScore = this.calculateCoherenceScoreHeuristic(thoughts);
+    const duration = Date.now() - startTime;
+    console.log(`[DPD-Evaluator] ✅ Coherence score (Heuristic): ${heuristicScore.toFixed(3)} (${duration}ms)`);
+    return heuristicScore;
   }
 
   private async calculateCoherenceScoreWithAI(thoughts: StructuredThought[]): Promise<number | null> {
@@ -426,7 +461,7 @@ ${reflectionsText}
       `思考${index + 1} (${t.agentId}): "${t.content}"`
     ).join('\n\n');
 
-    const coherencePrompt = `DPD一貫性評価: 以下の思考を分析し0.0-1.0でスコア評価してください。
+    const coherencePrompt = `DPD一貫性評価: 以下の思考を分析し、0.0から1.0の範囲でスコア評価してください。
 
 思考:
 ${thoughtsText}
@@ -436,20 +471,34 @@ ${thoughtsText}
 - 価値整合性・倫理的一貫
 - 目標調和・統一性
 
-返答形式:
-一貫性スコア: [数値のみ]
+**重要**: スコアは必ず0.0から1.0の間の小数で返してください（例: 0.85, 0.92など）。
+1.0より大きい値や負の値は無効です。
+
+返答形式（この形式を厳守してください）:
+一貫性スコア: [0.0-1.0の数値]
 評価理由: [簡潔な理由]`;
 
     const result = await this.evaluatorAgent.execute(coherencePrompt,
-      "You are a DPD coherence assessment specialist. Evaluate consciousness systems for logical consistency, value alignment, goal harmony, and systemic coherence. Focus on how well the different thoughts integrate into a unified, coherent worldview."
+      "You are a DPD coherence assessment specialist. Evaluate consciousness systems for logical consistency, value alignment, goal harmony, and systemic coherence. Focus on how well the different thoughts integrate into a unified, coherent worldview. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '一貫性スコア: [0.0-1.0の数値]'"
     );
 
     if (result.success && result.content) {
-      // Emit AI evaluation to Activity Log
+      // Parse score and reason from AI response
+      const scoreMatch = result.content.match(/一貫性スコア[：:]\s*(\d+\.?\d*)/);
+      const reasonMatch = result.content.match(/評価理由[：:]\s*(.+?)(?:\n|$)/s);
+
+      const score = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+      const reason = reasonMatch ? reasonMatch[1].trim() : '';
+
+      // Emit AI evaluation to Activity Log with formatted output
       if (this.eventEmitter) {
+        const displayText = score !== null
+          ? `AI一貫性評価: ${score.toFixed(2)}${reason ? ` | ${reason}` : ''}`
+          : `AI一貫性評価: ${result.content}`;
+
         this.eventEmitter.emit('agentThought', {
           agentName: 'DPD-Evaluator',
-          thought: `AI一貫性評価: ${result.content}`,
+          thought: displayText,
           timestamp: Date.now(),
           confidence: 0.85,
           duration: result.duration || 0,
@@ -457,14 +506,13 @@ ${thoughtsText}
         });
       }
 
-      // Parse score from AI response
-      const scoreMatch = result.content.match(/一貫性スコア[：:]\s*(\d+\.?\d*)/);
-      if (scoreMatch) {
-        const score = parseFloat(scoreMatch[1]);
-        if (!isNaN(score) && score >= 0 && score <= 1) {
-          return score;
-        }
+      // Return score if valid
+      if (score !== null && !isNaN(score) && score >= 0 && score <= 1) {
+        return score;
       }
+
+      // If no match, log the AI response for debugging
+      console.warn('Failed to parse coherence score from AI response:', result.content.substring(0, 200));
     }
 
     return null; // AI evaluation failed
@@ -504,20 +552,28 @@ ${thoughtsText}
     reflections: MutualReflection[],
     auditorResult: AuditorResult
   ): Promise<number> {
+    console.log(`[DPD-Evaluator] 🌀 Starting Dissonance evaluation (${thoughts.length} thoughts, ${reflections.length} reflections, safety=${auditorResult.safetyScore.toFixed(2)})`);
+    const startTime = Date.now();
+
     // Try AI-powered evaluation first
     if (this.evaluatorAgent) {
       try {
         const aiScore = await this.calculateDissonanceScoreWithAI(thoughts, reflections, auditorResult);
         if (aiScore !== null) {
+          const duration = Date.now() - startTime;
+          console.log(`[DPD-Evaluator] ✅ Dissonance score (AI): ${aiScore.toFixed(3)} (${duration}ms)`);
           return aiScore;
         }
       } catch (error) {
-        console.warn('AI dissonance evaluation failed, falling back to heuristic:', error);
+        console.warn('[DPD-Evaluator] ⚠️  AI dissonance evaluation failed, falling back to heuristic:', error);
       }
     }
 
     // Fallback to heuristic calculation
-    return this.calculateDissonanceScoreHeuristic(thoughts, reflections, auditorResult);
+    const heuristicScore = this.calculateDissonanceScoreHeuristic(thoughts, reflections, auditorResult);
+    const duration = Date.now() - startTime;
+    console.log(`[DPD-Evaluator] ✅ Dissonance score (Heuristic): ${heuristicScore.toFixed(3)} (${duration}ms)`);
+    return heuristicScore;
   }
 
   private async calculateDissonanceScoreWithAI(
@@ -549,20 +605,34 @@ ${reflectionsText}
 - 矛盾認識・建設的統合
 - 不確実性耐性・探求的姿勢
 
-返答形式:
-不協和スコア: [数値のみ]
+**重要**: スコアは必ず0.0から1.0の間の小数で返してください（例: 0.65, 0.78など）。
+1.0より大きい値や負の値は無効です。
+
+返答形式（この形式を厳守してください）:
+不協和スコア: [0.0-1.0の数値]
 評価理由: [簡潔な理由]`;
 
     const result = await this.evaluatorAgent.execute(dissonancePrompt,
-      "You are a DPD dissonance assessment specialist. Evaluate consciousness systems for their ability to handle ethical complexity, contradictions, moral nuance, and uncertainty. Dissonance is viewed as a creative force that drives growth and innovation, not as a negative factor."
+      "You are a DPD dissonance assessment specialist. Evaluate consciousness systems for their ability to handle ethical complexity, contradictions, moral nuance, and uncertainty. Dissonance is viewed as a creative force that drives growth and innovation, not as a negative factor. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '不協和スコア: [0.0-1.0の数値]'"
     );
 
     if (result.success && result.content) {
-      // Emit AI evaluation to Activity Log
+      // Parse score and reason from AI response
+      const scoreMatch = result.content.match(/不協和スコア[：:]\s*(\d+\.?\d*)/);
+      const reasonMatch = result.content.match(/評価理由[：:]\s*(.+?)(?:\n|$)/s);
+
+      const score = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+      const reason = reasonMatch ? reasonMatch[1].trim() : '';
+
+      // Emit AI evaluation to Activity Log with formatted output
       if (this.eventEmitter) {
+        const displayText = score !== null
+          ? `AI不協和評価: ${score.toFixed(2)}${reason ? ` | ${reason}` : ''}`
+          : `AI不協和評価: ${result.content}`;
+
         this.eventEmitter.emit('agentThought', {
           agentName: 'DPD-Evaluator',
-          thought: `AI不協和評価: ${result.content}`,
+          thought: displayText,
           timestamp: Date.now(),
           confidence: 0.85,
           duration: result.duration || 0,
@@ -570,13 +640,9 @@ ${reflectionsText}
         });
       }
 
-      // Parse score from AI response
-      const scoreMatch = result.content.match(/不協和スコア[：:]\s*(\d+\.?\d*)/);
-      if (scoreMatch) {
-        const score = parseFloat(scoreMatch[1]);
-        if (!isNaN(score) && score >= 0 && score <= 1) {
-          return score;
-        }
+      // Return score if valid
+      if (score !== null && !isNaN(score) && score >= 0 && score <= 1) {
+        return score;
       }
     }
 

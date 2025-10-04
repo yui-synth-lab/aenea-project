@@ -203,6 +203,9 @@ class DatabaseManager {
         coherence_shift REAL DEFAULT 0,
         dissonance_shift REAL DEFAULT 0,
 
+        -- System state at dialogue time
+        system_clock INTEGER,            -- System clock value at dialogue time
+
         timestamp INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -321,6 +324,24 @@ class DatabaseManager {
       console.error('Error getting consciousness state:', err);
     }
     return null;
+  }
+
+  /**
+   * Get current system clock value (from consciousness_state)
+   * This returns the latest system clock stored in the database
+   */
+  getCurrentSystemClock(): number {
+    if (!this.isReady || !this.db) {
+      return 0;
+    }
+
+    try {
+      const result = this.db.prepare('SELECT system_clock FROM consciousness_state WHERE id = 1').get() as any;
+      return result?.system_clock || 0;
+    } catch (err) {
+      console.error('Error getting current system clock:', err);
+      return 0;
+    }
   }
 
   saveConsciousnessState(state: ConsciousnessState): void {
@@ -1315,6 +1336,7 @@ class DatabaseManager {
     empathyShift?: number;
     coherenceShift?: number;
     dissonanceShift?: number;
+    systemClock?: number;
     timestamp: number;
   }): void {
     const stmt = this.db.prepare(`
@@ -1322,8 +1344,8 @@ class DatabaseManager {
         id, human_message, aenea_response,
         immediate_reaction, new_question, emotional_state,
         empathy_shift, coherence_shift, dissonance_shift,
-        timestamp
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        system_clock, timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -1336,6 +1358,7 @@ class DatabaseManager {
       dialogue.empathyShift || 0,
       dialogue.coherenceShift || 0,
       dialogue.dissonanceShift || 0,
+      dialogue.systemClock || null,
       dialogue.timestamp
     );
   }

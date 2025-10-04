@@ -55,6 +55,10 @@ export function createDialogueRoutes(): Router {
       // Process dialogue
       const response = await dialogueHandler.handleDialogue(message);
 
+      // Get current system clock for response (from DB)
+      const db = (dialogueHandler as any).db as DatabaseManager;
+      const currentSystemClock = db.getCurrentSystemClock();
+
       res.json({
         success: true,
         dialogue: {
@@ -63,6 +67,7 @@ export function createDialogueRoutes(): Router {
           response: response.main,
           newQuestion: response.newQuestion,
           emotionalState: response.emotionalState,
+          systemClock: currentSystemClock,
           timestamp: Date.now()
         }
       });
@@ -106,6 +111,7 @@ export function createDialogueRoutes(): Router {
           immediateReaction: d.immediate_reaction,
           newQuestion: d.new_question,
           emotionalState: d.emotional_state,
+          systemClock: d.system_clock,
           timestamp: d.timestamp
         })),
         total,

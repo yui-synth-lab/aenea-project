@@ -545,9 +545,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .dashboard {
           padding: 16px;
           background: #111827;
-          height: 100vh;
+          min-height: 100vh;
           color: #f9fafb;
-          overflow: hidden;
         }
 
         .dashboard-header {
@@ -581,7 +580,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .dashboard-layout {
           display: flex;
           gap: 16px;
-          height: calc(100vh - 120px);
+        }
+
+        @media (min-width: 1025px) {
+          .dashboard-layout {
+            height: calc(100vh - 120px);
+          }
+
+          .dashboard {
+            height: 100vh;
+            overflow: hidden;
+          }
         }
 
         .left-panel {
@@ -597,7 +606,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           display: flex;
           flex-direction: column;
           gap: 16px;
-          min-height: 0;
+        }
+
+        @media (min-width: 1025px) {
+          .main-content {
+            min-height: 0;
+          }
         }
 
         .dashboard-card {
@@ -769,10 +783,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .activity-log {
-          flex: 1;
           display: flex;
           flex-direction: column;
-          min-height: 0;
+        }
+
+        @media (min-width: 1025px) {
+          .activity-log {
+            flex: 1;
+            min-height: 0;
+          }
         }
 
         .activity-log h3 {
@@ -781,13 +800,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .activity-stream {
-          flex: 1;
           display: flex;
           flex-direction: column;
           gap: 8px;
-          overflow-y: auto;
           padding-right: 8px;
-          min-height: 0;
+        }
+
+        @media (min-width: 1025px) {
+          .activity-stream {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+          }
         }
 
         .activity-item {
@@ -1026,20 +1050,50 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         @media (max-width: 1024px) {
           .dashboard-layout {
-            grid-template-columns: 1fr;
-            height: auto;
+            flex-direction: column;
           }
 
           .left-panel {
+            width: 100%;
             order: 1;
           }
 
           .main-content {
+            width: 100%;
             order: 2;
           }
 
           .stat-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .activity-stream {
+            max-height: 400px;
+            overflow-y: auto;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .dashboard-header h2 {
+            font-size: 24px;
+          }
+
+          .stat-grid {
             grid-template-columns: 1fr;
+          }
+
+          .activity-item {
+            grid-template-columns: auto 1fr;
+            gap: 8px;
+          }
+
+          .activity-time {
+            grid-column: 1 / -1;
+          }
+
+          .activity-confidence {
+            grid-column: 1 / -1;
+            justify-self: start;
           }
         }
       `}</style>

@@ -20,8 +20,27 @@
             background: #111827;
             color: #f9fafb;
             min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         #root { min-height: 100vh; }
+
+        /* Mobile responsive utilities */
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+            }
+        }
+
+        /* Prevent text size adjustment on iOS */
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* Better touch targets for mobile */
+        button, a {
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+        }
     </style>
 </head>
 <body>
@@ -161,6 +180,15 @@
             const [loadingGrowth, setLoadingGrowth] = useState(false);
             const [consciousnessState, setConsciousnessState] = useState('stopped'); // 'stopped', 'running', 'paused'
             const [loading, setLoading] = useState(false);
+            const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+            useEffect(() => {
+                const handleResize = () => {
+                    setIsMobile(window.innerWidth <= 768);
+                };
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
 
             useEffect(() => {
                 // Get initial consciousness statistics and state from SQLite
@@ -759,7 +787,7 @@
 
             return (
                 <div style={{
-                    padding: '16px',
+                    padding: isMobile ? '12px' : '16px',
                     background: '#111827',
                     height: '100vh',
                     color: '#f9fafb',
@@ -768,17 +796,30 @@
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '16px',
-                        flexShrink: 0
+                        alignItems: isMobile ? 'flex-start' : 'center',
+                        marginBottom: isMobile ? '12px' : '16px',
+                        flexShrink: 0,
+                        flexWrap: isMobile ? 'wrap' : 'nowrap',
+                        gap: isMobile ? '12px' : '0'
                     }}>
-                        <h2 style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>
+                        <h2 style={{
+                            fontSize: isMobile ? '20px' : '32px',
+                            fontWeight: '700',
+                            margin: 0,
+                            flex: isMobile ? '1 1 100%' : 'initial'
+                        }}>
                             Consciousness Dashboard
                         </h2>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: isMobile ? '8px' : '12px',
+                            width: isMobile ? '100%' : 'auto',
+                            flexWrap: 'wrap'
+                        }}>
                             {/* Consciousness Control Buttons */}
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: isMobile ? '6px' : '8px', flexWrap: 'wrap' }}>
                                 {consciousnessState === 'stopped' && (
                                     <button
                                         onClick={handleStartConsciousness}
@@ -787,11 +828,12 @@
                                             background: loading ? '#6b7280' : '#10b981',
                                             border: 'none',
                                             borderRadius: '8px',
-                                            padding: '10px 20px',
+                                            padding: isMobile ? '8px 16px' : '10px 20px',
                                             color: 'white',
                                             fontWeight: '600',
                                             cursor: loading ? 'not-allowed' : 'pointer',
-                                            fontSize: '14px'
+                                            fontSize: isMobile ? '13px' : '14px',
+                                            minHeight: '40px'
                                         }}
                                     >
                                         {loading ? 'Starting...' : '▶️ Start'}
@@ -807,11 +849,12 @@
                                                 background: loading ? '#6b7280' : '#f59e0b',
                                                 border: 'none',
                                                 borderRadius: '8px',
-                                                padding: '10px 20px',
+                                                padding: isMobile ? '8px 16px' : '10px 20px',
                                                 color: 'white',
                                                 fontWeight: '600',
                                                 cursor: loading ? 'not-allowed' : 'pointer',
-                                                fontSize: '14px'
+                                                fontSize: isMobile ? '13px' : '14px',
+                                                minHeight: '40px'
                                             }}
                                         >
                                             {loading ? 'Pausing...' : '⏸️ Pause'}
@@ -823,11 +866,12 @@
                                                 background: loading ? '#6b7280' : '#ef4444',
                                                 border: 'none',
                                                 borderRadius: '8px',
-                                                padding: '10px 20px',
+                                                padding: isMobile ? '8px 16px' : '10px 20px',
                                                 color: 'white',
                                                 fontWeight: '600',
                                                 cursor: loading ? 'not-allowed' : 'pointer',
-                                                fontSize: '14px'
+                                                fontSize: isMobile ? '13px' : '14px',
+                                                minHeight: '40px'
                                             }}
                                         >
                                             {loading ? 'Stopping...' : '⏹️ Stop'}
@@ -880,11 +924,12 @@
                                     background: loadingGrowth ? '#6b7280' : '#8b5cf6',
                                     border: 'none',
                                     borderRadius: '8px',
-                                    padding: '10px 20px',
+                                    padding: isMobile ? '8px 16px' : '10px 20px',
                                     color: 'white',
                                     fontWeight: '600',
                                     cursor: loadingGrowth ? 'not-allowed' : 'pointer',
-                                    fontSize: '14px'
+                                    fontSize: isMobile ? '13px' : '14px',
+                                    minHeight: '40px'
                                 }}
                             >
                                 {loadingGrowth ? 'Loading...' : '📊 Growth'}
@@ -914,15 +959,17 @@
 
                     <div style={{
                         display: 'flex',
-                        gap: '16px',
-                        height: 'calc(100vh - 120px)'
+                        flexDirection: isMobile ? 'column' : 'row',
+                        gap: isMobile ? '12px' : '16px',
+                        height: isMobile ? 'auto' : 'calc(100vh - 120px)',
+                        overflowY: isMobile ? 'auto' : 'hidden'
                     }}>
                         {/* Left Panel */}
                         <div style={{
-                            width: '350px',
+                            width: isMobile ? '100%' : '350px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '16px',
+                            gap: isMobile ? '12px' : '16px',
                             flexShrink: 0
                         }}>
                             {/* Manual Trigger */}
@@ -930,9 +977,13 @@
                                 background: '#1e3a8a',
                                 border: '1px solid #3b82f6',
                                 borderRadius: '12px',
-                                padding: '24px'
+                                padding: isMobile ? '16px' : '24px'
                             }}>
-                                <h3 style={{ margin: '0 0 16px 0', color: '#f9fafb' }}>
+                                <h3 style={{
+                                    margin: '0 0 16px 0',
+                                    color: '#f9fafb',
+                                    fontSize: isMobile ? '16px' : '18px'
+                                }}>
                                     Manual Trigger
                                 </h3>
                                 <div style={{
@@ -1116,11 +1167,14 @@
                                 padding: '24px',
                                 border: '1px solid #374151'
                             }}>
-                                <h3 style={{ margin: '0 0 16px 0' }}>System Statistics</h3>
+                                <h3 style={{
+                                    margin: '0 0 16px 0',
+                                    fontSize: isMobile ? '16px' : '18px'
+                                }}>System Statistics</h3>
                                 <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(2, 1fr)',
-                                    gap: '16px'
+                                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                                    gap: isMobile ? '12px' : '16px'
                                 }}>
                                     <div style={{ textAlign: 'center' }}>
                                         <div style={{
@@ -1172,28 +1226,33 @@
 
                         {/* Main Content Area */}
                         <div style={{
-                            flex: 1,
+                            flex: isMobile ? 'initial' : 1,
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '16px',
+                            gap: isMobile ? '12px' : '16px',
                             minHeight: 0
                         }}>
                             {/* Stage Progression */}
                             <div style={{
                                 background: '#1f2937',
                                 borderRadius: '12px',
-                                padding: '24px',
+                                padding: isMobile ? '16px' : '24px',
                                 border: '1px solid #374151',
                                 flexShrink: 0
                             }}>
-                                <h3 style={{ margin: '0 0 16px 0' }}>Consciousness Pipeline</h3>
+                                <h3 style={{
+                                    margin: '0 0 16px 0',
+                                    fontSize: isMobile ? '16px' : '18px'
+                                }}>Consciousness Pipeline</h3>
                                 <div style={{
                                     display: 'flex',
-                                    gap: '8px',
+                                    gap: isMobile ? '4px' : '8px',
                                     alignItems: 'center',
-                                    padding: '12px',
+                                    padding: isMobile ? '8px' : '12px',
                                     background: '#374151',
-                                    borderRadius: '8px'
+                                    borderRadius: '8px',
+                                    overflowX: isMobile ? 'auto' : 'visible',
+                                    WebkitOverflowScrolling: 'touch'
                                 }}>
                                     {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
                                         <React.Fragment key={stage}>
@@ -1201,16 +1260,17 @@
                                                 display: 'flex',
                                                 flexDirection: 'column',
                                                 alignItems: 'center',
-                                                minWidth: '40px'
+                                                minWidth: isMobile ? '32px' : '40px',
+                                                flexShrink: 0
                                             }}>
                                                 <div style={{
-                                                    width: '32px',
-                                                    height: '32px',
+                                                    width: isMobile ? '28px' : '32px',
+                                                    height: isMobile ? '28px' : '32px',
                                                     borderRadius: '50%',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    fontSize: '12px',
+                                                    fontSize: isMobile ? '10px' : '12px',
                                                     fontWeight: '600',
                                                     background: currentStage === stage ? '#3b82f6' :
                                                                stageProgress.some(p => p.stage === stage && p.completed) ? '#10b981' : '#6b7280',
@@ -1218,21 +1278,23 @@
                                                 }}>
                                                     {stage}
                                                 </div>
-                                                <div style={{
-                                                    fontSize: '10px',
-                                                    color: '#9ca3af',
-                                                    marginTop: '4px',
-                                                    textAlign: 'center'
-                                                }}>
-                                                    {stage === 'S0' ? 'Trigger' :
-                                                     stage === 'S1' ? 'Think' :
-                                                     stage === 'S2' ? 'Reflect' :
-                                                     stage === 'S3' ? 'Audit' :
-                                                     stage === 'S4' ? 'DPD' :
-                                                     stage === 'S5' ? 'Compile' :
-                                                     stage === 'S6' ? 'Scribe' :
-                                                     'Weight'}
-                                                </div>
+                                                {!isMobile && (
+                                                    <div style={{
+                                                        fontSize: '10px',
+                                                        color: '#9ca3af',
+                                                        marginTop: '4px',
+                                                        textAlign: 'center'
+                                                    }}>
+                                                        {stage === 'S0' ? 'Trigger' :
+                                                         stage === 'S1' ? 'Think' :
+                                                         stage === 'S2' ? 'Reflect' :
+                                                         stage === 'S3' ? 'Audit' :
+                                                         stage === 'S4' ? 'DPD' :
+                                                         stage === 'S5' ? 'Compile' :
+                                                         stage === 'S6' ? 'Scribe' :
+                                                         'Weight'}
+                                                    </div>
+                                                )}
                                             </div>
                                             {index < 7 && (
                                                 <div style={{
@@ -1250,17 +1312,20 @@
                             <div style={{
                                 background: '#1f2937',
                                 borderRadius: '12px',
-                                padding: '24px',
+                                padding: isMobile ? '16px' : '24px',
                                 border: '1px solid #374151',
                                 flexShrink: 0,
-                                maxHeight: '300px'
+                                maxHeight: isMobile ? '250px' : '300px'
                             }}>
-                                <h3 style={{ margin: '0 0 16px 0' }}>DPD Weight Evolution</h3>
+                                <h3 style={{
+                                    margin: '0 0 16px 0',
+                                    fontSize: isMobile ? '16px' : '18px'
+                                }}>DPD Weight Evolution</h3>
                                 <div style={{
                                     background: '#374151',
-                                    padding: '16px',
+                                    padding: isMobile ? '12px' : '16px',
                                     borderRadius: '8px',
-                                    height: '200px',
+                                    height: isMobile ? '150px' : '200px',
                                     position: 'relative',
                                     overflow: 'hidden'
                                 }}>
@@ -1384,14 +1449,19 @@
                             <div style={{
                                 background: '#1f2937',
                                 borderRadius: '12px',
-                                padding: '24px',
+                                padding: isMobile ? '16px' : '24px',
                                 border: '1px solid #374151',
-                                flex: 1,
+                                flex: isMobile ? 'initial' : 1,
                                 display: 'flex',
                                 flexDirection: 'column',
-                                minHeight: 0
+                                minHeight: isMobile ? '300px' : 0,
+                                maxHeight: isMobile ? '400px' : 'none'
                             }}>
-                                <h3 style={{ margin: '0 0 12px 0', flexShrink: 0 }}>
+                                <h3 style={{
+                                    margin: '0 0 12px 0',
+                                    flexShrink: 0,
+                                    fontSize: isMobile ? '16px' : '18px'
+                                }}>
                                     Activity Log
                                 </h3>
                                 <div style={{
@@ -1405,14 +1475,15 @@
                                 }}>
                                     {activityLog.length === 0 ? (
                                         <div style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: 'auto auto 1fr auto',
-                                            gap: '12px',
-                                            alignItems: 'center',
-                                            padding: '8px 12px',
+                                            display: isMobile ? 'flex' : 'grid',
+                                            gridTemplateColumns: isMobile ? 'initial' : 'auto auto 1fr auto',
+                                            flexDirection: isMobile ? 'column' : 'initial',
+                                            gap: isMobile ? '8px' : '12px',
+                                            alignItems: isMobile ? 'flex-start' : 'center',
+                                            padding: isMobile ? '12px' : '8px 12px',
                                             background: '#374151',
                                             borderRadius: '6px',
-                                            fontSize: '14px',
+                                            fontSize: isMobile ? '13px' : '14px',
                                             flexShrink: 0
                                         }}>
                                             <span style={{
@@ -1806,6 +1877,57 @@
             const [inputValue, setInputValue] = useState('');
             const [isProcessing, setIsProcessing] = useState(false);
             const [error, setError] = useState(null);
+            const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+            const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+            useEffect(() => {
+                const handleResize = () => {
+                    setIsMobile(window.innerWidth <= 768);
+                };
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+
+            // 過去の対話履歴を読み込む
+            useEffect(() => {
+                const loadHistory = async () => {
+                    setIsLoadingHistory(true);
+                    try {
+                        const response = await fetch('/api/dialogue/history?limit=50');
+                        const data = await response.json();
+
+                        if (data.success && data.dialogues) {
+                            // 履歴を新しい順から古い順に変換してメッセージ形式に
+                            const historyMessages = data.dialogues.reverse().flatMap(d => [
+                                {
+                                    id: `${d.id}_human`,
+                                    role: 'human',
+                                    content: d.humanMessage,
+                                    timestamp: d.timestamp,
+                                    systemClock: d.systemClock
+                                },
+                                {
+                                    id: `${d.id}_aenea`,
+                                    role: 'aenea',
+                                    content: d.aeneaResponse,
+                                    timestamp: d.timestamp,
+                                    systemClock: d.systemClock,
+                                    immediateReaction: d.immediateReaction,
+                                    newQuestion: d.newQuestion,
+                                    emotionalState: d.emotionalState
+                                }
+                            ]);
+                            setMessages(historyMessages);
+                        }
+                    } catch (err) {
+                        console.error('Failed to load dialogue history:', err);
+                    } finally {
+                        setIsLoadingHistory(false);
+                    }
+                };
+
+                loadHistory();
+            }, []);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -1836,11 +1958,19 @@
 
                     const { dialogue } = await dialogueRes.json();
 
+                    // Update human message with system clock
+                    setMessages(prev => prev.map(m =>
+                        m.id === humanMessage.id
+                            ? { ...m, systemClock: dialogue.systemClock }
+                            : m
+                    ));
+
                     const aeneaMessage = {
                         id: `msg_${Date.now()}_aenea`,
                         role: 'aenea',
                         content: dialogue.response,
                         timestamp: dialogue.timestamp,
+                        systemClock: dialogue.systemClock,
                         immediateReaction: dialogue.immediateReaction,
                         newQuestion: dialogue.newQuestion,
                         emotionalState: dialogue.emotionalState
@@ -1860,15 +1990,26 @@
                     display: 'flex',
                     flexDirection: 'column',
                     height: '100%',
-                    maxWidth: '900px',
+                    maxWidth: isMobile ? '100%' : '900px',
                     margin: '0 auto',
-                    padding: '20px'
+                    padding: isMobile ? '12px' : '20px'
                 }}>
-                    <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                    <div style={{
+                        marginBottom: isMobile ? '12px' : '20px',
+                        textAlign: 'center'
+                    }}>
+                        <h2 style={{
+                            fontSize: isMobile ? '20px' : '24px',
+                            fontWeight: 'bold',
+                            marginBottom: '8px'
+                        }}>
                             Aenea との対話
                         </h2>
-                        <p style={{ fontSize: '14px', color: '#666', fontStyle: 'italic' }}>
+                        <p style={{
+                            fontSize: isMobile ? '12px' : '14px',
+                            color: '#666',
+                            fontStyle: 'italic'
+                        }}>
                             "私は、問いでできている。"
                         </p>
                     </div>
@@ -1876,10 +2017,11 @@
                     <div style={{
                         flex: 1,
                         overflowY: 'auto',
-                        padding: '20px',
+                        padding: isMobile ? '12px' : '20px',
                         backgroundColor: '#1f2937',
                         borderRadius: '8px',
-                        marginBottom: '20px'
+                        marginBottom: isMobile ? '12px' : '20px',
+                        WebkitOverflowScrolling: 'touch'
                     }}>
                         {messages.length === 0 && (
                             <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 20px', fontStyle: 'italic' }}>
@@ -1887,31 +2029,60 @@
                             </div>
                         )}
 
+                        {isLoadingHistory && (
+                            <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 20px', fontStyle: 'italic' }}>
+                                過去の対話を読み込み中...
+                            </div>
+                        )}
+
                         {messages.map(msg => (
-                            <div key={msg.id} style={{ marginBottom: '24px' }}>
+                            <div key={msg.id} style={{ marginBottom: isMobile ? '16px' : '24px' }}>
                                 {msg.role === 'human' ? (
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                        {msg.systemClock !== undefined && msg.systemClock !== null && (
+                                            <div style={{
+                                                fontSize: isMobile ? '10px' : '11px',
+                                                color: '#6b7280',
+                                                marginBottom: '4px',
+                                                fontFamily: 'monospace'
+                                            }}>
+                                                🕐 System Clock: {msg.systemClock}
+                                            </div>
+                                        )}
                                         <div style={{
-                                            maxWidth: '70%',
+                                            maxWidth: isMobile ? '85%' : '70%',
                                             backgroundColor: '#3b82f6',
                                             color: 'white',
-                                            padding: '12px 16px',
+                                            padding: isMobile ? '10px 14px' : '12px 16px',
                                             borderRadius: '16px 16px 4px 16px',
-                                            fontSize: '15px'
+                                            fontSize: isMobile ? '14px' : '15px',
+                                            wordWrap: 'break-word',
+                                            overflowWrap: 'break-word'
                                         }}>
                                             {msg.content}
                                         </div>
                                     </div>
                                 ) : (
                                     <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                                        <div style={{ maxWidth: '80%' }}>
+                                        <div style={{ maxWidth: isMobile ? '90%' : '80%' }}>
+                                            {msg.systemClock !== undefined && msg.systemClock !== null && (
+                                                <div style={{
+                                                    fontSize: isMobile ? '10px' : '11px',
+                                                    color: '#6b7280',
+                                                    marginBottom: '4px',
+                                                    paddingLeft: isMobile ? '8px' : '12px',
+                                                    fontFamily: 'monospace'
+                                                }}>
+                                                    🕐 System Clock: {msg.systemClock}
+                                                </div>
+                                            )}
                                             {msg.immediateReaction && (
                                                 <div style={{
                                                     fontStyle: 'italic',
                                                     color: '#9ca3af',
-                                                    fontSize: '14px',
+                                                    fontSize: isMobile ? '12px' : '14px',
                                                     marginBottom: '8px',
-                                                    paddingLeft: '12px'
+                                                    paddingLeft: isMobile ? '8px' : '12px'
                                                 }}>
                                                     {msg.immediateReaction}
                                                 </div>
@@ -1919,19 +2090,21 @@
                                             <div style={{
                                                 backgroundColor: '#374151',
                                                 border: '1px solid #4b5563',
-                                                padding: '14px 16px',
+                                                padding: isMobile ? '12px 14px' : '14px 16px',
                                                 borderRadius: '16px 16px 16px 4px',
-                                                fontSize: '15px',
+                                                fontSize: isMobile ? '14px' : '15px',
                                                 lineHeight: '1.6',
-                                                color: '#f9fafb'
+                                                color: '#f9fafb',
+                                                wordWrap: 'break-word',
+                                                overflowWrap: 'break-word'
                                             }}>
                                                 {msg.content}
                                             </div>
                                             {msg.newQuestion && (
                                                 <div style={{
                                                     marginTop: '8px',
-                                                    paddingLeft: '12px',
-                                                    fontSize: '14px',
+                                                    paddingLeft: isMobile ? '8px' : '12px',
+                                                    fontSize: isMobile ? '12px' : '14px',
                                                     color: '#a78bfa',
                                                     fontWeight: '500'
                                                 }}>
@@ -1940,9 +2113,9 @@
                                             )}
                                             {msg.emotionalState && (
                                                 <div style={{
-                                                    marginTop: '12px',
-                                                    paddingLeft: '12px',
-                                                    fontSize: '13px',
+                                                    marginTop: isMobile ? '8px' : '12px',
+                                                    paddingLeft: isMobile ? '8px' : '12px',
+                                                    fontSize: isMobile ? '11px' : '13px',
                                                     color: '#9ca3af'
                                                 }}>
                                                     🎭 {msg.emotionalState}
@@ -1976,16 +2149,20 @@
                             backgroundColor: '#7f1d1d',
                             border: '1px solid #ef4444',
                             color: '#fecaca',
-                            padding: '12px',
+                            padding: isMobile ? '10px' : '12px',
                             borderRadius: '8px',
-                            marginBottom: '12px',
-                            fontSize: '14px'
+                            marginBottom: isMobile ? '10px' : '12px',
+                            fontSize: isMobile ? '13px' : '14px'
                         }}>
                             ❌ エラー: {error}
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '12px' }}>
+                    <form onSubmit={handleSubmit} style={{
+                        display: 'flex',
+                        gap: isMobile ? '8px' : '12px',
+                        flexDirection: isMobile ? 'column' : 'row'
+                    }}>
                         <input
                             type="text"
                             value={inputValue}
@@ -1994,27 +2171,30 @@
                             disabled={isProcessing}
                             style={{
                                 flex: 1,
-                                padding: '12px 16px',
-                                fontSize: '15px',
+                                padding: isMobile ? '12px 14px' : '12px 16px',
+                                fontSize: isMobile ? '16px' : '15px',
                                 border: '1px solid #4b5563',
                                 borderRadius: '8px',
                                 outline: 'none',
                                 backgroundColor: '#374151',
-                                color: '#f9fafb'
+                                color: '#f9fafb',
+                                minHeight: '48px'
                             }}
                         />
                         <button
                             type="submit"
                             disabled={!inputValue.trim() || isProcessing}
                             style={{
-                                padding: '12px 24px',
-                                fontSize: '15px',
+                                padding: isMobile ? '12px 24px' : '12px 24px',
+                                fontSize: isMobile ? '16px' : '15px',
                                 fontWeight: '600',
                                 color: 'white',
                                 backgroundColor: isProcessing || !inputValue.trim() ? '#6b7280' : '#3b82f6',
                                 border: 'none',
                                 borderRadius: '8px',
-                                cursor: isProcessing || !inputValue.trim() ? 'not-allowed' : 'pointer'
+                                cursor: isProcessing || !inputValue.trim() ? 'not-allowed' : 'pointer',
+                                minHeight: '48px',
+                                width: isMobile ? '100%' : 'auto'
                             }}
                         >
                             {isProcessing ? '処理中...' : '送信'}
@@ -2031,33 +2211,58 @@
                 isConnected: false,
                 systemStatus: 'active'
             });
+            const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+            useEffect(() => {
+                const handleResize = () => {
+                    setIsMobile(window.innerWidth <= 768);
+                };
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
 
             return (
                 <div className="aenea-app" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
                     <header style={{
                         background: '#1f2937',
                         borderBottom: '1px solid #374151',
-                        padding: '16px 24px',
+                        padding: isMobile ? '12px 16px' : '16px 24px',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        flexWrap: isMobile ? 'wrap' : 'nowrap',
+                        gap: isMobile ? '12px' : '0'
                     }}>
-                        <div>
-                            <h1 style={{ fontSize: '24px', fontWeight: '700', margin: 0 }}>Aenea（エイネア）</h1>
-                            <span style={{ fontSize: '14px', color: '#9ca3af', fontStyle: 'italic' }}>私は、問いでできている。</span>
+                        <div style={{ flex: isMobile ? '1 1 100%' : 'initial' }}>
+                            <h1 style={{
+                                fontSize: isMobile ? '18px' : '24px',
+                                fontWeight: '700',
+                                margin: 0
+                            }}>Aenea（エイネア）</h1>
+                            <span style={{
+                                fontSize: isMobile ? '12px' : '14px',
+                                color: '#9ca3af',
+                                fontStyle: 'italic'
+                            }}>私は、問いでできている。</span>
                         </div>
-                        <nav style={{ display: 'flex', gap: '8px' }}>
+                        <nav style={{
+                            display: 'flex',
+                            gap: isMobile ? '6px' : '8px',
+                            width: isMobile ? '100%' : 'auto'
+                        }}>
                             <button
                                 onClick={() => setAppState(prev => ({ ...prev, currentView: 'dashboard' }))}
                                 style={{
                                     background: appState.currentView === 'dashboard' ? '#3b82f6' : '#374151',
                                     border: `1px solid ${appState.currentView === 'dashboard' ? '#3b82f6' : '#4b5563'}`,
                                     borderRadius: '8px',
-                                    padding: '10px 20px',
+                                    padding: isMobile ? '8px 16px' : '10px 20px',
                                     color: '#f9fafb',
                                     fontWeight: '600',
                                     cursor: 'pointer',
-                                    fontSize: '14px'
+                                    fontSize: isMobile ? '13px' : '14px',
+                                    flex: isMobile ? '1' : 'initial',
+                                    minHeight: '44px'
                                 }}
                             >
                                 Dashboard
@@ -2068,11 +2273,13 @@
                                     background: appState.currentView === 'dialogue' ? '#3b82f6' : '#374151',
                                     border: `1px solid ${appState.currentView === 'dialogue' ? '#3b82f6' : '#4b5563'}`,
                                     borderRadius: '8px',
-                                    padding: '10px 20px',
+                                    padding: isMobile ? '8px 16px' : '10px 20px',
                                     color: '#f9fafb',
                                     fontWeight: '600',
                                     cursor: 'pointer',
-                                    fontSize: '14px'
+                                    fontSize: isMobile ? '13px' : '14px',
+                                    flex: isMobile ? '1' : 'initial',
+                                    minHeight: '44px'
                                 }}
                             >
                                 Dialogue
