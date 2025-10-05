@@ -46,7 +46,20 @@ router.get('/state', (_req, res) => {
   }
 
   const state = consciousness.getState();
-  res.json(state);
+  const statistics = consciousness.getStatistics();
+
+  // Combine state with statistics for UI
+  res.json({
+    ...state,
+    statistics: {
+      totalThoughtCycles: statistics.totalThoughts || 0,
+      totalQuestions: statistics.totalQuestions || 0,
+      averageConfidence: (statistics.averageConfidence || 0) / 100, // Convert back to 0-1 range
+      uptime: statistics.uptime || 0
+    },
+    currentEnergy: state.energy,
+    dpdScores: state.dpdWeights
+  });
 });
 
 // GET /api/consciousness/statistics

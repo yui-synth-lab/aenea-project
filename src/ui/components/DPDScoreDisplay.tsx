@@ -186,21 +186,95 @@ export const DPDScoreDisplay: React.FC = () => {
       {isExpanded && (
         <div className="dpd-content">
           <div className="current-scores">
-            {history.length > 0 && (
-              <>
-                {renderScoreDimension('Empathy 共感', history[0].scores.empathy, currentWeights.empathy, 'empathy')}
-                {renderScoreDimension('Coherence 一貫性', history[0].scores.coherence, currentWeights.coherence, 'coherence')}
-                {renderScoreDimension('Dissonance 不協和', history[0].scores.dissonance, currentWeights.dissonance, 'dissonance')}
-
-                <div className="total-score">
-                  {renderScoreDimension('Weighted Total', history[0].scores.weightedTotal, 1.0, 'total')}
-                </div>
-              </>
-            )}
+            <>
+              {renderScoreDimension('Empathy 共感', currentWeights.empathy, currentWeights.empathy, 'empathy')}
+              {renderScoreDimension('Coherence 一貫性', currentWeights.coherence, currentWeights.coherence, 'coherence')}
+              {renderScoreDimension('Dissonance 不協和', currentWeights.dissonance, currentWeights.dissonance, 'dissonance')}
+            </>
           </div>
 
           <div className="weight-evolution">
-            <div className="section-title">Weight Evolution</div>
+            <div className="section-title">Weight Evolution Chart</div>
+            <div className="evolution-chart">
+              {history.length > 1 ? (
+                <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  {/* Stacked area chart */}
+                  {/* Bottom: Dissonance (orange) */}
+                  <polygon
+                    fill="#f59e0b"
+                    fillOpacity="0.7"
+                    stroke="#f59e0b"
+                    strokeWidth="0.5"
+                    points={
+                      history.map((entry, index) => {
+                        const x = (index / (history.length - 1)) * 100;
+                        return `${x},100`;
+                      }).join(' ') + ' ' +
+                      history.map((entry, index) => {
+                        const x = (index / (history.length - 1)) * 100;
+                        const y = 100 - (entry.scores.dissonance * 100);
+                        return `${x},${y}`;
+                      }).reverse().join(' ')
+                    }
+                  />
+                  {/* Middle: Coherence (blue) */}
+                  <polygon
+                    fill="#3b82f6"
+                    fillOpacity="0.7"
+                    stroke="#3b82f6"
+                    strokeWidth="0.5"
+                    points={
+                      history.map((entry, index) => {
+                        const x = (index / (history.length - 1)) * 100;
+                        const y = 100 - (entry.scores.dissonance * 100);
+                        return `${x},${y}`;
+                      }).join(' ') + ' ' +
+                      history.map((entry, index) => {
+                        const x = (index / (history.length - 1)) * 100;
+                        const y = 100 - (entry.scores.dissonance * 100) - (entry.scores.coherence * 100);
+                        return `${x},${y}`;
+                      }).reverse().join(' ')
+                    }
+                  />
+                  {/* Top: Empathy (green) */}
+                  <polygon
+                    fill="#10b981"
+                    fillOpacity="0.7"
+                    stroke="#10b981"
+                    strokeWidth="0.5"
+                    points={
+                      history.map((entry, index) => {
+                        const x = (index / (history.length - 1)) * 100;
+                        const y = 100 - (entry.scores.dissonance * 100) - (entry.scores.coherence * 100);
+                        return `${x},${y}`;
+                      }).join(' ') + ' ' +
+                      history.map((entry, index) => {
+                        const x = (index / (history.length - 1)) * 100;
+                        return `${x},0`;
+                      }).reverse().join(' ')
+                    }
+                  />
+                </svg>
+              ) : (
+                <div className="no-data">Waiting for weight evolution data...</div>
+              )}
+
+              <div className="chart-legend">
+                <div className="legend-item">
+                  <div className="legend-color empathy"></div>
+                  <span>Empathy</span>
+                </div>
+                <div className="legend-item">
+                  <div className="legend-color coherence"></div>
+                  <span>Coherence</span>
+                </div>
+                <div className="legend-item">
+                  <div className="legend-color dissonance"></div>
+                  <span>Dissonance</span>
+                </div>
+              </div>
+            </div>
+
             <div className="weight-display">
               <div className="weight-item">
                 <span>E: {(currentWeights.empathy * 100).toFixed(1)}%</span>
@@ -372,6 +446,65 @@ export const DPDScoreDisplay: React.FC = () => {
           background: #374151;
           padding: 16px;
           border-radius: 8px;
+        }
+
+        .evolution-chart {
+          background: #1f2937;
+          padding: 16px;
+          border-radius: 8px;
+          height: 200px;
+          position: relative;
+          margin-bottom: 16px;
+        }
+
+        .evolution-chart svg {
+          width: 100%;
+          height: 100%;
+        }
+
+        .no-data {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          color: #9ca3af;
+          font-size: 14px;
+        }
+
+        .chart-legend {
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
+          display: flex;
+          gap: 12px;
+          font-size: 12px;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .legend-color {
+          width: 12px;
+          height: 2px;
+        }
+
+        .legend-color.empathy {
+          background: #10b981;
+        }
+
+        .legend-color.coherence {
+          background: #3b82f6;
+        }
+
+        .legend-color.dissonance {
+          background: #f59e0b;
+        }
+
+        .legend-item span {
+          color: #e5e7eb;
         }
 
         .section-title {

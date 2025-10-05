@@ -38,22 +38,6 @@ export const ConsciousnessView: React.FC = () => {
   const [isThinking, setIsThinking] = useState(false);
   const thoughtStreamRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // システムクロックの更新
-    const clockInterval = setInterval(() => {
-      setConsciousnessState(prev => ({
-        ...prev,
-        systemClock: prev.systemClock + 0.001
-      }));
-    }, 1000);
-
-    // 模擬的な意識活動
-    startConsciousnessSimulation();
-
-    return () => {
-      clearInterval(clockInterval);
-    };
-  }, []);
 
   const startConsciousnessSimulation = () => {
     // 定期的な内部トリガー生成のシミュレーション

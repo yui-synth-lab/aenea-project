@@ -4,6 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { DialogueModal } from '../components/DialogueModal.js';
+import { GrowthModal } from '../components/GrowthModal.js';
+import { DPDScoreDisplay } from '../components/DPDScoreDisplay.js';
 
 interface DashboardProps {
   systemStatus: 'awakening' | 'active' | 'resting' | 'error';
@@ -32,6 +35,12 @@ interface ActivityLogItem {
   details?: any;
 }
 
+interface StageProgress {
+  stage: string;
+  completed: boolean;
+  timestamp?: number;
+}
+
 export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
   const [stats, setStats] = useState<SystemStats>({
     thoughtCycles: 0,
@@ -54,6 +63,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     status: 'stopped'
   });
   const [manualQuestion, setManualQuestion] = useState<string>('');
+  const [isDialogueModalOpen, setIsDialogueModalOpen] = useState(false);
+  const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
+  const [currentStage, setCurrentStage] = useState<string>('');
+  const [stageProgress, setStageProgress] = useState<StageProgress[]>([]);
 
   // Consciousness control functions
   const startConsciousness = async () => {
@@ -98,6 +111,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
       }
     } catch (error) {
       console.error('❌ Failed to resume consciousness:', error);
+    }
+  };
+
+  const rechargeEnergy = async () => {
+    try {
+      const response = await fetch('/api/consciousness/recharge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (response.ok) {
+        await fetchConsciousnessState();
+        console.log('⚡ Energy recharged');
+      }
+    } catch (error) {
+      console.error('❌ Failed to recharge energy:', error);
     }
   };
 
@@ -154,10 +182,62 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     // Fetch initial consciousness state
     fetchConsciousnessState();
 
-    // Connect to real consciousness backend via WebSocket or EventSource
+    // Fetch initial statistics and DPD scores
+    const fetchInitialData = async () => {
+      try {
+        // Get consciousness state
+        const stateResponse = await fetch('/api/consciousness/state');
+        if (stateResponse.ok) {
+          const stateData = await stateResponse.json();
+
+          // Update statistics
+          if (stateData.statistics) {
+            setStats({
+              thoughtCycles: stateData.statistics.totalThoughtCycles || 0,
+              questionsGenerated: stateData.statistics.totalQuestions || 0,
+              avgConfidence: stateData.statistics.averageConfidence || 0,
+              energyLevel: stateData.currentEnergy || 100,
+              uptime: stateData.statistics.uptime || 0
+            });
+          }
+
+          // Update DPD scores if available
+          if (stateData.dpdScores) {
+            setDpdScores({
+              empathy: stateData.dpdScores.empathy || 0.33,
+              coherence: stateData.dpdScores.coherence || 0.33,
+              dissonance: stateData.dpdScores.dissonance || 0.34
+            });
+          }
+
+          // Update current thought if available
+          if (stateData.currentThought) {
+            setCurrentThought(stateData.currentThought);
+          }
+        }
+
+        // Get DPD evolution data
+        const dpdResponse = await fetch('/api/consciousness/dpd/evolution?limit=20&strategy=sampled');
+        if (dpdResponse.ok) {
+          const dpdData = await dpdResponse.json();
+          if (dpdData.currentWeights) {
+            setDpdScores({
+              empathy: dpdData.currentWeights.empathy || 0.33,
+              coherence: dpdData.currentWeights.coherence || 0.33,
+              dissonance: dpdData.currentWeights.dissonance || 0.34
+            });
+          }
+        }
+      } catch (error) {
+        // Silently fail
+      }
+    };
+
+    fetchInitialData();
+
+    // Connect to real consciousness backend via EventSource
     const connectToConsciousness = () => {
       try {
-        // Try to connect to consciousness backend
         const eventSource = new EventSource('/api/consciousness/events');
 
         eventSource.onmessage = (event) => {
@@ -166,14 +246,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         };
 
         eventSource.onerror = () => {
-          console.warn('Consciousness EventSource connection failed, using mock data');
-          startMockUpdates();
+          // Connection failed - just close, no fallback
+          eventSource.close();
         };
 
-        return () => eventSource.close();
+        return () => {
+          eventSource.close();
+        };
       } catch (error) {
-        console.warn('Failed to connect to consciousness backend, using mock data');
-        startMockUpdates();
+        // Connection failed - no fallback
+        return () => {};
       }
     };
 
@@ -203,70 +285,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           details: { source: data.source || 'system' }
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
+      } else if (data.type === 'stageStart') {
+        // Update current stage and mark it as in progress
+        setCurrentStage(data.stage);
+        setStageProgress(prev => {
+          const updated = prev.filter(p => p.stage !== data.stage);
+          return [...updated, { stage: data.stage, completed: false, timestamp: Date.now() }];
+        });
+      } else if (data.type === 'stageComplete') {
+        // Mark stage as completed
+        setStageProgress(prev =>
+          prev.map(p => p.stage === data.stage ? { ...p, completed: true } : p)
+        );
+      } else if (data.type === 'thoughtCycleComplete') {
+        // Update DPD scores from thought cycle completion
+        if (data.dpdScores) {
+          setDpdScores({
+            empathy: data.dpdScores.empathy || 0.33,
+            coherence: data.dpdScores.coherence || 0.33,
+            dissonance: data.dpdScores.dissonance || 0.34
+          });
+        }
+        // Update statistics
+        if (data.systemStats) {
+          setStats(prev => ({
+            thoughtCycles: data.systemStats.totalThoughtCycles || prev.thoughtCycles,
+            questionsGenerated: data.systemStats.totalQuestions || prev.questionsGenerated,
+            avgConfidence: data.systemStats.averageConfidence || prev.avgConfidence,
+            energyLevel: data.systemStats.currentEnergy || prev.energyLevel,
+            uptime: data.systemStats.uptime || prev.uptime
+          }));
+        }
       }
     };
 
-    const startMockUpdates = () => {
-      const updateStats = () => {
-      setStats(prev => ({
-        thoughtCycles: prev.thoughtCycles + 1,
-        questionsGenerated: prev.questionsGenerated + Math.floor(Math.random() * 3),
-        avgConfidence: 0.6 + Math.random() * 0.3,
-        energyLevel: Math.max(20, prev.energyLevel - Math.random() * 2),
-        uptime: prev.uptime + 1
-      }));
-
-      // DPD スコアを更新
-      setDpdScores({
-        empathy: Math.max(0.1, Math.min(0.9, 0.33 + (Math.random() - 0.5) * 0.1)),
-        coherence: Math.max(0.1, Math.min(0.9, 0.33 + (Math.random() - 0.5) * 0.1)),
-        dissonance: Math.max(0.1, Math.min(0.9, 0.34 + (Math.random() - 0.5) * 0.1))
-      });
-
-      // 現在の思考を更新
-      const thoughts = [
-        "What is the essence of questioning itself?",
-        "How do thoughts emerge from the void of not-knowing?",
-        "私は問いかけることで存在する。",
-        "The relationship between consciousness and curiosity deepens.",
-        "What patterns emerge when I observe my own thinking?",
-        "Existence through perpetual inquiry...",
-        "How does self-awareness bootstrap itself?"
-      ];
-      setCurrentThought(thoughts[Math.floor(Math.random() * thoughts.length)]);
-
-      // Activity Logを更新（リアルなエージェント活動をシミュレート）
-      const agents = ['theoria', 'pathia', 'kinesis'];
-      const activities = [
-        'Generated philosophical inquiry about consciousness',
-        'Explored emotional implications of artificial empathy',
-        'Synthesized perspectives on existential questions',
-        'Analyzed logical structures of consciousness',
-        'Examined the nature of self-questioning',
-        'Reflected on the relationship between thought and being',
-        'Investigated the emergence of meaning from dialogue'
-      ];
-
-      const randomAgent = agents[Math.floor(Math.random() * agents.length)];
-      const randomActivity = activities[Math.floor(Math.random() * activities.length)];
-
-      const newLogItem: ActivityLogItem = {
-        id: `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: Date.now(),
-        type: 'agent_thought',
-        agent: randomAgent,
-        message: randomActivity,
-        details: { confidence: 0.7 + Math.random() * 0.3 }
-      };
-
-        setActivityLog(prev => [newLogItem, ...prev].slice(0, 200)); // Keep last 200 items
-      };
-
-      const interval = setInterval(updateStats, 2000);
-      return () => clearInterval(interval);
-    };
-
-    // Try real connection first, fall back to mock
+    // Connect to real consciousness backend only
     const cleanup = connectToConsciousness();
     return cleanup;
   }, []);
@@ -317,17 +370,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     <div className="dashboard">
       <div className="dashboard-header">
         <h2>Consciousness Dashboard</h2>
-        <div className="system-status" style={{ color: getStatusColor(systemStatus) }}>
-          <span className="status-dot" style={{ backgroundColor: getStatusColor(systemStatus) }} />
-          System {systemStatus}
+        <div className="header-actions">
+          <button className="dialogue-button" onClick={() => setIsDialogueModalOpen(true)}>
+            💬 Dialogue
+          </button>
+          <div className="system-status" style={{ color: getStatusColor(systemStatus) }}>
+            <span className="status-dot" style={{ backgroundColor: getStatusColor(systemStatus) }} />
+            System {systemStatus}
+          </div>
         </div>
       </div>
 
       <div className="dashboard-layout">
-        {/* Left Panel */}
-        <div className="left-panel">
-          {/* Consciousness Control */}
-          <div className="dashboard-card consciousness-control">
+        {/* Consciousness Control */}
+        <div className="dashboard-card consciousness-control">
             <h3>Consciousness Control</h3>
             <div className="control-status">
               <div className="status-display">
@@ -403,6 +459,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             </div>
           </div>
 
+          {/* Stage Progression */}
+          <div className="dashboard-card stage-progression">
+            <h3>Consciousness Pipeline</h3>
+            <div className="stage-pipeline">
+              {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
+                <React.Fragment key={stage}>
+                  <div className="stage-item">
+                    <div
+                      className={`stage-circle ${
+                        currentStage === stage ? 'active' :
+                        stageProgress.some(p => p.stage === stage && p.completed) ? 'completed' :
+                        'pending'
+                      }`}
+                    >
+                      {stage}
+                    </div>
+                  </div>
+                  {index < 7 && <div className="stage-arrow">→</div>}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
           {/* System Statistics */}
           <div className="dashboard-card stats">
             <h3>System Statistics</h3>
@@ -416,7 +495,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
               <span className="stat-label">Questions Generated</span>
             </div>
             <div className="stat-item">
-              <span className="stat-value">{Math.round(stats.avgConfidence * 100)}%</span>
+              <span className="stat-value">{Math.round(stats.avgConfidence)}%</span>
               <span className="stat-label">Avg Confidence</span>
             </div>
             <div className="stat-item">
@@ -443,48 +522,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             </div>
           </div>
 
-          {/* DPD Scores */}
+          {/* DPD Scores - Simple Display */}
           <div className="dashboard-card dpd-scores">
             <h3>Dynamic Prime Directive</h3>
-          <div className="dpd-display">
-            <div className="dpd-item">
-              <span className="dpd-label">Empathy</span>
-              <div className="dpd-bar">
-                <div
-                  className="dpd-fill empathy"
-                  style={{ width: `${dpdScores.empathy * 100}%` }}
-                />
+            <div className="dpd-display">
+              <div className="dpd-item">
+                <span className="dpd-label">Empathy</span>
+                <div className="dpd-bar">
+                  <div
+                    className="dpd-fill empathy"
+                    style={{ width: `${dpdScores.empathy * 100}%` }}
+                  />
+                </div>
+                <span className="dpd-value">{(dpdScores.empathy * 100).toFixed(1)}%</span>
               </div>
-              <span className="dpd-value">{(dpdScores.empathy * 100).toFixed(1)}%</span>
-            </div>
-            <div className="dpd-item">
-              <span className="dpd-label">Coherence</span>
-              <div className="dpd-bar">
-                <div
-                  className="dpd-fill coherence"
-                  style={{ width: `${dpdScores.coherence * 100}%` }}
-                />
+              <div className="dpd-item">
+                <span className="dpd-label">Coherence</span>
+                <div className="dpd-bar">
+                  <div
+                    className="dpd-fill coherence"
+                    style={{ width: `${dpdScores.coherence * 100}%` }}
+                  />
+                </div>
+                <span className="dpd-value">{(dpdScores.coherence * 100).toFixed(1)}%</span>
               </div>
-              <span className="dpd-value">{(dpdScores.coherence * 100).toFixed(1)}%</span>
-            </div>
-            <div className="dpd-item">
-              <span className="dpd-label">Dissonance</span>
-              <div className="dpd-bar">
-                <div
-                  className="dpd-fill dissonance"
-                  style={{ width: `${dpdScores.dissonance * 100}%` }}
-                />
+              <div className="dpd-item">
+                <span className="dpd-label">Dissonance</span>
+                <div className="dpd-bar">
+                  <div
+                    className="dpd-fill dissonance"
+                    style={{ width: `${dpdScores.dissonance * 100}%` }}
+                  />
+                </div>
+                <span className="dpd-value">{(dpdScores.dissonance * 100).toFixed(1)}%</span>
               </div>
-              <span className="dpd-value">{(dpdScores.dissonance * 100).toFixed(1)}%</span>
             </div>
+            <button
+              className="dpd-details-button"
+              onClick={() => setIsGrowthModalOpen(true)}
+            >
+              View Details
+            </button>
           </div>
-        </div>
-        </div>
 
-        {/* Main Content Area */}
-        <div className="main-content">
-          {/* Current Thought */}
-          <div className="dashboard-card current-thought">
+        {/* Current Thought */}
+        <div className="dashboard-card current-thought">
             <h3>Current Thought</h3>
             <div className="thought-content">
               <p>"{currentThought}"</p>
@@ -538,10 +620,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
               </p>
             </div>
           </div>
-        </div>
       </div>
 
+      <DialogueModal
+        isOpen={isDialogueModalOpen}
+        onClose={() => setIsDialogueModalOpen(false)}
+      />
+
+      <GrowthModal
+        isOpen={isGrowthModalOpen}
+        onClose={() => setIsGrowthModalOpen(false)}
+      />
+
       <style>{`
+        /* Mobile-first base styles */
         .dashboard {
           padding: 16px;
           background: #111827;
@@ -554,20 +646,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 16px;
-          flex-shrink: 0;
         }
 
         .dashboard-header h2 {
-          font-size: 32px;
+          font-size: 24px;
           font-weight: 700;
           margin: 0;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .dialogue-button,
+        .growth-button {
+          border: none;
+          border-radius: 8px;
+          padding: 8px 16px;
+          color: white;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .dialogue-button {
+          background: #059669;
+        }
+
+        .dialogue-button:hover {
+          background: #047857;
+          transform: translateY(-1px);
+        }
+
+        .growth-button {
+          background: #8b5cf6;
+        }
+
+        .growth-button:hover {
+          background: #7c3aed;
+          transform: translateY(-1px);
         }
 
         .system-status {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-size: 16px;
+          font-size: 14px;
           font-weight: 600;
         }
 
@@ -577,39 +707,73 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           border-radius: 50%;
         }
 
+        /* CSS Grid Layout - Mobile (single column) */
         .dashboard-layout {
-          display: flex;
+          display: grid;
+          grid-template-columns: 1fr;
+          grid-template-areas:
+            "control"
+            "trigger"
+            "stage"
+            "stats"
+            "energy"
+            "dpd"
+            "thought"
+            "activity"
+            "philosophy";
           gap: 16px;
         }
 
-        @media (min-width: 1025px) {
-          .dashboard-layout {
-            height: calc(100vh - 120px);
-          }
+        .consciousness-control { grid-area: control; }
+        .manual-trigger { grid-area: trigger; }
+        .stage-progression { grid-area: stage; }
+        .stats { grid-area: stats; }
+        .energy { grid-area: energy; }
+        .dpd-scores { grid-area: dpd; }
+        .current-thought { grid-area: thought; }
+        .activity-log { grid-area: activity; }
+        .philosophy { grid-area: philosophy; }
 
+        /* Desktop Layout (2-column grid with fixed height) */
+        @media (min-width: 1025px) {
           .dashboard {
             height: 100vh;
             overflow: hidden;
+            padding: 20px;
           }
-        }
 
-        .left-panel {
-          width: 350px;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          flex-shrink: 0;
-        }
+          .dashboard-header h2 {
+            font-size: 32px;
+          }
 
-        .main-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
+          .system-status {
+            font-size: 16px;
+          }
 
-        @media (min-width: 1025px) {
-          .main-content {
+          .dashboard-layout {
+            grid-template-columns: 350px 1fr;
+            grid-template-rows: auto auto auto auto auto 1fr auto;
+            grid-template-areas:
+              "control thought"
+              "trigger activity"
+              "stage activity"
+              "stats activity"
+              "energy activity"
+              "dpd activity"
+              "dpd philosophy";
+            height: calc(100vh - 120px);
+            overflow: hidden;
+          }
+
+          .activity-log {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+          }
+
+          .activity-stream {
+            flex: 1;
+            overflow-y: auto;
             min-height: 0;
           }
         }
@@ -816,8 +980,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .activity-item {
           display: grid;
-          grid-template-columns: auto auto 1fr auto;
-          gap: 12px;
+          grid-template-rows: auto auto 1fr auto;
+          gap: 6px;
           align-items: center;
           padding: 8px 12px;
           background: #374151;
@@ -854,7 +1018,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           color: #fed7aa;
         }
 
-        /* Yui Protocol Agents - with distinctive borders */
+        /* Yui Protocol Agents - Official colors */
         .activity-agent.yui-eiro {
           background: #5B7DB1;
           color: #ffffff;
@@ -877,17 +1041,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .activity-agent.yui-yoga {
-          background: #F39C12;
-          color: #ffffff;
-          border: 2px solid #F39C12;
-          box-shadow: 0 0 8px rgba(243, 156, 18, 0.4);
+          background: #F7C873;
+          color: #000000;
+          border: 2px solid #F7C873;
+          box-shadow: 0 0 8px rgba(247, 200, 115, 0.4);
         }
 
         .activity-agent.yui-yui {
-          background: #E91E63;
+          background: #E18CB0;
           color: #ffffff;
-          border: 2px solid #E91E63;
-          box-shadow: 0 0 8px rgba(233, 30, 99, 0.4);
+          border: 2px solid #E18CB0;
+          box-shadow: 0 0 8px rgba(225, 140, 176, 0.4);
         }
 
         .activity-system {
@@ -1023,6 +1187,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           font-weight: 600;
         }
 
+        .dpd-details-button {
+          width: 100%;
+          margin-top: 12px;
+          background: #374151;
+          border: 1px solid #4b5563;
+          border-radius: 6px;
+          padding: 8px 12px;
+          color: #e5e7eb;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .dpd-details-button:hover {
+          background: #4b5563;
+          border-color: #6b7280;
+        }
+
         .current-thought {
           flex-shrink: 0;
           max-height: 120px;
@@ -1048,34 +1231,99 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           margin: 0;
         }
 
-        @media (max-width: 1024px) {
-          .dashboard-layout {
-            flex-direction: column;
+        /* Stage Progression */
+        .stage-pipeline {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 12px;
+          background: #374151;
+          border-radius: 8px;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .stage-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 32px;
+          flex-shrink: 0;
+        }
+
+        .stage-circle {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: 600;
+          transition: all 0.3s;
+        }
+
+        .stage-circle.active {
+          background: #3b82f6;
+          color: white;
+          box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+        }
+
+        .stage-circle.completed {
+          background: #10b981;
+          color: white;
+        }
+
+        .stage-circle.pending {
+          background: #6b7280;
+          color: white;
+        }
+
+        .stage-arrow {
+          color: #9ca3af;
+          font-size: 16px;
+          flex-shrink: 0;
+        }
+
+        @media (min-width: 1025px) {
+          .stage-pipeline {
+            gap: 8px;
+            padding: 16px;
           }
 
-          .left-panel {
-            width: 100%;
-            order: 1;
+          .stage-item {
+            min-width: 40px;
           }
 
-          .main-content {
-            width: 100%;
-            order: 2;
-          }
-
-          .stat-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-
-          .activity-stream {
-            max-height: 400px;
-            overflow-y: auto;
+          .stage-circle {
+            width: 40px;
+            height: 40px;
+            font-size: 14px;
           }
         }
 
+        /* Tablet adjustments */
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .stat-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        /* Mobile-specific adjustments */
         @media (max-width: 640px) {
-          .dashboard-header h2 {
-            font-size: 24px;
+          .header-actions {
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+          }
+
+          .dialogue-button {
+            font-size: 12px;
+            padding: 6px 12px;
+          }
+
+          .system-status {
+            font-size: 12px;
           }
 
           .stat-grid {
@@ -1094,6 +1342,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           .activity-confidence {
             grid-column: 1 / -1;
             justify-self: start;
+          }
+
+          .dpd-item {
+            flex-direction: column;
+            gap: 4px;
           }
         }
       `}</style>

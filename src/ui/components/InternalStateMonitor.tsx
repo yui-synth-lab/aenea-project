@@ -38,36 +38,6 @@ export const InternalStateMonitor: React.FC = () => {
 
   const [isExpanded, setIsExpanded] = useState(true);
 
-  useEffect(() => {
-    // 内部状態の定期更新シミュレーション
-    const updateInterval = setInterval(() => {
-      setInternalState(prev => ({
-        consciousness: {
-          depth: Math.max(0, Math.min(1, prev.consciousness.depth + (Math.random() - 0.5) * 0.02)),
-          complexity: Math.max(0, Math.min(1, prev.consciousness.complexity + (Math.random() - 0.5) * 0.01)),
-          selfAwareness: Math.max(0, Math.min(1, prev.consciousness.selfAwareness + (Math.random() - 0.5) * 0.005))
-        },
-        emotional: {
-          valence: Math.max(-1, Math.min(1, prev.emotional.valence + (Math.random() - 0.5) * 0.1)),
-          arousal: Math.max(0, Math.min(1, prev.emotional.arousal + (Math.random() - 0.5) * 0.05)),
-          curiosity: Math.max(0, Math.min(1, prev.emotional.curiosity + (Math.random() - 0.5) * 0.03))
-        },
-        cognitive: {
-          focus: Math.max(0, Math.min(1, prev.cognitive.focus + (Math.random() - 0.5) * 0.04)),
-          processing: Math.max(0, Math.min(1, prev.cognitive.processing + (Math.random() - 0.5) * 0.06)),
-          memory: Math.max(0, Math.min(1, prev.cognitive.memory + (Math.random() - 0.5) * 0.02))
-        },
-        growth: {
-          maturity: Math.max(0, Math.min(1, prev.growth.maturity + Math.random() * 0.001)),
-          adaptability: Math.max(0, Math.min(1, prev.growth.adaptability + (Math.random() - 0.5) * 0.01)),
-          wisdom: Math.max(0, Math.min(1, prev.growth.wisdom + Math.random() * 0.0005))
-        }
-      }));
-    }, 2000);
-
-    return () => clearInterval(updateInterval);
-  }, []);
-
   const renderStateCategory = (
     title: string,
     states: Record<string, number>,
