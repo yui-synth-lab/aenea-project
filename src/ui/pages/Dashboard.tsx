@@ -111,35 +111,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     }
   };
 
-  const rechargeEnergy = async () => {
-    try {
-      const response = await fetch('/api/consciousness/recharge-energy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (response.ok) {
-        await fetchConsciousnessState();
-        console.log('⚡ Energy recharged');
-      }
-    } catch (error) {
-      console.error('❌ Failed to recharge energy:', error);
-    }
-  };
-
-  const deepRest = async () => {
-    try {
-      const response = await fetch('/api/consciousness/deep-rest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (response.ok) {
-        await fetchConsciousnessState();
-        console.log('😴 Deep rest initiated');
-      }
-    } catch (error) {
-      console.error('❌ Failed to initiate deep rest:', error);
-    }
-  };
 
   const stopConsciousness = async () => {
     try {
@@ -153,6 +124,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
       }
     } catch (error) {
       console.error('❌ Failed to stop consciousness:', error);
+    }
+  };
+
+  const enterSleepMode = async () => {
+    try {
+      const response = await fetch('/api/consciousness/sleep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (response.ok) {
+        console.log('💤 Entering sleep mode...');
+      }
+    } catch (error) {
+      console.error('❌ Failed to enter sleep mode:', error);
     }
   };
 
@@ -368,6 +353,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           questionsGenerated: totalQuestions || prev.questionsGenerated,
           energyLevel: energy ?? prev.energyLevel
         }));
+      } else if (t === 'sleepStarted') {
+        // Sleep mode started
+        const logItem: ActivityLogItem = {
+          id: `sleep_start_${Date.now()}`,
+          timestamp: data.timestamp || Date.now(),
+          type: 'system_event',
+          message: `💤 Entering sleep mode (${data.reason})`
+        };
+        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setCurrentThought(`Sleep Mode: ${data.reason}`);
+      } else if (t === 'sleepPhaseChanged') {
+        // Sleep phase changed
+        const logItem: ActivityLogItem = {
+          id: `sleep_phase_${Date.now()}`,
+          timestamp: Date.now(),
+          type: 'system_event',
+          message: `Sleep: ${data.phase} (${data.progress}%)`
+        };
+        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setCurrentThought(`Sleep Phase: ${data.phase}`);
+      } else if (t === 'sleepCompleted') {
+        // Sleep completed
+        const duration = (data.duration / 1000).toFixed(1);
+        const energyGain = (data.energyAfter - data.energyBefore).toFixed(1);
+        const logItem: ActivityLogItem = {
+          id: `sleep_complete_${Date.now()}`,
+          timestamp: data.timestamp || Date.now(),
+          type: 'system_event',
+          message: `✨ Sleep completed (${duration}s, +${energyGain} energy)`
+        };
+        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setStats(prev => ({ ...prev, energyLevel: data.energyAfter }));
+        setCurrentThought('');
+      } else if (t === 'sleepError') {
+        // Sleep error
+        const logItem: ActivityLogItem = {
+          id: `sleep_error_${Date.now()}`,
+          timestamp: Date.now(),
+          type: 'system_event',
+          message: `❌ Sleep error: ${data.error}`
+        };
+        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
       }
     };
 
@@ -455,12 +482,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             </div>
             <div className="control-buttons">
               {!consciousnessState.isRunning ? (
-                <button
-                  className="control-button start"
-                  onClick={startConsciousness}
-                >
-                  ▶️ Start Consciousness
-                </button>
+                <>
+                  <button
+                    className="control-button start"
+                    onClick={startConsciousness}
+                  >
+                    ▶️ Start Consciousness
+                  </button>
+                  <button
+                    className="control-button sleep"
+                    onClick={enterSleepMode}
+                  >
+                    💤 Sleep
+                  </button>
+                </>
               ) : consciousnessState.isPaused ? (
                 <>
                   <button
@@ -551,14 +586,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
                 />
               </div>
               <span className="energy-percentage">{Math.round(stats.energyLevel)}%</span>
-            </div>
-            <div className="energy-controls">
-              <button className="energy-button recharge" onClick={rechargeEnergy}>
-                ⚡ Recharge
-              </button>
-              <button className="energy-button rest" onClick={deepRest}>
-                😴 Deep Rest
-              </button>
             </div>
           </div>
 

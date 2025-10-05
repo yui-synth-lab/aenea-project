@@ -166,61 +166,6 @@ router.post('/stop', (_req, res) => {
   }
 });
 
-// POST /api/consciousness/recharge-energy
-router.post('/recharge-energy', (req, res) => {
-  if (!consciousness) {
-    return res.status(500).json({ error: 'Consciousness not initialized' });
-  }
-
-  try {
-    const { amount } = req.body || {};
-    const result = consciousness.rechargeEnergy(amount);
-
-    if (result) {
-      const energyState = consciousness.getEnergyState();
-      res.json({
-        success: true,
-        message: 'エネルギー充電完了',
-        energyState
-      });
-    } else {
-      res.json({
-        success: false,
-        message: 'エネルギーは既に満タンです'
-      });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
-
-// POST /api/consciousness/deep-rest
-router.post('/deep-rest', (_req, res) => {
-  if (!consciousness) {
-    return res.status(500).json({ error: 'Consciousness not initialized' });
-  }
-
-  try {
-    const result = consciousness.performDeepRest();
-
-    if (result) {
-      const energyState = consciousness.getEnergyState();
-      res.json({
-        success: true,
-        message: '深い休息によってエネルギーと効率が回復しました',
-        energyState
-      });
-    } else {
-      res.json({
-        success: false,
-        message: '深い休息は実行できませんでした'
-      });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
-
 // GET /api/consciousness/debug/database
 router.get('/debug/database', async (_req, res) => {
   if (!consciousness) {
@@ -247,55 +192,6 @@ router.get('/debug/database', async (_req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
-
-// POST /api/consciousness/recharge - Manual energy recharge
-router.post('/recharge', (req, res) => {
-  if (!consciousness) {
-    return res.status(500).json({ error: 'Consciousness not initialized' });
-  }
-
-  try {
-    const { amount } = req.body || {};
-    const energyAmount = amount ? parseFloat(amount) : undefined;
-
-    const success = consciousness.rechargeEnergy(energyAmount);
-    const newState = consciousness.getEnergyState();
-
-    res.json({
-      success,
-      energy: newState.available,
-      maxEnergy: newState.total,
-      percentage: Math.round((newState.available / newState.total) * 100),
-      message: success ? 'Energy recharged successfully' : 'Energy recharge not needed or failed'
-    });
-  } catch (error) {
-    console.error('Energy recharge error:', error);
-    res.status(500).json({ success: false, error: 'Failed to recharge energy' });
-  }
-});
-
-// POST /api/consciousness/deep-rest - Deep rest energy restoration
-router.post('/deep-rest', (req, res) => {
-  if (!consciousness) {
-    return res.status(500).json({ error: 'Consciousness not initialized' });
-  }
-
-  try {
-    const success = consciousness.performDeepRest();
-    const newState = consciousness.getEnergyState();
-
-    res.json({
-      success,
-      energy: newState.available,
-      maxEnergy: newState.total,
-      percentage: Math.round((newState.available / newState.total) * 100),
-      message: success ? 'Deep rest completed - energy and efficiency restored' : 'Deep rest not needed or failed'
-    });
-  } catch (error) {
-    console.error('Deep rest error:', error);
-    res.status(500).json({ success: false, error: 'Failed to perform deep rest' });
   }
 });
 
@@ -427,6 +323,10 @@ router.get('/events', (req, res) => {
   const energyRechargedListener = (data: any) => sendEvent('energyRecharged', data);
   const deepRestPerformedListener = (data: any) => sendEvent('deepRestPerformed', data);
   const consciousnessDormantListener = (data: any) => sendEvent('consciousnessDormant', data);
+  const sleepStartedListener = (data: any) => sendEvent('sleepStarted', data);
+  const sleepPhaseChangedListener = (data: any) => sendEvent('sleepPhaseChanged', data);
+  const sleepCompletedListener = (data: any) => sendEvent('sleepCompleted', data);
+  const sleepErrorListener = (data: any) => sendEvent('sleepError', data);
   const consciousnessAwakenedListener = (data: any) => sendEvent('consciousnessAwakened', data);
   const energyUpdatedListener = (data: any) => sendEvent('energyUpdated', data);
 
@@ -451,7 +351,11 @@ router.get('/events', (req, res) => {
   consciousness.on('consciousnessDormant', consciousnessDormantListener);
   consciousness.on('consciousnessAwakened', consciousnessAwakenedListener);
   consciousness.on('energyUpdated', energyUpdatedListener);
-  console.log('✅ SSE event listeners registered (20 events)');
+  consciousness.on('sleepStarted', sleepStartedListener);
+  consciousness.on('sleepPhaseChanged', sleepPhaseChangedListener);
+  consciousness.on('sleepCompleted', sleepCompletedListener);
+  consciousness.on('sleepError', sleepErrorListener);
+  console.log('✅ SSE event listeners registered (24 events)');
 
   // Clean up on client disconnect
   req.on('close', () => {
@@ -475,8 +379,41 @@ router.get('/events', (req, res) => {
     consciousness.removeListener('consciousnessDormant', consciousnessDormantListener);
     consciousness.removeListener('consciousnessAwakened', consciousnessAwakenedListener);
     consciousness.removeListener('energyUpdated', energyUpdatedListener);
+    consciousness.removeListener('sleepStarted', sleepStartedListener);
+    consciousness.removeListener('sleepPhaseChanged', sleepPhaseChangedListener);
+    consciousness.removeListener('sleepCompleted', sleepCompletedListener);
+    consciousness.removeListener('sleepError', sleepErrorListener);
     console.log('SSE client disconnected');
   });
+});
+
+// POST /api/consciousness/sleep - Enter sleep mode manually
+router.post('/sleep', async (_req, res) => {
+  if (!consciousness) {
+    return res.status(500).json({ error: 'Consciousness not initialized' });
+  }
+
+  try {
+    // Enter sleep mode manually (will stop consciousness if running)
+    await consciousness.enterSleepMode(true);
+    res.json({ success: true, message: 'Entering sleep mode' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// GET /api/consciousness/sleep/status - Get sleep status
+router.get('/sleep/status', (_req, res) => {
+  if (!consciousness) {
+    return res.status(500).json({ error: 'Consciousness not initialized' });
+  }
+
+  try {
+    const status = consciousness.getSleepStatus();
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 export default router;

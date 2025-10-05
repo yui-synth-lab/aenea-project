@@ -170,10 +170,33 @@ class DatabaseManager {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Dream patterns - patterns extracted during REM sleep phase
+      CREATE TABLE IF NOT EXISTS dream_patterns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern TEXT NOT NULL,
+        emotional_tone TEXT,
+        source_thought_ids TEXT, -- JSON array of thought IDs
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Sleep logs - consciousness sleep cycle records
+      CREATE TABLE IF NOT EXISTS sleep_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        system_clock REAL NOT NULL,
+        trigger_reason TEXT, -- 'energy_critical', 'thought_overflow', 'scheduled', 'manual'
+        phases TEXT NOT NULL, -- JSON array of phase descriptions
+        stats TEXT NOT NULL, -- JSON object of statistics
+        duration INTEGER, -- in milliseconds
+        energy_before REAL,
+        energy_after REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Core beliefs - consolidated knowledge from significant thoughts
       CREATE TABLE IF NOT EXISTS core_beliefs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        belief_content TEXT NOT NULL,
+        belief_content TEXT NOT NULL, -- Max 80 characters (enforced in app layer)
         category TEXT, -- 'existential', 'ethical', 'epistemological', etc.
         confidence REAL NOT NULL DEFAULT 0.5, -- 0-1, strengthens over time
         strength REAL NOT NULL DEFAULT 0.5, -- 0-1, how central this belief is
@@ -478,22 +501,10 @@ class DatabaseManager {
       console.debug('getSignificantThoughts called but database not ready');
       return [];
     }
-
-    console.debug(`getSignificantThoughts called with limit: ${limit}, isReady: ${this.isReady}, db exists: ${!!this.db}`);
-    console.debug(`Database file path: ${this.dbPath}`);
-
     try {
       const query = 'SELECT * FROM significant_thoughts ORDER BY significance_score DESC, timestamp DESC LIMIT ?';
-      console.debug(`Executing significant thoughts query: ${query}`);
-      console.debug(`Query limit parameter: ${limit}`);
-
       const result = this.db.prepare(query).all(limit);
-      console.debug(`Number of rows returned: ${result.length}`);
-      console.debug(`Type of rows: ${typeof result}`);
-
       const filteredResult = result.filter((row: any) => row.thought_content && row.thought_content.trim());
-      console.debug(`Filtered rows: ${filteredResult.length}`);
-
       return filteredResult;
     } catch (err) {
       console.error('Error getting significant thoughts:', err);
@@ -955,7 +966,6 @@ class DatabaseManager {
         }
       }
 
-      console.debug('Database stats:', stats);
       return stats;
     } catch (err) {
       console.error('Error getting database stats:', err);
@@ -1438,6 +1448,151 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       SELECT * FROM dialogue_memories
       ORDER BY importance DESC, timestamp DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
+  }
+
+  // ============================================================================
+  // Sleep Mode Methods
+  // ============================================================================
+
+  /**
+   * Get recent significant thoughts (for REM phase dream extraction)
+   */
+  getRecentSignificantThoughts(limit: number = 100, daysAgo: number = 3): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM significant_thoughts
+      WHERE created_at > datetime('now', '-${daysAgo} days')
+      ORDER BY confidence DESC, created_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
+  }
+
+  /**
+   * Get old significant thoughts for consolidation
+   * @param ageValue - Age value (number of days or hours)
+   * @param ageUnit - 'days' or 'hours'
+   */
+  getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit: 'days' | 'hours' = 'days'): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM significant_thoughts
+      WHERE created_at < datetime('now', '-${ageValue} ${ageUnit}')
+      AND confidence >= ?
+      ORDER BY confidence DESC, created_at ASC
+      LIMIT ?
+    `);
+    return stmt.all(minConfidence, limit);
+  }
+
+  /**
+   * Delete significant thoughts by IDs
+   */
+  deleteSignificantThoughts(ids: string[]): void {
+    if (ids.length === 0) return;
+    const placeholders = ids.map(() => '?').join(',');
+    const stmt = this.db.prepare(`DELETE FROM significant_thoughts WHERE id IN (${placeholders})`);
+    stmt.run(...ids);
+  }
+
+  /**
+   * Get top core beliefs by reinforcement count
+   */
+  getTopCoreBeliefs(limit: number = 30): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM core_beliefs
+      ORDER BY reinforcement_count DESC, confidence DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
+  }
+
+  /**
+   * Get thought cycles with high ethical dissonance
+   */
+  getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): any[] {
+    const stmt = this.db.prepare(`
+      SELECT tc.*, dw.dissonance
+      FROM thought_cycles tc
+      JOIN dpd_weights dw ON tc.id = dw.context
+      WHERE dw.dissonance > ?
+      AND tc.created_at > datetime('now', '-${daysAgo} days')
+      ORDER BY dw.dissonance DESC
+      LIMIT ?
+    `);
+    return stmt.all(minDissonance, limit);
+  }
+
+  /**
+   * Save dream pattern
+   */
+  saveDreamPattern(dream: { pattern: string; emotionalTone: string; sourceThoughtIds: string[] }): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO dream_patterns (pattern, emotional_tone, source_thought_ids, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `);
+    stmt.run(dream.pattern, dream.emotionalTone, JSON.stringify(dream.sourceThoughtIds));
+  }
+
+  /**
+   * Save sleep log
+   */
+  saveSleepLog(log: {
+    timestamp: number;
+    systemClock: number;
+    triggerReason: string;
+    phases: string[];
+    stats: any;
+    duration: number;
+    energyBefore: number;
+    energyAfter: number;
+  }): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO sleep_logs
+      (timestamp, system_clock, trigger_reason, phases, stats, duration, energy_before, energy_after, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `);
+    stmt.run(
+      log.timestamp,
+      log.systemClock,
+      log.triggerReason,
+      JSON.stringify(log.phases),
+      JSON.stringify(log.stats),
+      log.duration,
+      log.energyBefore,
+      log.energyAfter
+    );
+  }
+
+  /**
+   * Get significant thoughts count
+   */
+  getSignificantThoughtsCount(): number {
+    const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM significant_thoughts`);
+    const result: any = stmt.get();
+    return result?.count || 0;
+  }
+
+  /**
+   * Get recent sleep logs
+   */
+  getRecentSleepLogs(limit: number = 10): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM sleep_logs
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
+  }
+
+  /**
+   * Get dream patterns
+   */
+  getDreamPatterns(limit: number = 20): any[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM dream_patterns
+      ORDER BY created_at DESC
       LIMIT ?
     `);
     return stmt.all(limit);

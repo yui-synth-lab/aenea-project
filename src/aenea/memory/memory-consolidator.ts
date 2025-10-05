@@ -213,7 +213,7 @@ ${thoughtsSummary}
 **出力形式（JSON配列）:**
 [
   {
-    "belief_content": "50文字以内の本質的記述",
+    "belief_content": "80文字以内の本質的記述",
     "category": "existential|ethical|epistemological|consciousness|creative|metacognitive|temporal|paradoxical|ontological",
     "confidence": 0.0-1.0,
     "strength": 0.0-1.0,
@@ -274,10 +274,6 @@ ${thoughtsSummary}
         .filter((b: any) => {
           // Filter out beliefs that are too long or empty
           if (!b.belief_content || b.belief_content.length === 0) return false;
-          if (b.belief_content.length > 50) {
-            log.warn('MemoryConsolidator', `Belief too long (${b.belief_content.length} chars), truncating: ${b.belief_content}`);
-            b.belief_content = b.belief_content.substring(0, 50);
-          }
           return true;
         })
         .map((b: any) => ({
@@ -433,7 +429,7 @@ ${thoughtsSummary}
    */
   private createBelief(belief: Partial<CoreBelief>): void {
     this.db.createCoreBelief(belief);
-    log.info('MemoryConsolidator', `📚 New belief formed: ${belief.belief_content?.substring(0, 50)}...`);
+    log.info('MemoryConsolidator', `📚 New belief formed: ${belief.belief_content}...`);
   }
 
   /**

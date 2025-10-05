@@ -50,6 +50,12 @@ interface GrowthData {
     category?: string;
     firstAppeared?: number;
   }>;
+  dreamPatterns?: Array<{
+    pattern?: string;
+    emotional_tone?: string;
+    emotionalTone?: string;
+    created_at?: number;
+  }>;
 }
 
 const formatValue = (value: any): string => {
@@ -263,6 +269,28 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                 </div>
               </div>
 
+              {/* Dream Patterns */}
+              <div className="growth-card dreams wide">
+                <h3>💤 Dream Patterns (夢パターン)</h3>
+                <div className="scrollable-list">
+                  {growthData.dreamPatterns && growthData.dreamPatterns.length > 0 ?
+                    growthData.dreamPatterns.slice(0, 15).map((dream, index) => (
+                      <div key={index} className="list-item dreams-item">
+                        <p className="item-content dream-pattern">
+                          {dream.pattern || 'No pattern'}
+                        </p>
+                        <div className="item-meta">
+                          <span className="emotional-tone">
+                            {dream.emotional_tone || dream.emotionalTone || 'Unknown tone'}
+                          </span>
+                          {dream.created_at && <span>📅 {new Date(dream.created_at).toLocaleString()}</span>}
+                        </div>
+                      </div>
+                    )) :
+                    <p className="no-data">No dreams recorded yet. Enter sleep mode to generate dream patterns.</p>}
+                </div>
+              </div>
+
               {/* Unresolved Ideas */}
               <div className="growth-card ideas wide">
                 <h3>Unresolved Ideas</h3>
@@ -379,6 +407,7 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         .growth-card.metrics h3 { color: #8b5cf6; }
         .growth-card.thoughts h3 { color: #ef4444; }
         .growth-card.beliefs h3 { color: #a78bfa; }
+        .growth-card.dreams h3 { color: #ec4899; }
         .growth-card.ideas h3 { color: #06b6d4; }
 
         .growth-card p {
@@ -486,6 +515,7 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
 
         .thoughts-item { border-left: 4px solid #ef4444; }
         .beliefs-item { border-left: 4px solid #a78bfa; }
+        .dreams-item { border-left: 4px solid #ec4899; }
         .ideas-item { border-left: 4px solid #06b6d4; }
 
         .item-content {
@@ -496,6 +526,16 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
 
         .beliefs-item .item-content {
           font-weight: 600;
+        }
+
+        .dreams-item .item-content {
+          font-style: italic;
+          color: #f9a8d4;
+        }
+
+        .emotional-tone {
+          color: #ec4899;
+          font-weight: 500;
         }
 
         .item-meta {

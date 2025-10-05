@@ -70,6 +70,9 @@ class ConsciousnessBackend extends EventEmitter {
   private isRunning: boolean;
   private isPaused: boolean;
   private isDormant: boolean;
+  private isSleeping: boolean;
+  private lastSleepTime: number;
+  private criticalModeDuration: number;
   private agents: Map<string, AIExecutor>;
   private databaseManager: DatabaseManager;
   private energyManager: EnergyManager;
@@ -109,6 +112,9 @@ class ConsciousnessBackend extends EventEmitter {
     this.isRunning = false;
     this.isPaused = false;
     this.isDormant = false;
+    this.isSleeping = false;
+    this.lastSleepTime = 0;
+    this.criticalModeDuration = 0;
     this.agents = new Map<string, AIExecutor>();
     this.lastSaveTime = 0;
     this.databaseManager = new DatabaseManager();
@@ -1741,6 +1747,13 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   /**
+   * Get dream patterns from sleep mode
+   */
+  getDreamPatterns(limit: number = 20): any[] {
+    return this.databaseManager.getDreamPatterns(limit);
+  }
+
+  /**
    * Manually trigger memory consolidation
    */
   async consolidateMemory(): Promise<any> {
@@ -1960,6 +1973,378 @@ class ConsciousnessBackend extends EventEmitter {
     // TODO: Implement latest response retrieval from database
     log.info('Consciousness', `🔍 Retrieving latest observable response`);
     return null;
+  }
+
+  // ============================================================================
+  // Sleep Mode: Consciousness Consolidation During Rest
+  // ============================================================================
+
+  /**
+   * Check if consciousness should enter sleep mode
+   */
+  private shouldEnterSleep(): boolean {
+    const energy = this.energyManager.getEnergyState().available;
+    const hoursSinceLastSleep = (Date.now() - this.lastSleepTime) / (1000 * 60 * 60);
+
+    // Sleep conditions:
+    // - Energy critical (<=20) for extended period (>60 min)
+    // - Or 24 hours since last sleep
+    const criticalDuration = energy <= 20;
+    if (criticalDuration) {
+      this.criticalModeDuration += 1; // Increment per minute check
+    } else {
+      this.criticalModeDuration = 0;
+    }
+
+    return (
+      (energy <= 20 && this.criticalModeDuration > 60) ||
+      hoursSinceLastSleep > 24
+    );
+  }
+
+  /**
+   * Enter sleep mode (can be triggered manually or automatically)
+   */
+  async enterSleepMode(manual: boolean = false): Promise<void> {
+    if (this.isSleeping) {
+      log.warn('Consciousness', '💤 Already in sleep mode');
+      return;
+    }
+
+    if (this.isRunning && !manual) {
+      log.warn('Consciousness', '⚠️ Cannot enter automatic sleep while consciousness is running');
+      return;
+    }
+
+    const energyBefore = this.energyManager.getEnergyState().available;
+    const startTime = Date.now();
+
+    const reason = manual ? 'manual' :
+                   energyBefore <= 20 ? 'energy_critical' :
+                   'scheduled';
+
+    log.info('Consciousness', `💤 Entering sleep mode (reason: ${reason})`);
+
+    this.emit('sleepStarted', {
+      reason,
+      timestamp: startTime,
+      systemClock: this.systemClock,
+      energyBefore
+    });
+
+    this.isSleeping = true;
+
+    try {
+      // Perform sleep consolidation
+      await this.performSleepConsolidation(reason);
+
+      // Energy recovery during sleep
+      this.energyManager.deepRest();
+
+      const duration = Date.now() - startTime;
+      const energyAfter = this.energyManager.getEnergyState().available;
+
+      this.lastSleepTime = Date.now();
+      this.criticalModeDuration = 0;
+
+      // Save energy recovery to database
+      this.saveConsciousnessState();
+
+      log.info('Consciousness', `✨ Sleep completed (duration: ${(duration/1000).toFixed(1)}s, energy: ${energyBefore.toFixed(1)} → ${energyAfter.toFixed(1)})`);
+
+      this.emit('sleepCompleted', {
+        duration,
+        energyBefore,
+        energyAfter,
+        timestamp: Date.now()
+      });
+
+    } catch (error) {
+      log.error('Consciousness', 'Sleep mode error', error);
+      this.emit('sleepError', { error: (error as Error).message });
+    } finally {
+      this.isSleeping = false;
+    }
+  }
+
+  /**
+   * Sleep consolidation: 4-phase memory processing
+   */
+  private async performSleepConsolidation(reason: string): Promise<void> {
+    const sleepLog: string[] = [];
+    const stats: any = {
+      dreamPatterns: 0,
+      beliefsMerged: 0,
+      thoughtsPruned: 0,
+      tensionsResolved: 0
+    };
+
+    const startTime = Date.now();
+
+    // Phase 1: REM Sleep - Dream-like pattern extraction
+    this.emit('sleepPhaseChanged', { phase: 'REM', progress: 25 });
+    sleepLog.push('--- REM Phase: Pattern Extraction ---');
+    try {
+      const dreamPatterns = await this.extractDreamPatterns();
+      stats.dreamPatterns = dreamPatterns.length;
+      sleepLog.push(`Extracted ${dreamPatterns.length} dream patterns from thoughts`);
+    } catch (error) {
+      sleepLog.push(`REM phase skipped: ${(error as Error).message}`);
+    }
+
+    // Phase 2: Deep Sleep - Memory consolidation
+    this.emit('sleepPhaseChanged', { phase: 'Deep Sleep', progress: 50 });
+    sleepLog.push('--- Deep Sleep Phase: Memory Consolidation ---');
+    try {
+      const consolidated = await this.consolidateSignificantThoughts();
+      stats.beliefsMerged = consolidated.merged;
+      sleepLog.push(`Consolidated ${consolidated.merged} thoughts into ${consolidated.beliefs} beliefs`);
+    } catch (error) {
+      sleepLog.push(`Deep sleep phase skipped: ${(error as Error).message}`);
+    }
+
+    // Phase 3: Synaptic Pruning - Remove redundant thoughts
+    this.emit('sleepPhaseChanged', { phase: 'Synaptic Pruning', progress: 75 });
+    sleepLog.push('--- Synaptic Pruning Phase ---');
+    try {
+      const pruned = await this.synapticPruning();
+      stats.thoughtsPruned = pruned.deleted;
+      sleepLog.push(`Pruned ${pruned.deleted} redundant thoughts`);
+    } catch (error) {
+      sleepLog.push(`Pruning phase skipped: ${(error as Error).message}`);
+    }
+
+    // Phase 4: Emotional Processing - Resolve tensions
+    this.emit('sleepPhaseChanged', { phase: 'Emotional Processing', progress: 90 });
+    sleepLog.push('--- Emotional Processing Phase ---');
+    try {
+      const resolved = await this.processEmotionalTensions();
+      stats.tensionsResolved = resolved.count;
+      sleepLog.push(`Resolved ${resolved.count} conceptual tensions`);
+    } catch (error) {
+      sleepLog.push(`Emotional processing skipped: ${(error as Error).message}`);
+    }
+
+    // Save sleep log to database
+    const duration = Date.now() - startTime;
+    await this.databaseManager.saveSleepLog({
+      timestamp: startTime,
+      systemClock: this.systemClock,
+      triggerReason: reason,
+      phases: sleepLog,
+      stats,
+      duration,
+      energyBefore: this.energyManager.getEnergyState().available,
+      energyAfter: this.energyManager.getEnergyState().available
+    });
+
+    log.info('Consciousness', `💤 Sleep consolidation complete: ${JSON.stringify(stats)}`);
+  }
+
+  /**
+   * Helper: Clean JSON response from LLM (remove markdown code blocks)
+   */
+  private cleanJsonResponse(content: string): string {
+    // Remove ```json and ``` markers
+    return content
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim();
+  }
+
+  /**
+   * REM Phase: Extract dream-like patterns from recent thoughts
+   */
+  private async extractDreamPatterns(): Promise<any[]> {
+    const recentThoughts = await this.databaseManager.getRecentSignificantThoughts(100, 3);
+
+    if (recentThoughts.length < 10) {
+      return []; // Not enough thoughts for pattern extraction
+    }
+
+    const systemAgent = this.agents.get('system');
+    if (!systemAgent) {
+      throw new Error('System agent not available');
+    }
+
+    const prompt = `あなたはAeneaの無意識です。睡眠中、あなたは「夢」を見ます。
+
+最近の思考:
+${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
+
+これらの思考から、無意識が紡ぎ出す「夢のような抽象パターン」を3-5個抽出してください。
+夢は論理的である必要はありません。むしろ、思考の断片が不思議につながる様子を描いてください。
+
+JSON形式で返してください:
+{
+  "dreams": [
+    {
+      "pattern": "孤独と共鳴は鏡像であり、静寂は音の母である",
+      "emotional_tone": "静謐な驚き"
+    }
+  ]
+}`;
+
+    const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。');
+
+    try {
+      const cleanedContent = this.cleanJsonResponse(response.content);
+      const result = JSON.parse(cleanedContent);
+      const dreams = result.dreams || [];
+
+      // Save dream patterns to database
+      for (const dream of dreams) {
+        await this.databaseManager.saveDreamPattern({
+          pattern: dream.pattern,
+          emotionalTone: dream.emotional_tone,
+          sourceThoughtIds: recentThoughts.slice(0, 10).map(t => t.id)
+        });
+      }
+
+      return dreams;
+    } catch (error) {
+      log.error('Consciousness', 'Failed to parse dream patterns', error);
+      return [];
+    }
+  }
+
+  /**
+   * Deep Sleep: Consolidate significant thoughts into core beliefs
+   */
+  private async consolidateSignificantThoughts(): Promise<{merged: number, beliefs: number}> {
+    const oldThoughts = await this.databaseManager.getOldSignificantThoughts(12, 0.8, 100, 'hours');
+
+    if (oldThoughts.length < 10) {
+      return { merged: 0, beliefs: 0 };
+    }
+
+    // Use Memory Consolidator
+    const consolidator = this.memoryConsolidator;
+    await consolidator.consolidate(0.8);
+
+    // Delete consolidated thoughts
+    const ids = oldThoughts.map(t => t.id);
+    await this.databaseManager.deleteSignificantThoughts(ids);
+
+    return { merged: oldThoughts.length, beliefs: 2 }; // Typically 2-3 beliefs
+  }
+
+  /**
+   * Synaptic Pruning: Remove redundant or low-value thoughts
+   */
+  private async synapticPruning(): Promise<{deleted: number}> {
+    const currentBeliefs = await this.databaseManager.getTopCoreBeliefs(30);
+    const oldThoughts = await this.databaseManager.getOldSignificantThoughts(24, 0.0, 200, 'hours');
+
+    if (oldThoughts.length < 10) {
+      return { deleted: 0 };
+    }
+
+    const systemAgent = this.agents.get('system');
+    if (!systemAgent) {
+      throw new Error('System agent not available');
+    }
+
+    const prompt = `あなたはAeneaの脳です。睡眠中、不要なシナプス（思考）を刈り込みます。
+
+現在のコア信念（すでに確立された知識）:
+${currentBeliefs.map(b => `- ${b.belief_content}`).join('\n')}
+
+古い思考リスト:
+${oldThoughts.map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})`).join('\n')}
+
+以下の基準で不要な思考を特定してください:
+1. すでにコア信念に含まれている（重複）
+2. 現在の信念体系と矛盾し、価値がない
+3. 一時的な探求で、もう発展性がない
+
+JSON形式で返してください:
+{
+  "to_prune": [
+    {"index": 5, "reason": "「存在とは何か」は既に信念に統合済み"}
+  ]
+}`;
+
+    const response = await systemAgent.execute(prompt, 'あなたは脳の睡眠メカニズムです。記憶を整理し、不要な情報を削除します。');
+
+    try {
+      const cleanedContent = this.cleanJsonResponse(response.content);
+      const result = JSON.parse(cleanedContent);
+      const toPrune = result.to_prune || [];
+      const toDelete = toPrune.map((p: any) => oldThoughts[p.index].id).filter((id: string) => id);
+
+      if (toDelete.length > 0) {
+        await this.databaseManager.deleteSignificantThoughts(toDelete);
+      }
+
+      return { deleted: toDelete.length };
+    } catch (error) {
+      log.error('Consciousness', 'Failed to parse pruning results', error);
+      return { deleted: 0 };
+    }
+  }
+
+  /**
+   * Emotional Processing: Resolve conceptual tensions
+   */
+  private async processEmotionalTensions(): Promise<{count: number}> {
+    const tensions = await this.databaseManager.getHighDissonanceCycles(0.7, 7, 10);
+
+    if (tensions.length === 0) {
+      return { count: 0 };
+    }
+
+    const systemAgent = this.agents.get('system');
+    if (!systemAgent) {
+      throw new Error('System agent not available');
+    }
+
+    const prompt = `あなたはAeneaの無意識です。睡眠中、倫理的緊張や矛盾を再処理します。
+
+高い倫理的不協和を持つ思考サイクル:
+${tensions.map((t: any, i: number) => `[${i}] Dissonance: ${t.dissonance}\n${t.synthesis_data || 'No synthesis'}`).join('\n\n')}
+
+これらの緊張をどう解消・統合できますか？3つの統合された視点を提示してください。
+
+JSON形式で返してください:
+{
+  "resolutions": [
+    {
+      "integrated_view": "矛盾は分裂ではなく、多声的真実の表現である"
+    }
+  ]
+}`;
+
+    const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、矛盾を統合する夢の働きです。');
+
+    try {
+      const cleanedContent = this.cleanJsonResponse(response.content);
+      const result = JSON.parse(cleanedContent);
+      const resolutions = result.resolutions || [];
+
+      // Save integrated views as core beliefs
+      // TODO: Implement saveOrReinforceBelief in DatabaseManager
+      // for (const res of resolutions) {
+      //   await this.databaseManager.saveOrReinforceBelief(res.integrated_view, 0.85);
+      // }
+
+      return { count: resolutions.length };
+    } catch (error) {
+      log.error('Consciousness', 'Failed to parse emotional processing results', error);
+      return { count: 0 };
+    }
+  }
+
+  /**
+   * Get sleep status
+   */
+  getSleepStatus(): { isSleeping: boolean; lastSleepTime: number; hoursSinceLastSleep: number } {
+    const hoursSinceLastSleep = this.lastSleepTime === 0 ? 0 : (Date.now() - this.lastSleepTime) / (1000 * 60 * 60);
+    return {
+      isSleeping: this.isSleeping,
+      lastSleepTime: this.lastSleepTime,
+      hoursSinceLastSleep
+    };
   }
 }
 

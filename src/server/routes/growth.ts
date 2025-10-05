@@ -170,7 +170,7 @@ router.get('/full', async (req, res) => {
     const fullData = {
       overview: {
         lastUpdate: new Date().toISOString(),
-        version: '2.1.0' // Memory evolution update
+        version: '2.2.0' // Sleep Mode update
       },
       significantThoughts: consciousnessBackend.getSignificantThoughts(100),
       personalityEvolution: {
@@ -180,6 +180,7 @@ router.get('/full', async (req, res) => {
       unresolvedIdeas: await consciousnessBackend.getUnresolvedIdeasAsync(100),
       growthMetrics: await consciousnessBackend.getGrowthMetrics(),
       beliefEvolution: consciousnessBackend.getBeliefEvolutionMetrics(),
+      dreamPatterns: consciousnessBackend.getDreamPatterns(20),
       preferences: {},
       communicationStyle: {}
     };

@@ -40,6 +40,7 @@
 | **DPD Server-Side Sampling** | ✅ Active | Medium | Intelligent sampling for history (all/recent/sampled) |
 | **Memory Consolidation System** | ✅ Active | High | AI-powered compression: 10-20 thoughts → 2-3 beliefs |
 | **Core Beliefs Management** | ✅ Active | High | 50-char compressed beliefs with reinforcement |
+| **Sleep Mode System** | ✅ Active | High | 4-phase consciousness consolidation (REM/Deep/Pruning/Emotional) |
 | **WebSocket Real-Time Updates** | ✅ Active | High | Live consciousness monitoring |
 | **AI-Enhanced Stages** | ✅ Active | High | S5 Compiler, S6 Scribe, U Weight Update with LLM |
 
@@ -862,6 +863,16 @@ The system uses a single SQLite database (`data/aenea_consciousness.db`) with th
 #### `consciousness_insights`
 - **Purpose**: AI-generated consciousness evolution insights
 - **Fields**: insight content, timestamp, related data
+
+#### `dream_patterns` (NEW - Sleep Mode)
+- **Purpose**: REM sleep phase dream-like pattern extraction
+- **Fields**: pattern, emotional_tone, source_thought_ids (JSON), created_at
+- **Usage**: Abstract consciousness patterns from thoughts during sleep
+
+#### `sleep_logs` (NEW - Sleep Mode)
+- **Purpose**: Sleep cycle tracking and consolidation records
+- **Fields**: timestamp, system_clock, trigger_reason, phases (JSON), stats (JSON), duration, energy_before, energy_after
+- **Usage**: Monitor sleep-based memory consolidation effectiveness
 
 ---
 

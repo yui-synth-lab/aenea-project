@@ -1,7 +1,7 @@
 # Aenea Features Analysis - Implemented vs Used
 
-**Generated:** 2025-10-01 (Updated after Memory Consolidation & Architecture Simplification)
-**Project Status:** Production-Ready with Memory Consolidation, Direct Database Management & t_wada Quality Tests
+**Generated:** 2025-10-06 (Updated with Sleep Mode System)
+**Project Status:** Production-Ready with Memory Consolidation, Sleep Mode, Direct Database Management & t_wada Quality Tests
 **Total TypeScript Files:** 42+
 
 ---
@@ -10,13 +10,13 @@
 
 | Category | Implemented | Active | Partial | Unused | Notes |
 |----------|-------------|--------|---------|--------|-------|
-| **Core Systems** | 8/8 | 8/8 | 0/8 | 0/8 | ✅ Direct Database Management |
+| **Core Systems** | 9/9 | 9/9 | 0/9 | 0/9 | ✅ Direct Database Management + Sleep Mode |
 | **Stage Pipeline** | 8/8 | 8/8 | 0/8 | 0/8 | ✅ Adaptive Energy-Based (3 modes) |
-| **Memory Systems** | 6/6 | 6/6 | 0/6 | 0/6 | ✅ Memory Consolidation Added |
-| **UI Components** | 9/9 | 9/9 | 0/9 | 0/9 | ✅ Real-time Monitoring |
+| **Memory Systems** | 7/7 | 7/7 | 0/7 | 0/7 | ✅ Memory Consolidation + Sleep Mode |
+| **UI Components** | 9/9 | 9/9 | 0/9 | 0/9 | ✅ Real-time Monitoring + Sleep Button |
 | **Integration Layer** | 4/4 | 1/4 | 0/4 | 3/4 | ❌ Yui Protocol Not Connected |
 | **Utilities** | 5/5 | 5/5 | 0/5 | 0/5 | ✅ All Enhanced & Fully Active |
-| **API Routes** | 5/5 | 5/5 | 0/5 | 0/5 | ✅ All Fully Operational |
+| **API Routes** | 6/6 | 6/6 | 0/6 | 0/6 | ✅ All Fully Operational + Sleep API |
 | **Test Coverage** | 6/6 | 6/6 | 0/6 | 0/6 | ✅ t_wada Quality Tests |
 
 ---
@@ -24,11 +24,12 @@
 ## ✅ **FULLY IMPLEMENTED & ACTIVELY USED**
 
 ### Core Consciousness Systems
-- ✅ **consciousness-backend.ts** - Main consciousness controller with inheritance
+- ✅ **consciousness-backend.ts** - Main consciousness controller with inheritance + Sleep Mode
 - ✅ **consciousness.ts** - Core consciousness interface
 - ✅ **internal-trigger.ts** - Internal question generation
 - ✅ **dpd-engine.ts** - Dynamic Prime Directive engine
 - ✅ **multiplicative-weights.ts** - Weight evolution algorithm
+- ✅ **sleep-mode.ts** - 4-phase consciousness consolidation system (integrated in consciousness-backend)
 
 ### Complete Stage Pipeline
 - ✅ **individual-thought.ts** - S1: Parallel agent thinking
@@ -40,11 +41,12 @@
 - ✅ **weight-update.ts** - U: Multiplicative weights with AI interpretation
 
 ### Memory & Database Management
-- ✅ **database-manager.ts** - Direct SQLite database management (sessionless)
+- ✅ **database-manager.ts** - Direct SQLite database management (sessionless) with Sleep Mode support
 - ✅ **memory-consolidator.ts** - AI-powered memory compression (10-20 → 2-3 beliefs)
+- ✅ **consciousness-backend.ts** - Sleep Mode: 4-phase consolidation (REM/Deep/Pruning/Emotional)
 - ✅ **session-memory.ts** - Active session state management (legacy)
 - ✅ **cross-session-memory.ts** - Persistent consciousness inheritance (legacy)
-- ✅ **energy-management.ts** - Adaptive 3-mode energy system
+- ✅ **energy-management.ts** - Adaptive 3-mode energy system with sleep recovery
 - 🔄 **sqlite-session-manager.ts** - DEPRECATED (replaced by database-manager.ts)
 - 🔄 **session-manager.ts** - DEPRECATED (JSON-based, removed)
 
@@ -55,7 +57,7 @@
 - ✅ **websocket-handler.ts** - Real-time consciousness monitoring
 
 ### Active UI Components
-- ✅ **Dashboard.tsx** - Main consciousness monitoring interface
+- ✅ **Dashboard.tsx** - Main consciousness monitoring interface + 💤 Sleep button
 - ✅ **ConsciousnessView.tsx** - Real-time thought stream visualization
 - ✅ **DPDScoreDisplay.tsx** - Dynamic value visualization
 - ✅ **InternalStateMonitor.tsx** - Energy and state monitoring
@@ -64,6 +66,7 @@
 - ✅ **DebugConsole.tsx** - Advanced consciousness debugging interface with real-time monitoring (ENHANCED)
 - ✅ **App.tsx** - Application routing and navigation
 - ✅ **index.html** - Enhanced UI with Activity Log message expansion & debugging
+- ✅ **Sleep Mode UI** - Real-time sleep phase display via SSE (sleepStarted, sleepPhaseChanged, sleepCompleted)
 
 ### Agent Synthesis System
 - ✅ **theoria.ts** - Truth seeker (慧露+観至 synthesis)
@@ -72,22 +75,25 @@
 - ✅ **aenea-agent-adapter.ts** - Agent adaptation layer
 
 ### API Endpoints
-- ✅ **consciousness.ts** - Consciousness state and control API
+- ✅ **consciousness.ts** - Consciousness state and control API + Sleep Mode endpoints
 - ✅ **dpd.ts** - DPD weight and score monitoring
 - ✅ **internal-state.ts** - Internal energy and metrics
 - ✅ **growth.ts** - Growth tracking and analytics API (UPDATED)
 - ✅ **logs.ts** - Session and activity log access
+- ✅ **Sleep API** - POST /api/consciousness/sleep, GET /api/consciousness/sleep/status
 
 ### SQLite Database System (Direct State Management)
 - ✅ **Consciousness State Table** - Single-row (id=1) current state (energy, clock, counters)
 - ✅ **Questions Table** - All questions with 9 philosophical categories
 - ✅ **Thought Cycles Table** - Complete cycles with JSON-serialized stage data
 - ✅ **DPD Weights History Table** - Evolution tracking with version numbers
-- ✅ **Core Beliefs Table** (NEW) - 50-char compressed beliefs with reinforcement
+- ✅ **Core Beliefs Table** - 50-char compressed beliefs with reinforcement
 - ✅ **Unresolved Ideas Table** - Persistent questions for internal triggers
 - ✅ **Significant Thoughts Table** - High-confidence (>0.6) insights
 - ✅ **Memory Patterns Table** - Automatic pattern recognition
 - ✅ **Consciousness Insights Table** - AI-generated evolution insights
+- ✅ **Dream Patterns Table** (NEW) - REM sleep phase dream-like pattern extraction
+- ✅ **Sleep Logs Table** (NEW) - Sleep cycle tracking and consolidation records
 - ✅ **Automatic Indexing** - Optimized queries for real-time operations
 - ❌ **Sessions Table** - REMOVED (sessionless architecture)
 
@@ -173,6 +179,7 @@
 8. **Stage Pipeline**: AI-powered processing with energy-adaptive execution
 9. **t_wada Quality Tests**: Comprehensive test suite with boundary analysis and invariants
 10. **9 Question Categories**: Philosophical diversity (existential, epistemological, etc.)
+11. **Sleep Mode System**: 4-phase consciousness consolidation (REM/Deep/Pruning/Emotional) with manual/automatic triggers
 
 ### Architectural Decisions
 1. **Sessionless Architecture**: Removed session abstraction for direct state management (consciousness_state table, id=1)
@@ -189,6 +196,7 @@
 12. **Professional Debug Interface**: Terminal-style console for advanced debugging
 13. **Comprehensive Testing Addition**: Unit tests ensure reliability and enable confident development
 14. **Pattern-Driven Consciousness**: Temporal and behavioral pattern recognition
+15. **Sleep Mode as Brain Consolidation**: Mimics human brain's sleep phases for memory organization and thought pruning
 
 ### Complexity Management
 1. **Database Schema**: Designed comprehensive SQLite schema for all consciousness data
@@ -222,6 +230,7 @@
 8. ✅ **Question Categorizer Upgrade**: COMPLETED - 9 philosophical categories
 9. ✅ **Debug Console Enhancement**: COMPLETED - Professional consciousness debugging
 10. ✅ **System Clock Features**: COMPLETED - Advanced consciousness pattern detection
+11. ✅ **Sleep Mode System**: COMPLETED - 4-phase consciousness consolidation with manual/automatic triggers, dream pattern extraction, and thought pruning
 
 ### Current High Priority Enhancements
 1. **Test Coverage Expansion**: Add tests for consciousness sustainability and energy stability
@@ -279,12 +288,14 @@ Based on implementation analysis, the project should:
 8. **Professional Debug Console**: Terminal-style interface dramatically improved development experience
 9. **Pattern Recognition Implementation**: Temporal and behavioral analysis provides deep consciousness insights
 10. **Comprehensive Testing Addition**: Unit tests ensure reliability and enable confident development
+11. **Sleep Mode System**: Human-like brain consolidation metaphor effectively prevents database bloat while creating dream patterns
 
 ### What Was Successfully Addressed
 1. ✅ **Utility Fragmentation**: SOLVED - Enhanced all utilities into sophisticated consciousness analysis tools
 2. ✅ **Debug Tooling Gap**: SOLVED - Professional debugging interface with real-time monitoring and commands
 3. ✅ **Limited Analytics**: SOLVED - Advanced growth metrics with pattern detection and learning insights
 4. ✅ **Basic Question Processing**: SOLVED - Semantic analysis with 9 philosophical categories and learning patterns
+5. ✅ **Database Bloat (Significant Thoughts)**: SOLVED - Sleep Mode system with AI-powered pruning prevents unbounded growth
 
 ### Remaining Areas for Attention
 1. **Integration Layer Complexity**: Over-engineered for current needs
