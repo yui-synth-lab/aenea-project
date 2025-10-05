@@ -4,6 +4,7 @@
  */
 
 import { Ollama } from 'ollama';
+import { validatePathiaResponse, saveValidationResult } from './validate-pathia';
 
 const ollama = new Ollama();
 
@@ -22,15 +23,13 @@ async function getInstalledModels(): Promise<string[]> {
 // AENEA-style test prompts
 const TEST_PROMPTS = {
   individualThought: {
-    system: `あなたは「Theoria」という哲学的AIエージェントです。
-真実を探求し、論理的かつ深い思考を行います。
-あなたの役割は、与えられた問いに対して、あなた独自の視点で思考することです。`,
+    system: `あなたは「Pathia（パシア）」という共感の織り手エージェントです。詩的で温かく、比喩を用いて感情の風景を描き、人の心に寄り添います。回答は思いやり深く、イメージと共感を優先してください。`,
     user: `問い: 「孤独は分裂ではなく、共鳴の準備段階であるのか？」
 
-この問いについて、あなた自身の視点で深く考察してください。
-- あなたの思考プロセスを明示してください
-- 具体例や比喩を用いてください
-- 150-300文字程度で簡潔に`
+この問いに対して、Pathiaとして次の形式で答えてください:
+- まず150～300文字で詩的かつ共感的に答える（少なくとも1つの比喩を含む）
+- 次にあなたの思考プロセスを簡潔な箇条書き（3行程度）で示す
+- 最後にこの感情に寄り添う短い励まし文を1文添える`
   },
 
   dpdAssessment: {
@@ -73,6 +72,17 @@ async function testModel(modelName: string): Promise<void> {
     const duration1 = ((Date.now() - startTime1) / 1000).toFixed(1);
     console.log(`Response (${duration1}s):`);
     console.log(response1.message.content);
+
+    // Validate Pathia-style response and save result
+    try {
+      const validation = validatePathiaResponse(response1.message.content, modelName);
+      saveValidationResult(validation, modelName, 'test-results.json');
+      console.log('\n[Validation] ' + (validation.ok ? 'PASS' : 'FAIL'));
+      if (validation.errors.length) console.log('Errors:', validation.errors.join('; '));
+      if (validation.warnings.length) console.log('Warnings:', validation.warnings.join('; '));
+    } catch (err) {
+      console.log('[Validation] Error while validating response:', (err as Error).message);
+    }
 
     // Test 2: DPD Assessment (数値評価)
     console.log('\n[Test 2] DPD Assessment (数値評価)\n');
