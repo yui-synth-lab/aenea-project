@@ -10,6 +10,10 @@ interface DialogueMessage {
   role: 'human' | 'aenea';
   content: string;
   timestamp: number;
+  systemClock?: number;
+  immediateReaction?: string;
+  newQuestion?: string;
+  emotionalState?: string;
 }
 
 interface DialogueModalProps {
@@ -40,13 +44,29 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
       const response = await fetch('/api/dialogue/history?limit=50');
       if (response.ok) {
         const data = await response.json();
-        const historyMessages: DialogueMessage[] = data.history.map((item: any) => ({
-          id: `${item.timestamp}-${item.role}`,
-          role: item.role,
-          content: item.content,
-          timestamp: item.timestamp
-        }));
-        setMessages(historyMessages);
+        if (data.success && data.dialogues) {
+          // Convert dialogues to message format (reverse to show oldest first)
+          const historyMessages: DialogueMessage[] = data.dialogues.reverse().flatMap((d: any) => [
+            {
+              id: `${d.id}_human`,
+              role: 'human' as const,
+              content: d.humanMessage,
+              timestamp: d.timestamp,
+              systemClock: d.systemClock
+            },
+            {
+              id: `${d.id}_aenea`,
+              role: 'aenea' as const,
+              content: d.aeneaResponse,
+              timestamp: d.timestamp,
+              systemClock: d.systemClock,
+              immediateReaction: d.immediateReaction,
+              newQuestion: d.newQuestion,
+              emotionalState: d.emotionalState
+            }
+          ]);
+          setMessages(historyMessages);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch dialogue history:', error);
@@ -77,13 +97,19 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
 
       if (response.ok) {
         const data = await response.json();
-        const aeneaMessage: DialogueMessage = {
-          id: `${Date.now()}-aenea`,
-          role: 'aenea',
-          content: data.response,
-          timestamp: Date.now()
-        };
-        setMessages(prev => [...prev, aeneaMessage]);
+        if (data.dialogue) {
+          const aeneaMessage: DialogueMessage = {
+            id: `${Date.now()}-aenea`,
+            role: 'aenea',
+            content: data.dialogue.response,
+            timestamp: data.dialogue.timestamp || Date.now(),
+            systemClock: data.dialogue.systemClock,
+            immediateReaction: data.dialogue.immediateReaction,
+            newQuestion: data.dialogue.newQuestion,
+            emotionalState: data.dialogue.emotionalState
+          };
+          setMessages(prev => [...prev, aeneaMessage]);
+        }
       } else {
         console.error('Failed to send message');
       }
@@ -133,7 +159,27 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
                       {new Date(msg.timestamp).toLocaleTimeString()}
                     </span>
                   </div>
+                  {msg.systemClock !== undefined && msg.systemClock !== null && (
+                    <div className="message-system-clock">
+                      🕐 System Clock: {msg.systemClock}
+                    </div>
+                  )}
+                  {msg.immediateReaction && (
+                    <div className="message-immediate-reaction">
+                      {msg.immediateReaction}
+                    </div>
+                  )}
                   <div className="message-content">{msg.content}</div>
+                  {msg.newQuestion && (
+                    <div className="message-new-question">
+                      <strong>💭 New Question:</strong> {msg.newQuestion}
+                    </div>
+                  )}
+                  {msg.emotionalState && (
+                    <div className="message-emotional-state">
+                      <strong>❤️ Emotional State:</strong> {msg.emotionalState}
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -285,11 +331,62 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
           color: #9ca3af;
         }
 
+        .message-system-clock {
+          font-family: monospace;
+          font-size: 11px;
+          color: #9ca3af;
+          margin-bottom: 4px;
+        }
+
+        .message-immediate-reaction {
+          font-style: italic;
+          color: #d1d5db;
+          font-size: 13px;
+          margin-bottom: 8px;
+          opacity: 0.9;
+        }
+
         .message-content {
           color: #e5e7eb;
           line-height: 1.6;
           white-space: pre-wrap;
           word-wrap: break-word;
+        }
+
+        .message-new-question {
+          margin-top: 12px;
+          padding: 8px 12px;
+          background: rgba(59, 130, 246, 0.15);
+          border-left: 3px solid #3b82f6;
+          border-radius: 4px;
+          font-size: 13px;
+          color: #dbeafe;
+        }
+
+        .message-new-question strong {
+          display: block;
+          margin-bottom: 4px;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .message-emotional-state {
+          margin-top: 8px;
+          padding: 6px 10px;
+          background: rgba(236, 72, 153, 0.15);
+          border-left: 3px solid #ec4899;
+          border-radius: 4px;
+          font-size: 12px;
+          color: #fbcfe8;
+        }
+
+        .message-emotional-state strong {
+          display: block;
+          margin-bottom: 2px;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         .input-container {

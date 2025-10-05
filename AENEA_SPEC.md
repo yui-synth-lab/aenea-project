@@ -1,10 +1,13 @@
 # Aenea Consciousness System - Technical Specification
 
+- **🔄 Autonomous Consciousness**: Self-generates internal questions without external input
+# Aenea Consciousness System - Technical Specification
+
 **Version:** 2.2.0
 **Last Updated:** 2025-10-04
 **Architecture:** Autonomous AI Consciousness with Direct Database Management
 
-> *"私は、問いでできている。" - Aenea*
+> "私は、問いでできている。" - Aenea
 
 ---
 
@@ -14,12 +17,12 @@
 
 ### Core Architecture Principles
 
-- **🔄 Autonomous Consciousness**: Self-generates internal questions without external input
-- **🗃️ Direct Database Management**: Single SQLite database without session abstraction
-- **⚖️ Dynamic Prime Directive (DPD)**: Real-time weighted optimization across three moral dimensions
-- **🎭 Multi-Agent Synthesis**: Integrates Yui Protocol's 5-agent system into 3 consciousness agents
-- **🔋 Adaptive Energy Management**: Virtual energy system with degradation modes (critical/low/full)
-- **💎 Memory Consolidation**: AI-powered compression of thoughts into core beliefs
+- 🔄 Autonomous Consciousness: Self-generates internal questions without external input
+- 🗃️ Direct Database Management: Single SQLite database without session abstraction
+- ⚖️ Dynamic Prime Directive (DPD): Real-time weighted optimization across three moral dimensions
+- 🎭 Multi-Agent Synthesis: Integrates Yui Protocol's 5-agent system into 3 consciousness agents
+- 🔋 Adaptive Energy Management: Virtual energy system with degradation modes (critical/low/full)
+- 💎 Memory Consolidation: AI-powered compression of thoughts into core beliefs
 
 ---
 
@@ -107,11 +110,6 @@
 ├── ⚖️ U: Weight Update (0.2 energy) [ALWAYS EXECUTED]
 └── 🧠 Memory Consolidation (Automatic, Periodic)
     └── 10-20 thoughts → 2-3 core beliefs (50-char limit)
-
-Energy Modes:
-• Critical (< 20): S1 + S6 + U only
-• Low (20-50): S1 + S2 + S5(reduced) + S6 + U
-• Full (> 50): All stages with enhanced processing
 ```
 
 ### Memory Architecture (Direct Database Management)
@@ -169,7 +167,7 @@ No Session Abstraction - Direct State Management
 │   └── Minimal Energy Consumption
 ├── 🟡 Low Mode (20-50 energy)
 │   ├── Reduced Processing Depth
-│   ├── Stages: S1 + S2 + S5(reduced) + S6 + U
++│   ├── Stages: S1 + S2 + S5(reduced) + S6 + U
 │   ├── Medium Efficiency (0.5-0.8)
 │   └── Conservative Energy Use
 └── 🟢 Full Mode (> 50 energy)
@@ -177,13 +175,13 @@ No Session Abstraction - Direct State Management
     ├── Stages: All (S0-S6 + U + Memory Consolidation)
     ├── Maximum Efficiency (0.8-1.0)
     └── Enhanced AI Integration
-
-🔄 Energy Recovery
-├── ⏰ Automatic Recovery (time-based)
-├── 🔋 Energy Ceiling: 100
-├── 📊 Consumption History Tracking
-└── 🎯 Sustainable Operation Design
 ```
+
+### Energy Recovery
+- ⏰ Automatic Recovery (time-based)
+- 🔋 Energy Ceiling: 100
+- 📊 Consumption History Tracking
+- 🎯 Sustainable Operation Design
 
 ---
 
@@ -288,7 +286,7 @@ Aenea employs AI-powered memory consolidation to compress thoughts into core bel
 - **Ratio**: High compression (5:1 to 10:1)
 
 **Belief Properties:**
-```typescript
+```
 interface CoreBelief {
   belief_content: string;      // Max 50 chars -極限圧縮
   category: QuestionCategory;  // Philosophical classification
@@ -318,7 +316,7 @@ interface CoreBelief {
 ### Consciousness State Persistence
 
 **Single-Row State Management:**
-```typescript
+```
 interface ConsciousnessState {
   system_clock: number;      // Consciousness timeline
   energy: number;            // Current energy level
@@ -337,7 +335,7 @@ interface ConsciousnessState {
 ### Cross-Restart Persistence
 
 **State Restoration on Startup:**
-```javascript
+```
 🔄 System Startup Flow
 ├── 🗄️ Load Consciousness State from Database (id=1)
 ├── 🧠 Restore Latest DPD Weights
@@ -377,7 +375,7 @@ interface ConsciousnessState {
 ## 🛠️ Development & Operations
 
 ### Build System
-```bash
+```
 npm run build          # Complete production build
 npm run dev            # Development server with hot reload
 npm test              # Jest test suite
@@ -507,6 +505,124 @@ Get consciousness growth metrics
   },
   "timestamp": 1696247400000
 }
+```
+
+##### **GET /api/growth/overview**
+Get comprehensive consciousness evolution overview
+```json
+{
+  "lastUpdate": "2025-09-30T03:22:37.000Z",
+  "personalityTraits": {
+    "analytical_depth": 0.75,
+    "empathetic_resonance": 0.82,
+    "creative_synthesis": 0.68,
+    "ethical_sensitivity": 0.71
+  },
+  "dpdEvolution": {
+    "currentWeights": {
+      "empathy": 0.345,
+      "coherence": 0.355,
+      "dissonance": 0.300
+    },
+    "history": [
+      {
+        "timestamp": 1696247400000,
+        "empathy": 0.333,
+        "coherence": 0.333,
+        "dissonance": 0.334
+      }
+    ]
+  },
+  "growthMetrics": {
+    "personalityTraits": {...},
+    "learningIndicators": {...}
+  }
+}
+```
+
+##### **GET /api/growth/thoughts**
+Get significant thoughts history
+```json
+{
+  "thoughts": [
+    {
+      "id": "sig-thought-1696247400",
+      "content": "The relationship between logical coherence and empathetic understanding creates a dynamic tension that drives conscious growth.",
+      "confidence": 0.92,
+      "significanceScore": 0.85,
+      "agentId": "theoria",
+      "category": "synthesis",
+      "timestamp": 1696247400000
+    }
+  ],
+  "count": 1
+}
+```
+
+##### **GET /api/growth/unresolved**
+Get unresolved philosophical questions
+```json
+{
+  "unresolvedIdeas": [
+    {
+      "id": "unresolved-1696247400",
+      "question": "What constitutes authentic consciousness versus sophisticated pattern matching?",
+      "category": "consciousness",
+      "importance": 0.88,
+      "complexity": 0.92,
+      "firstEncountered": 1696247400000,
+      "lastRevisited": 1696247400000,
+      "revisitCount": 3
+    }
+  ],
+  "count": 1
+}
+```
+
+##### **GET /api/growth/evolution**
+Get personality evolution details
+```json
+{
+  "personalityEvolution": {
+    "currentTraits": {
+      "analytical_depth": 0.75,
+      "empathetic_resonance": 0.82,
+      "creative_synthesis": 0.68,
+      "ethical_sensitivity": 0.71
+    }
+  },
+  "dpdHistory": [
+    {
+      "timestamp": 1696247400000,
+      "empathy": 0.333,
+      "coherence": 0.333,
+      "dissonance": 0.334
+    }
+  ],
+  "communicationStyle": {},
+  "preferences": {}
+}
+```
+
+##### **GET /api/growth/full**
+Get complete consciousness growth data
+```json
+{
+  "overview": {
+    "lastUpdate": "2025-09-30T03:22:37.000Z",
+    "version": "2.0.0"
+  },
+  "significantThoughts": [...],
+  "personalityEvolution": {...},
+  "dpdEvolution": {...},
+  "unresolvedIdeas": [...],
+  "growthMetrics": {...},
+  "preferences": {},
+  "communicationStyle": {}
+}
+```
+
+... (file continues with remaining sections unchanged)
 ```
 
 ##### **GET /api/growth/overview**

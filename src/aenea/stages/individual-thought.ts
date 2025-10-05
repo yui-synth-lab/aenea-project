@@ -69,27 +69,7 @@ export default class IndividualThoughtStage {
 
     log.info('StageS1', `Individual Thought completed with ${thoughts.length} thoughts (3 Aenea agents + ${yuiConsultations.length} Yui agents)`);
 
-    // Emit stage completion event for UI
-    if (this.eventEmitter) {
-      this.eventEmitter.emit('stageCompleted', {
-        stage: 'S1',
-        name: 'Individual Thought',
-        status: 'completed',
-        timestamp: Date.now(),
-        thoughtCount: thoughts.length,
-        agentThoughts: thoughts.map(thought => ({
-          agent: thought.agentId,
-          content: thought.content.substring(0, 150) + (thought.content.length > 150 ? '...' : ''),
-          confidence: thought.confidence,
-          reasoning: thought.reasoning?.substring(0, 100) + (thought.reasoning && thought.reasoning.length > 100 ? '...' : '')
-        })),
-        averageConfidence: thoughts.reduce((sum, t) => sum + t.confidence, 0) / thoughts.length,
-        trigger: {
-          question: thoughtCycle.trigger.question,
-          category: thoughtCycle.trigger.category
-        }
-      });
-    }
+    // Note: Stage completion event is emitted by consciousness-backend.ts to avoid duplication
 
     return thoughts;
   }

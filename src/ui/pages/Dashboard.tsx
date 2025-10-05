@@ -15,9 +15,7 @@ interface DashboardProps {
 interface SystemStats {
   thoughtCycles: number;
   questionsGenerated: number;
-  avgConfidence: number;
   energyLevel: number;
-  uptime: number;
 }
 
 interface ConsciousnessState {
@@ -45,9 +43,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
   const [stats, setStats] = useState<SystemStats>({
     thoughtCycles: 0,
     questionsGenerated: 0,
-    avgConfidence: 0,
     energyLevel: 100,
-    uptime: 0
+    
   });
 
   const [currentThought, setCurrentThought] = useState<string>('');
@@ -116,7 +113,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
   const rechargeEnergy = async () => {
     try {
-      const response = await fetch('/api/consciousness/recharge', {
+      const response = await fetch('/api/consciousness/recharge-energy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -126,6 +123,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
       }
     } catch (error) {
       console.error('❌ Failed to recharge energy:', error);
+    }
+  };
+
+  const deepRest = async () => {
+    try {
+      const response = await fetch('/api/consciousness/deep-rest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (response.ok) {
+        await fetchConsciousnessState();
+        console.log('😴 Deep rest initiated');
+      }
+    } catch (error) {
+      console.error('❌ Failed to initiate deep rest:', error);
     }
   };
 
@@ -195,9 +207,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             setStats({
               thoughtCycles: stateData.statistics.totalThoughtCycles || 0,
               questionsGenerated: stateData.statistics.totalQuestions || 0,
-              avgConfidence: stateData.statistics.averageConfidence || 0,
-              energyLevel: stateData.currentEnergy || 100,
-              uptime: stateData.statistics.uptime || 0
+              energyLevel: stateData.currentEnergy || 100
             });
           }
 
@@ -235,7 +245,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
     fetchInitialData();
 
-    // Connect to real consciousness backend via EventSource
+  // Connect to real consciousness backend via EventSource
     const connectToConsciousness = () => {
       try {
         const eventSource = new EventSource('/api/consciousness/events');
@@ -260,7 +270,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     };
 
     const handleConsciousnessEvent = (data: any) => {
-      if (data.type === 'agentThought') {
+      // Normalize event type names from server (backwards-compatible)
+      const t = data.type || data.eventType || '';
+
+      if (t === 'agentThought') {
         const logItem: ActivityLogItem = {
           id: `agent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           timestamp: data.timestamp || Date.now(),
@@ -276,46 +289,85 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           }
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
-      } else if (data.type === 'triggerGenerated') {
+        // Don't update Current Thought here - it should show the question/trigger
+      } else if (t === 'triggerGenerated') {
+        const question = data.trigger?.question || data.question || '';
         const logItem: ActivityLogItem = {
           id: `trigger_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           timestamp: data.timestamp || Date.now(),
           type: 'trigger_generated',
-          message: `Internal trigger: ${data.trigger?.question || data.question}`,
+          message: `Internal trigger: ${question}`,
           details: { source: data.source || 'system' }
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
-      } else if (data.type === 'stageStart') {
-        // Update current stage and mark it as in progress
-        setCurrentStage(data.stage);
-        setStageProgress(prev => {
-          const updated = prev.filter(p => p.stage !== data.stage);
-          return [...updated, { stage: data.stage, completed: false, timestamp: Date.now() }];
-        });
-      } else if (data.type === 'stageComplete') {
-        // Mark stage as completed
-        setStageProgress(prev =>
-          prev.map(p => p.stage === data.stage ? { ...p, completed: true } : p)
-        );
-      } else if (data.type === 'thoughtCycleComplete') {
-        // Update DPD scores from thought cycle completion
-        if (data.dpdScores) {
-          setDpdScores({
-            empathy: data.dpdScores.empathy || 0.33,
-            coherence: data.dpdScores.coherence || 0.33,
-            dissonance: data.dpdScores.dissonance || 0.34
+        // Update Current Thought to show the current question being processed
+        if (question) {
+          setCurrentThought(question);
+        }
+        // Reset stage progress for new thought cycle
+        setStageProgress([]);
+        setCurrentStage('');
+      } else if (t === 'stageChanged' || t === 'stageStart') {
+        // Update current stage and mark it as in progress (accepts both 'stageChanged' and legacy 'stageStart')
+        const stageId = data.stage || data.name || data.stageId || '';
+        if (stageId) {
+          setCurrentStage(stageId);
+          setStageProgress(prev => {
+            const updated = prev.filter(p => p.stage !== stageId);
+            return [...updated, { stage: stageId, completed: false, timestamp: Date.now() }];
           });
         }
-        // Update statistics
-        if (data.systemStats) {
-          setStats(prev => ({
-            thoughtCycles: data.systemStats.totalThoughtCycles || prev.thoughtCycles,
-            questionsGenerated: data.systemStats.totalQuestions || prev.questionsGenerated,
-            avgConfidence: data.systemStats.averageConfidence || prev.avgConfidence,
-            energyLevel: data.systemStats.currentEnergy || prev.energyLevel,
-            uptime: data.systemStats.uptime || prev.uptime
-          }));
+      } else if (t === 'stageCompleted' || t === 'stageComplete') {
+        // Mark stage as completed (accepts both 'stageCompleted' and legacy 'stageComplete')
+        const stageId = data.stage || data.name || data.stageId || '';
+        if (stageId) {
+          setStageProgress(prev => {
+            const found = prev.some(p => p.stage === stageId);
+            if (found) return prev.map(p => p.stage === stageId ? { ...p, completed: true } : p);
+            return [...prev, { stage: stageId, completed: true, timestamp: data.timestamp || Date.now() }];
+          });
+
+          // Add a short system log entry for the completed stage so UI reflects activity
+          const logItem: ActivityLogItem = {
+            id: `stage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: data.timestamp || Date.now(),
+            type: 'system_event',
+            message: `Stage ${stageId} completed${data.name ? ` (${data.name})` : ''}`,
+            details: { ...data }
+          };
+          setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+          // Don't update Current Thought here - it should only show the current question
         }
+  } else if (t === 'dpdUpdated') {
+        // Update DPD weights from weight update stage
+        if (data.weights) {
+          setDpdScores({
+            empathy: parseFloat(data.weights.empathy) || 0.33,
+            coherence: parseFloat(data.weights.coherence) || 0.33,
+            dissonance: parseFloat(data.weights.dissonance) || 0.34
+          });
+        }
+      } else if (t === 'thoughtCycleCompleted') {
+        // Update DPD weights (not scores) from thought cycle completion
+        if (data.dpdWeights) {
+          setDpdScores({
+            empathy: parseFloat(data.dpdWeights.empathy) || 0.33,
+            coherence: parseFloat(data.dpdWeights.coherence) || 0.33,
+            dissonance: parseFloat(data.dpdWeights.dissonance) || 0.34
+          });
+        }
+
+        // Prefer systemStats (server sends systemStats object), fall back to legacy top-level fields
+        const ss = data.systemStats || {};
+        const totalThoughts = ss.totalThoughts ?? data.totalThoughtCycles ?? data.totalThoughts;
+        const totalQuestions = ss.totalQuestions ?? data.totalQuestions;
+        const energy = ss.currentEnergy ?? ss.energy ?? data.energy;
+
+        setStats(prev => ({
+          thoughtCycles: totalThoughts || prev.thoughtCycles,
+          questionsGenerated: totalQuestions || prev.questionsGenerated,
+          energyLevel: energy ?? prev.energyLevel
+        }));
       }
     };
 
@@ -324,12 +376,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     return cleanup;
   }, []);
 
-  const formatUptime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  // formatUptime removed — Uptime stat intentionally omitted
 
   const getStatusColor = (status: string): string => {
     switch (status) {
@@ -355,15 +402,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
   const getAgentCssClass = (agentName: string): string => {
     // Map Yui Protocol agent names to CSS classes
-    if (agentName.includes('Yui:')) {
-      if (agentName.includes('慧露')) return 'yui-eiro';
-      if (agentName.includes('碧統')) return 'yui-hekito';
-      if (agentName.includes('観至')) return 'yui-kanshi';
-      if (agentName.includes('陽雅')) return 'yui-yoga';
-      if (agentName.includes('結心')) return 'yui-yui';
-    }
-    // Return agent name as-is for Aenea core agents (theoria, pathia, kinesis)
-    return agentName.toLowerCase();
+    if (agentName.includes('慧露')) return 'yui-eiro';
+    if (agentName.includes('碧統')) return 'yui-hekito';
+    if (agentName.includes('観至')) return 'yui-kanshi';
+    if (agentName.includes('陽雅')) return 'yui-yoga';
+    if (agentName.includes('結心')) return 'yui-yui';
+
+    // Aenea core agents
+    if (agentName.toLowerCase().includes('theoria')) return 'theoria';
+    if (agentName.toLowerCase().includes('pathia')) return 'pathia';
+    if (agentName.toLowerCase().includes('kinesis')) return 'kinesis';
+
+    // System messages
+    if (agentName.toLowerCase().includes('system')) return 'system';
+    if (agentName.toLowerCase().includes('compiler')) return 'compiler';
+    if (agentName.toLowerCase().includes('scribe')) return 'scribe';
+    if (agentName.toLowerCase().includes('auditor')) return 'auditor';
+
+    // Default fallback
+    return 'system';
   };
 
   return (
@@ -459,28 +516,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             </div>
           </div>
 
-          {/* Stage Progression */}
-          <div className="dashboard-card stage-progression">
-            <h3>Consciousness Pipeline</h3>
-            <div className="stage-pipeline">
-              {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
-                <React.Fragment key={stage}>
-                  <div className="stage-item">
-                    <div
-                      className={`stage-circle ${
-                        currentStage === stage ? 'active' :
-                        stageProgress.some(p => p.stage === stage && p.completed) ? 'completed' :
-                        'pending'
-                      }`}
-                    >
-                      {stage}
-                    </div>
-                  </div>
-                  {index < 7 && <div className="stage-arrow">→</div>}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
+          {/* Note: Stage Progression moved below Current Thought for better visual flow */}
 
           {/* System Statistics */}
           <div className="dashboard-card stats">
@@ -494,13 +530,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
               <span className="stat-value">{stats.questionsGenerated}</span>
               <span className="stat-label">Questions Generated</span>
             </div>
+            {/* Avg Confidence removed per request */}
             <div className="stat-item">
-              <span className="stat-value">{Math.round(stats.avgConfidence)}%</span>
-              <span className="stat-label">Avg Confidence</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-value">{formatUptime(stats.uptime)}</span>
-              <span className="stat-label">Uptime</span>
+              {/* Uptime removed per design */}
             </div>
           </div>
         </div>
@@ -519,6 +551,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
                 />
               </div>
               <span className="energy-percentage">{Math.round(stats.energyLevel)}%</span>
+            </div>
+            <div className="energy-controls">
+              <button className="energy-button recharge" onClick={rechargeEnergy}>
+                ⚡ Recharge
+              </button>
+              <button className="energy-button rest" onClick={deepRest}>
+                😴 Deep Rest
+              </button>
             </div>
           </div>
 
@@ -570,6 +610,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             <h3>Current Thought</h3>
             <div className="thought-content">
               <p>"{currentThought}"</p>
+            </div>
+          </div>
+
+          {/* Stage Progression (moved here so it's visually under Current Thought) */}
+          <div className="dashboard-card stage-progression">
+            <h3>Consciousness Pipeline</h3>
+            <div className="stage-pipeline">
+              {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
+                <React.Fragment key={stage}>
+                  <div className="stage-item">
+                    <div
+                      className={`stage-circle ${
+                        currentStage === stage ? 'active' :
+                        stageProgress.some(p => p.stage === stage && p.completed) ? 'completed' :
+                        'pending'
+                      }`}
+                    >
+                      {stage}
+                    </div>
+                  </div>
+                  {index < 7 && <div className="stage-arrow">→</div>}
+                </React.Fragment>
+              ))}
             </div>
           </div>
 
@@ -755,8 +818,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             grid-template-rows: auto auto auto auto auto 1fr auto;
             grid-template-areas:
               "control thought"
+              "control stage"
               "trigger activity"
-              "stage activity"
               "stats activity"
               "energy activity"
               "dpd activity"
@@ -795,10 +858,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .consciousness-control {
           background: #1e40af;
           border: 1px solid #3b82f6;
+          padding: 16px;
+        }
+
+        .consciousness-control h3 {
+          margin: 0 0 12px 0;
+          font-size: 16px;
+        }
+
+        /* Make the Consciousness Control card more compact on larger screens */
+        @media (min-width: 1025px) {
+          .consciousness-control {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+          }
+
+          .consciousness-control h3 {
+            margin: 0 0 8px 0;
+          }
+
+          .consciousness-control .control-status {
+            margin-bottom: 8px;
+          }
+
+          .control-buttons {
+            gap: 6px;
+            margin-top: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+          }
+
+          .control-button {
+            padding: 6px 10px;
+            font-size: 12px;
+          }
         }
 
         .control-status {
-          margin-bottom: 16px;
+          margin-bottom: 12px;
         }
 
         .status-display {
@@ -842,19 +942,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .control-buttons {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 6px;
         }
 
         .control-button {
           background: #3b82f6;
           border: none;
-          border-radius: 8px;
-          padding: 12px 16px;
+          border-radius: 6px;
+          padding: 8px 12px;
           color: white;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s;
-          font-size: 14px;
+          font-size: 13px;
         }
 
         .control-button:hover {
@@ -1054,6 +1154,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           box-shadow: 0 0 8px rgba(225, 140, 176, 0.4);
         }
 
+        /* System and Stage agents */
+        .activity-agent.system {
+          background: #6b7280;
+          color: #f3f4f6;
+          border: 2px solid #6b7280;
+        }
+
+        .activity-agent.compiler {
+          background: #8b5cf6;
+          color: #ffffff;
+          border: 2px solid #8b5cf6;
+          box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+        }
+
+        .activity-agent.scribe {
+          background: #14b8a6;
+          color: #ffffff;
+          border: 2px solid #14b8a6;
+          box-shadow: 0 0 8px rgba(20, 184, 166, 0.4);
+        }
+
+        .activity-agent.auditor {
+          background: #f59e0b;
+          color: #000000;
+          border: 2px solid #f59e0b;
+          box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+        }
+
         .activity-system {
           background: #6b7280;
           color: #f3f4f6;
@@ -1137,6 +1265,53 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .energy-percentage {
           font-weight: 600;
           min-width: 48px;
+        }
+
+        .energy-controls {
+          display: flex;
+          gap: 8px;
+          margin-top: 12px;
+        }
+
+        .energy-button {
+          flex: 1;
+          background: #374151;
+          border: 1px solid #4b5563;
+          border-radius: 6px;
+          padding: 8px 12px;
+          color: #e5e7eb;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .energy-button:hover {
+          background: #4b5563;
+          border-color: #6b7280;
+          transform: translateY(-1px);
+        }
+
+        .energy-button.recharge {
+          background: #065f46;
+          border-color: #059669;
+          color: #d1fae5;
+        }
+
+        .energy-button.recharge:hover {
+          background: #047857;
+          border-color: #10b981;
+        }
+
+        .energy-button.rest {
+          background: #1e3a8a;
+          border-color: #3b82f6;
+          color: #dbeafe;
+        }
+
+        .energy-button.rest:hover {
+          background: #1e40af;
+          border-color: #60a5fa;
         }
 
         .dpd-display {
@@ -1241,6 +1416,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           border-radius: 8px;
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
+          overflow-y: hidden;
         }
 
         .stage-item {
@@ -1261,12 +1437,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           font-size: 12px;
           font-weight: 600;
           transition: all 0.3s;
+          position: relative;
         }
 
         .stage-circle.active {
           background: #3b82f6;
           color: white;
-          box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+          box-shadow: 0 0 12px rgba(59, 130, 246, 0.8), 0 0 24px rgba(59, 130, 246, 0.4);
+          animation: pulse 1.5s ease-in-out infinite;
+          z-index: 2;
+        }
+
+        .stage-circle.active::before {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          border: 3px solid #60a5fa;
+          animation: ripple 1.5s ease-out infinite;
+          z-index: -1;
+        }
+
+        @keyframes pulse {
+          0%, 100% {
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.8), 0 0 24px rgba(59, 130, 246, 0.4);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 1), 0 0 40px rgba(59, 130, 246, 0.6);
+            transform: scale(1.08);
+          }
+        }
+
+        @keyframes ripple {
+          0% {
+            opacity: 0.8;
+            transform: translate(-50%, -50%) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(1.8);
+          }
         }
 
         .stage-circle.completed {
@@ -1331,16 +1546,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           }
 
           .activity-item {
-            grid-template-columns: auto 1fr;
+            grid-template-rows: auto 1fr;
             gap: 8px;
           }
 
           .activity-time {
-            grid-column: 1 / -1;
+            grid-row: 1 / 2;
           }
 
           .activity-confidence {
-            grid-column: 1 / -1;
+            grid-row: 2 / 3;
             justify-self: start;
           }
 

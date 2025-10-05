@@ -88,7 +88,7 @@ export const DPDScoreDisplay: React.FC = () => {
         const data = JSON.parse(event.data);
 
         // DPD 更新イベントまたは思考サイクル完了時に再取得
-        if (data.type === 'dpdUpdate' || data.type === 'thoughtCycleComplete' || data.type === 'weightUpdate') {
+        if (data.type === 'dpdUpdated' || data.type === 'thoughtCycleCompleted' || data.type === 'weightUpdate') {
           fetchDPDEvolution();
         }
       };

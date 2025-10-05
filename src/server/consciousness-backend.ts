@@ -172,10 +172,10 @@ class ConsciousnessBackend extends EventEmitter {
     // Initialize stage processors with agents and event emitter
     this.individualThoughtStage = new IndividualThoughtStage(this.agents, this.databaseManager, this);
     this.mutualReflectionStage = new MutualReflectionStage(this.agents, this);
-    this.auditorStage = new AuditorStage(undefined, this);
 
-    // Use system agent for Compiler and Scribe stages
+    // Use system agent for Auditor, DPD Assessment, Compiler and Scribe stages
     const systemAgent = this.agents.get('system');
+    this.auditorStage = new AuditorStage(systemAgent, this);
     this.dpdAssessmentStage = new DPDAssessmentStage(this.dpdWeights, systemAgent, this);
 
     this.compilerStage = new CompilerStage(systemAgent, this);
@@ -564,11 +564,29 @@ class ConsciousnessBackend extends EventEmitter {
 
     try {
       // S0: Trigger Generation (already completed, consume energy)
+      // Emit stage start event
+      this.emit('stageChanged', {
+        stage: 'S0',
+        name: 'Internal Trigger Generation',
+        status: 'in_progress',
+        timestamp: Date.now()
+      });
+
       const s0EnergyCost = 1.0;
       await this.energyManager.consumeEnergy(s0EnergyCost, 'stage_S0');
       thoughtCycle.totalEnergy += s0EnergyCost;
       thoughtCycle.totalStages++;
       log.info('StageS0', `Internal trigger generated: "${trigger.question.substring(0, 60)}..."`);
+
+      // Emit stage completion event
+      this.emit('stageCompleted', {
+        stage: 'S0',
+        name: 'Internal Trigger Generation',
+        status: 'completed',
+        timestamp: Date.now(),
+        question: trigger.question.substring(0, 100),
+        category: trigger.category
+      });
 
       // Stage execution based on energy mode
       await this.executeIndividualThought(thoughtCycle);
@@ -670,6 +688,14 @@ class ConsciousnessBackend extends EventEmitter {
   // ============================================================================
 
   private async executeIndividualThought(thoughtCycle: ThoughtCycle): Promise<void> {
+    // Emit stage start event
+    this.emit('stageChanged', {
+      stage: 'S1',
+      name: 'Individual Thought',
+      status: 'in_progress',
+      timestamp: Date.now()
+    });
+
     const energyCost = 1.0;
     await this.energyManager.consumeEnergy(energyCost, 'stage_S1');
     thoughtCycle.totalEnergy += energyCost;
@@ -677,9 +703,26 @@ class ConsciousnessBackend extends EventEmitter {
 
     const thoughts = await this.individualThoughtStage.run(thoughtCycle);
     thoughtCycle.thoughts = thoughts;
+
+    // Emit stage completion event
+    this.emit('stageCompleted', {
+      stage: 'S1',
+      name: 'Individual Thought',
+      status: 'completed',
+      timestamp: Date.now(),
+      thoughtCount: thoughts.length
+    });
   }
 
   private async executeMutualReflection(thoughtCycle: ThoughtCycle): Promise<void> {
+    // Emit stage start event
+    this.emit('stageChanged', {
+      stage: 'S2',
+      name: 'Mutual Reflection',
+      status: 'in_progress',
+      timestamp: Date.now()
+    });
+
     const energyCost = 0.5;
     await this.energyManager.consumeEnergy(energyCost, 'stage_S2');
     thoughtCycle.totalEnergy += energyCost;
@@ -731,6 +774,14 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async executeAuditor(thoughtCycle: ThoughtCycle): Promise<void> {
+    // Emit stage start event
+    this.emit('stageChanged', {
+      stage: 'S3',
+      name: 'Auditor',
+      status: 'in_progress',
+      timestamp: Date.now()
+    });
+
     const energyCost = 0.5;
     await this.energyManager.consumeEnergy(energyCost, 'stage_S3');
     thoughtCycle.totalEnergy += energyCost;
@@ -764,6 +815,14 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async executeDPDAssessment(thoughtCycle: ThoughtCycle): Promise<void> {
+    // Emit stage start event
+    this.emit('stageChanged', {
+      stage: 'S4',
+      name: 'DPD Assessment',
+      status: 'in_progress',
+      timestamp: Date.now()
+    });
+
     const energyCost = 0.5;
     await this.energyManager.consumeEnergy(energyCost, 'stage_S4');
     thoughtCycle.totalEnergy += energyCost;
@@ -811,6 +870,14 @@ class ConsciousnessBackend extends EventEmitter {
   private async executeCompiler(thoughtCycle: ThoughtCycle): Promise<void> {
     console.log(`[Backend S5] Starting Compiler stage at ${new Date().toISOString()}`);
 
+    // Emit stage start event
+    this.emit('stageChanged', {
+      stage: 'S5',
+      name: 'Compiler',
+      status: 'in_progress',
+      timestamp: Date.now()
+    });
+
     const energyCost = 0.8;
     await this.energyManager.consumeEnergy(energyCost, 'stage_S5');
     thoughtCycle.totalEnergy += energyCost;
@@ -846,6 +913,14 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async executeScribe(thoughtCycle: ThoughtCycle): Promise<void> {
+    // Emit stage start event
+    this.emit('stageChanged', {
+      stage: 'S6',
+      name: 'Scribe',
+      status: 'in_progress',
+      timestamp: Date.now()
+    });
+
     const energyCost = 0.3;
     await this.energyManager.consumeEnergy(energyCost, 'stage_S6');
     thoughtCycle.totalEnergy += energyCost;
@@ -884,6 +959,14 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async executeWeightUpdate(thoughtCycle: ThoughtCycle): Promise<void> {
+    // Emit stage start event
+    this.emit('stageChanged', {
+      stage: 'U',
+      name: 'Weight Update',
+      status: 'in_progress',
+      timestamp: Date.now()
+    });
+
     const energyCost = 0.2;
     await this.energyManager.consumeEnergy(energyCost, 'stage_U');
     thoughtCycle.totalEnergy += energyCost;
@@ -923,20 +1006,18 @@ class ConsciousnessBackend extends EventEmitter {
 
     log.info('StageU', 'Weight Update completed');
 
-    // Emit stage completion event for UI
+    // Emit stage completion event
     this.emit('stageCompleted', {
       stage: 'U',
       name: 'Weight Update',
       status: 'completed',
       timestamp: Date.now(),
+      weightsUpdated: !!thoughtCycle.dpdScores,
       weights: this.dpdWeights,
       version: this.dpdWeights.version,
       empathyWeight: this.dpdWeights.empathy.toFixed(3),
       coherenceWeight: this.dpdWeights.coherence.toFixed(3),
-      dissonanceWeight: this.dpdWeights.dissonance.toFixed(3),
-      weightSum: (this.dpdWeights.empathy + this.dpdWeights.coherence + this.dpdWeights.dissonance).toFixed(3),
-      evolutionTrigger: (this.dpdWeights as any).triggerType || 'unknown',
-      context: (this.dpdWeights as any).context?.substring(0, 100) + ((this.dpdWeights as any).context && (this.dpdWeights as any).context.length > 100 ? '...' : '') || 'No context'
+      dissonanceWeight: this.dpdWeights.dissonance.toFixed(3)
     });
   }
 

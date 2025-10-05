@@ -401,7 +401,7 @@ router.get('/events', (req, res) => {
   const stageCompletedListener = (data: any) => sendEvent('stageCompleted', data);
   const agentThoughtListener = (data: any) => sendEvent('agentThought', data);
   const thoughtCycleCompletedListener = (data: any) => {
-    // Send thoughtCycleComplete event with full statistics
+    // Send thoughtCycleCompleted event with full statistics
     const eventData = {
       ...data,
       systemStats: {
@@ -413,7 +413,7 @@ router.get('/events', (req, res) => {
       dpdScores: data.dpdScores,
       dpdWeights: data.dpdWeights
     };
-    sendEvent('thoughtCycleComplete', eventData);
+    sendEvent('thoughtCycleCompleted', eventData);
   };
   const thoughtCycleFailedListener = (data: any) => sendEvent('thoughtCycleFailed', data);
   const clockAdvancedListener = (data: any) => sendEvent('clockAdvanced', data);
