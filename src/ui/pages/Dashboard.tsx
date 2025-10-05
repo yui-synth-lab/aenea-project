@@ -815,13 +815,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
           .dashboard-layout {
             grid-template-columns: 350px 1fr;
-            grid-template-rows: auto auto auto auto auto 1fr auto;
+            grid-template-rows: auto auto auto auto auto auto 1fr auto;
             grid-template-areas:
               "control thought"
-              "control stage"
-              "trigger activity"
+              "trigger stage"
               "stats activity"
               "energy activity"
+              "dpd activity"
+              "dpd activity"
               "dpd activity"
               "dpd philosophy";
             height: calc(100vh - 120px);
@@ -858,12 +859,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .consciousness-control {
           background: #1e40af;
           border: 1px solid #3b82f6;
-          padding: 16px;
+          padding: 12px;
         }
 
         .consciousness-control h3 {
-          margin: 0 0 12px 0;
-          font-size: 16px;
+          margin: 0 0 8px 0;
+          font-size: 15px;
         }
 
         /* Make the Consciousness Control card more compact on larger screens */
@@ -872,19 +873,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            padding: 16px;
+            padding: 12px;
           }
 
           .consciousness-control h3 {
-            margin: 0 0 8px 0;
+            margin: 0 0 6px 0;
+            font-size: 14px;
           }
 
           .consciousness-control .control-status {
-            margin-bottom: 8px;
+            margin-bottom: 6px;
           }
 
           .control-buttons {
-            gap: 6px;
+            gap: 4px;
             margin-top: 0;
             display: flex;
             flex-direction: column;
@@ -892,13 +894,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           }
 
           .control-button {
-            padding: 6px 10px;
-            font-size: 12px;
+            padding: 5px 8px;
+            font-size: 11px;
           }
         }
 
         .control-status {
-          margin-bottom: 12px;
+          margin-bottom: 8px;
         }
 
         .status-display {
@@ -910,11 +912,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .status-indicator {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 16px;
-          border-radius: 8px;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 6px;
           font-weight: 600;
-          font-size: 14px;
+          font-size: 12px;
         }
 
         .status-indicator.stopped {
@@ -933,8 +935,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .status-indicator .status-dot {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background-color: currentColor;
         }

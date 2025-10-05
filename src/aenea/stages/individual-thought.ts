@@ -192,7 +192,7 @@ ${personality.interactionPatterns}`;
 - あなた自身の名前「${personality.name}」以外のエージェント名は、文章のどこにも書かないでください
 - 常にあなた独自の視点と専門性を保ってください
 - あなたの人格が明確に表れるような語り方をしてください
-- 200-400文字で簡潔に、しかし深く応答してください
+- 200文字で簡潔に、しかし深く応答してください
 - 日本語で応答してください`;
 
     // Build user prompt with context
@@ -316,9 +316,9 @@ ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察�
       if (contrastingResponse) {
         const contrastingThought: StructuredThought = {
           id: `yui_${selectedAgents.contrasting.id}_${thoughtCycle.id || Date.now() + 1}`,
-          agentId: `yui:${selectedAgents.contrasting.name}`,
+          agentId: `${selectedAgents.contrasting.name}`,
           content: contrastingResponse.content,
-          reasoning: `Yui (対比): ${selectedAgents.contrasting.name} - ${selectedAgents.contrasting.reason}`,
+          reasoning: `${selectedAgents.contrasting.name} - ${selectedAgents.contrasting.reason}`,
           confidence: contrastingResponse.confidence,
           timestamp: contrastingResponse.timestamp,
           systemClock: 0,

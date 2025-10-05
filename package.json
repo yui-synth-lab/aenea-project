@@ -21,7 +21,8 @@
     "debug:internal-state": "npm run dev -- --debug-mode",
     "test:ui": "node tests/ui/ui-api-test.js",
     "test:ui-selenium": "node tests/ui/selenium-ui-test.js",
-    "demo": "npm run build && tsx src/server/aenea-server.ts"
+    "demo": "npm run build && tsx src/server/aenea-server.ts",
+    "analyze": "tsx scripts/analyze-growth.ts"
   },
   "keywords": [
     "ai",
