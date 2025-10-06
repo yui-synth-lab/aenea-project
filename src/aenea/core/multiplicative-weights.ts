@@ -47,8 +47,8 @@ export class MultiplicativeWeightsUpdater {
     this.config = {
       learningRate: 0.05,
       regularization: 0.01,
-      minWeight: 0.05,
-      maxWeight: 0.85,
+      minWeight: 0.10,  // Increased to prevent extreme imbalance
+      maxWeight: 0.75,  // Decreased to maintain diversity
       decayFactor: 0.99,
       ...config
     };
@@ -69,7 +69,7 @@ export class MultiplicativeWeightsUpdater {
     // 各次元のパフォーマンスフィードバック（損失）を計算
     const empathyLoss = this.calculateLoss(scores.empathy, performanceTarget);
     const coherenceLoss = this.calculateLoss(scores.coherence, performanceTarget);
-    const dissonanceLoss = this.calculateInverseLoss(scores.dissonance, 0.3); // Lower dissonance is better
+    const dissonanceLoss = this.calculateLoss(scores.dissonance, 0.5); // Moderate dissonance is creative
 
     // Apply multiplicative updates with regularization
     // 正則化付き乗法的更新を適用

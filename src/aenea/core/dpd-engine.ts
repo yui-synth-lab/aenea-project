@@ -873,11 +873,13 @@ ${reflectionsText}
    * Calculate weight adjustment for a component
    */
   private calculateWeightAdjustment(
-    component: keyof DPDWeights, 
-    currentScore: number, 
+    component: keyof DPDWeights,
+    currentScore: number,
     targetScore?: number
   ): WeightAdjustment {
-    const target = targetScore || 0.7; // Default target score
+    // Dissonance is a creative force - moderate levels (0.4-0.6) are healthy
+    // 不協和は創造的な力 - 中程度のレベル（0.4-0.6）が健全
+    const target = targetScore || (component === 'dissonance' ? 0.5 : 0.7);
     const error = target - currentScore;
     const adjustment = error * this.weightParams.learningRate;
     

@@ -1613,11 +1613,16 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
     // Get DPD weights history from database with sampling
     const { records, totalCount } = this.databaseManager.getDPDWeightsHistorySampled(limit, strategy);
 
-    console.log('[DEBUG] getDPDEvolution - this.dpdWeights:', this.dpdWeights);
+    // Get the latest weights from database (most accurate source of truth)
+    const latestFromDB = this.databaseManager.getLatestDPDWeights();
+    const currentWeights = latestFromDB || this.dpdWeights;
+
+    console.log('[DEBUG] getDPDEvolution - DB latest:', latestFromDB);
+    console.log('[DEBUG] getDPDEvolution - memory:', this.dpdWeights);
     console.log('[DEBUG] getDPDEvolution - records.length:', records.length, 'totalCount:', totalCount);
 
     return {
-      currentWeights: this.dpdWeights,
+      currentWeights: currentWeights,
       history: records,
       totalCount: totalCount
     };

@@ -221,10 +221,10 @@ ${memoriesText || '（まだありません）'}
       main = mainMatch[1].trim().replace(/^[「『"]|[」』"]$/g, '');
     }
 
-    // 新しい問い
-    const questionMatch = content.match(/(?:新しい問い|new question[^:：]*)[：:]\s*[「『"]?([^」』"\n]+)[」』"]?/i);
+    // 新しい問い（複数行対応）
+    const questionMatch = content.match(/(?:新しい問い|new question[^:：]*)[：:]\s*(.+?)(?=\n(?:感情状態|emotional|$))/is);
     if (questionMatch) {
-      newQuestion = questionMatch[1].trim();
+      newQuestion = questionMatch[1].trim().replace(/^[「『"]|[」』"]$/g, '');
       // "なし"や"null"の場合は null に変換
       if (newQuestion.match(/^(なし|null|none|-)$/i)) {
         newQuestion = '';

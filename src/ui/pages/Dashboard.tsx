@@ -1342,7 +1342,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .thought-content {
           background: #374151;
-          padding: 16px;
+          padding: 8px;
           border-radius: 8px;
           border-left: 4px solid #3b82f6;
           /* Allow vertical scrolling when content exceeds the fixed max-height */
