@@ -1,0 +1,68 @@
+/**
+ * Loading Spinner - Cyberpunk Version
+ */
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--cyber-bg-primary);
+}
+
+.loading-content {
+  text-align: center;
+  border: 2px solid var(--cyber-neon-cyan);
+  padding: 48px;
+  background: var(--cyber-bg-secondary);
+  box-shadow:
+    0 0 20px var(--cyber-glow-cyan),
+    inset 0 0 20px rgba(0, 255, 255, 0.1);
+  position: relative;
+}
+
+.loading-content::before,
+.loading-content::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--cyber-neon-cyan);
+  box-shadow: 0 0 10px var(--cyber-glow-cyan);
+}
+
+.loading-content::before {
+  top: -2px;
+  left: -2px;
+}
+
+.loading-content::after {
+  bottom: -2px;
+  right: -2px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--cyber-border);
+  border-top: 3px solid var(--cyber-neon-cyan);
+  border-right: 3px solid var(--cyber-neon-magenta);
+  animation: spin 1s linear infinite;
+  margin: 0 auto 24px;
+  box-shadow:
+    0 0 15px var(--cyber-glow-cyan),
+    inset 0 0 15px rgba(0, 255, 255, 0.2);
+}
+
+.loading-content h2 {
+  color: var(--cyber-neon-cyan);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 700;
+  text-shadow: 0 0 10px var(--cyber-glow-cyan);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

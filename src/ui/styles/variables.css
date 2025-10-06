@@ -1,0 +1,30 @@
+/**
+ * Aenea Cyberpunk Theme Variables
+ */
+
+:root {
+  /* Background Colors */
+  --cyber-bg-primary: #0a0e15;
+  --cyber-bg-secondary: rgba(15, 20, 25, 0.7);
+  --cyber-bg-tertiary: #1a1f2e;
+
+  /* Border Colors */
+  --cyber-border: #1e2433;
+
+  /* Neon Colors */
+  --cyber-neon-cyan: #00ffff;
+  --cyber-neon-magenta: #ff00ff;
+  --cyber-neon-lime: #00ff41;
+  --cyber-neon-yellow: #ffff00;
+  --cyber-neon-pink: #ff1493;
+
+  /* Text Colors */
+  --cyber-text-primary: #c4c4c4;
+  --cyber-text-secondary: #8b95a5;
+  --cyber-text-dim: #4a5568;
+
+  /* Glow Effects */
+  --cyber-glow-cyan: rgba(0, 255, 255, 0.3);
+  --cyber-glow-magenta: rgba(255, 0, 255, 0.3);
+  --cyber-glow-lime: rgba(0, 255, 65, 0.3);
+}

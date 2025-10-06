@@ -1,0 +1,36 @@
+/**
+ * Cyberpunk Scrollbar Styling
+ */
+
+/* Webkit Browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--cyber-bg-secondary);
+  border: 1px solid var(--cyber-border);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyber-neon-cyan) 0%, var(--cyber-neon-magenta) 100%);
+  border: 1px solid var(--cyber-border);
+  box-shadow: 0 0 10px var(--cyber-glow-cyan);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--cyber-neon-magenta) 0%, var(--cyber-neon-cyan) 100%);
+  box-shadow: 0 0 15px var(--cyber-glow-magenta);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--cyber-bg-secondary);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyber-neon-cyan) var(--cyber-bg-secondary);
+}
