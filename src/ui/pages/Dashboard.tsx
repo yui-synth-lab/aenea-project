@@ -4,9 +4,12 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Brain, Zap, Activity, Sparkles, MessageCircle, TrendingUp, Moon, Play, Pause, Square, AlertCircle } from 'lucide-react';
 import { DialogueModal } from '../components/DialogueModal.js';
 import { GrowthModal } from '../components/GrowthModal.js';
 import { DPDScoreDisplay } from '../components/DPDScoreDisplay.js';
+import ParticleBackground from '../components/ParticleBackground.js';
 
 interface DashboardProps {
   systemStatus: 'awakening' | 'active' | 'resting' | 'error';
@@ -539,12 +542,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
   return (
     <div className="dashboard">
-      <div className="dashboard-header">
-        <h2>Consciousness Dashboard</h2>
+      {/* Particle Background - responds to DPD weights and thinking state */}
+      <ParticleBackground
+        dpdWeights={dpdScores}
+        isThinking={consciousnessState.isRunning && !consciousnessState.isPaused}
+      />
+
+      <motion.div
+        className="dashboard-header"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="header-title">
+          <Brain className="header-icon" size={32} />
+          <h2>Consciousness Dashboard</h2>
+        </div>
         <div className="header-actions">
-          <button className="dialogue-button" onClick={() => setIsDialogueModalOpen(true)}>
-            💬 Dialogue
-          </button>
+          <motion.button
+            className="dialogue-button"
+            onClick={() => setIsDialogueModalOpen(true)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <MessageCircle size={16} />
+            Dialogue
+          </motion.button>
           <div className={`status-indicator ${consciousnessState.status}`}>
             <span className="status-dot"></span>
             <span className="status-text">
@@ -557,63 +580,100 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             System {systemStatus}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <div className="dashboard-layout">
         {/* Consciousness Control */}
-        <div className="dashboard-card consciousness-control">
-          <h3>Consciousness Control</h3>
+        <motion.div
+          className="dashboard-card consciousness-control"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+        >
+          <h3><Brain size={18} style={{ display: 'inline', marginRight: '8px' }} />Consciousness Control</h3>
           <div className="control-buttons">
-            {!consciousnessState.isRunning ? (
-              <>
-                <button
-                  className="control-button start"
-                  onClick={startConsciousness}
-                  disabled={consciousnessState.isProcessingCycle}
+            <AnimatePresence mode="wait">
+              {!consciousnessState.isRunning ? (
+                <motion.div
+                  key="stopped"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  style={{ display: 'flex', gap: '8px', width: '100%' }}
                 >
-                  ▶️ Start
-                </button>
-                <button
-                  className="control-button sleep"
-                  onClick={enterSleepMode}
-                  disabled={consciousnessState.isProcessingCycle}
+                  <motion.button
+                    className="control-button start"
+                    onClick={startConsciousness}
+                    disabled={consciousnessState.isProcessingCycle}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Play size={16} /> Start
+                  </motion.button>
+                  <motion.button
+                    className="control-button sleep"
+                    onClick={enterSleepMode}
+                    disabled={consciousnessState.isProcessingCycle}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Moon size={16} /> Sleep
+                  </motion.button>
+                </motion.div>
+              ) : consciousnessState.isPaused ? (
+                <motion.div
+                  key="paused"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  style={{ display: 'flex', gap: '8px', width: '100%' }}
                 >
-                  💤 Sleep
-                </button>
-              </>
-            ) : consciousnessState.isPaused ? (
-              <>
-                <button
-                  className="control-button resume"
-                  onClick={resumeConsciousness}
+                  <motion.button
+                    className="control-button resume"
+                    onClick={resumeConsciousness}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Play size={16} /> Resume
+                  </motion.button>
+                  <motion.button
+                    className="control-button stop"
+                    onClick={stopConsciousness}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Square size={16} /> Stop
+                  </motion.button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="running"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  style={{ display: 'flex', gap: '8px', width: '100%' }}
                 >
-                  ▶️ Resume
-                </button>
-                <button
-                  className="control-button stop"
-                  onClick={stopConsciousness}
-                >
-                  ⏹️ Stop
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  className="control-button pause"
-                  onClick={pauseConsciousness}
-                >
-                  ⏸️ Pause
-                </button>
-                <button
-                  className="control-button stop"
-                  onClick={stopConsciousness}
-                >
-                  ⏹️ Stop
-                </button>
-              </>
-            )}
+                  <motion.button
+                    className="control-button pause"
+                    onClick={pauseConsciousness}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Pause size={16} /> Pause
+                  </motion.button>
+                  <motion.button
+                    className="control-button stop"
+                    onClick={stopConsciousness}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Square size={16} /> Stop
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
 
         {/* Manual Trigger */}
         <div className="dashboard-card manual-trigger">
@@ -743,12 +803,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         </div>
 
         {/* Current Thought */}
-        <div className="dashboard-card current-thought">
-          <h3>Current Thought</h3>
-          <div className="thought-content">
-            <p>"{currentThought}"</p>
-          </div>
-        </div>
+        <motion.div
+          className="dashboard-card current-thought"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <h3><Sparkles size={18} style={{ display: 'inline', marginRight: '8px' }} />Current Thought</h3>
+          <motion.div
+            className="thought-content"
+            animate={{
+              scale: currentThought && consciousnessState.isRunning ? [1, 1.02, 1] : 1,
+              opacity: currentThought ? 1 : 0.5
+            }}
+            transition={{
+              scale: {
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }
+            }}
+          >
+            <p>"{currentThought || 'Waiting for consciousness to awaken...'}"</p>
+          </motion.div>
+        </motion.div>
 
         {/* Stage Progression (moved here so it's visually under Current Thought) */}
         <div className="dashboard-card stage-progression">
@@ -856,6 +934,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 16px;
+          position: relative;
+          z-index: 1;
+        }
+
+        .header-title {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .header-icon {
+          color: #3b82f6;
+          filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));
         }
 
         .dashboard-header h2 {
@@ -1070,17 +1161,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          gap: 6px;
           background: #3b82f6;
           border: none;
           border-radius: 8px;
-          padding: 6px 10px; /* slightly smaller height */
-          min-height: 36px;
+          padding: 8px 16px;
+          min-height: 40px;
           color: white;
           font-weight: 600;
           cursor: pointer;
-          transition: transform 0.15s ease, background-color 0.15s ease;
-          font-size: 13px;
+          transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+          font-size: 14px;
+          flex: 1;
         }
 
         .control-button:hover {

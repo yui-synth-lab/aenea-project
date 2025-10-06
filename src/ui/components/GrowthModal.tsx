@@ -4,6 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TrendingUp, X, Brain, Heart, Lightbulb, Moon as MoonIcon } from 'lucide-react';
 
 interface GrowthModalProps {
   isOpen: boolean;
@@ -105,13 +107,32 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
 
   return (
     <>
-      <div className="growth-modal-overlay" onClick={onClose}>
-        <div className="growth-modal-container" onClick={(e) => e.stopPropagation()}>
+      <AnimatePresence>
+        <motion.div
+          className="growth-modal-overlay"
+          onClick={onClose}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="growth-modal-container"
+            onClick={(e) => e.stopPropagation()}
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          >
           <div className="growth-modal-header">
-            <h2>意識成長レポート</h2>
-            <button className="close-button" onClick={onClose}>
-              Close
-            </button>
+            <h2><TrendingUp size={28} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle' }} />意識成長レポート</h2>
+            <motion.button
+              className="close-button"
+              onClick={onClose}
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <X size={20} />
+            </motion.button>
           </div>
 
           {loading || !growthData ? (
@@ -119,26 +140,41 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           ) : (
             <div className="growth-content">
               {/* Overview */}
-              <div className="growth-card overview">
-                <h3>Overview</h3>
+              <motion.div
+                className="growth-card overview"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <h3><Brain size={18} style={{ display: 'inline', marginRight: '8px' }} />Overview</h3>
                 <p><strong>Last Update:</strong> {growthData.overview?.lastUpdate ?
                   new Date(growthData.overview.lastUpdate).toLocaleString() : 'Never'}</p>
                 <p><strong>Version:</strong> {growthData.overview?.version || 'N/A'}</p>
-              </div>
+              </motion.div>
 
               {/* Personality Traits */}
-              <div className="growth-card personality">
-                <h3>Personality Traits</h3>
+              <motion.div
+                className="growth-card personality"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <h3><Heart size={18} style={{ display: 'inline', marginRight: '8px' }} />Personality Traits</h3>
                 {growthData.personalityEvolution?.currentTraits ? Object.entries(growthData.personalityEvolution.currentTraits).map(([trait, value]) => (
                   <p key={trait}>
                     <strong>{trait.replace(/([A-Z])/g, ' $1').trim()}:</strong> {formatValue(value)}
                   </p>
                 )) : <p>No personality data available</p>}
-              </div>
+              </motion.div>
 
               {/* DPD Evolution with Chart */}
-              <div className="growth-card dpd wide">
-                <h3>DPD Weight Evolution</h3>
+              <motion.div
+                className="growth-card dpd wide"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <h3><TrendingUp size={18} style={{ display: 'inline', marginRight: '8px' }} />DPD Weight Evolution</h3>
                 {growthData.dpdEvolution?.currentWeights ? (
                   <>
                     <div className="dpd-current-values">
@@ -215,21 +251,31 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                     })()}
                   </>
                 ) : <p>No DPD evolution data available</p>}
-              </div>
+              </motion.div>
 
               {/* Growth Metrics */}
-              <div className="growth-card metrics">
-                <h3>Growth Metrics</h3>
+              <motion.div
+                className="growth-card metrics"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+              >
+                <h3><Lightbulb size={18} style={{ display: 'inline', marginRight: '8px' }} />Growth Metrics</h3>
                 {growthData.growthMetrics ? Object.entries(growthData.growthMetrics).map(([metric, value]) => (
                   <p key={metric}>
                     <strong>{metric.replace(/([A-Z])/g, ' $1').trim()}:</strong> {formatValue(value)}
                   </p>
                 )) : <p>No growth metrics available</p>}
-              </div>
+              </motion.div>
 
               {/* Significant Thoughts */}
-              <div className="growth-card thoughts wide">
-                <h3>Significant Thoughts</h3>
+              <motion.div
+                className="growth-card thoughts wide"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <h3><Brain size={18} style={{ display: 'inline', marginRight: '8px' }} />Significant Thoughts</h3>
                 <div className="scrollable-list">
                   {growthData.significantThoughts && growthData.significantThoughts.length > 0 ?
                     growthData.significantThoughts.slice(0, 10).map((thought, index) => (
@@ -245,11 +291,16 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                     )) :
                     <p className="no-data">No significant thoughts recorded yet</p>}
                 </div>
-              </div>
+              </motion.div>
 
               {/* Core Beliefs */}
-              <div className="growth-card beliefs wide">
-                <h3>Core Beliefs (核心的信念)</h3>
+              <motion.div
+                className="growth-card beliefs wide"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+              >
+                <h3><Heart size={18} style={{ display: 'inline', marginRight: '8px' }} />Core Beliefs (核心的信念)</h3>
                 <div className="scrollable-list">
                   {growthData.beliefEvolution?.currentBeliefs && growthData.beliefEvolution.currentBeliefs.length > 0 ?
                     growthData.beliefEvolution.currentBeliefs.slice(0, 10).map((belief, index) => (
@@ -267,11 +318,16 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                     )) :
                     <p className="no-data">No core beliefs formed yet. Continue consciousness cycles to develop beliefs.</p>}
                 </div>
-              </div>
+              </motion.div>
 
               {/* Dream Patterns */}
-              <div className="growth-card dreams wide">
-                <h3>💤 Dream Patterns (夢パターン)</h3>
+              <motion.div
+                className="growth-card dreams wide"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <h3><MoonIcon size={18} style={{ display: 'inline', marginRight: '8px' }} />Dream Patterns (夢パターン)</h3>
                 <div className="scrollable-list">
                   {growthData.dreamPatterns && growthData.dreamPatterns.length > 0 ?
                     growthData.dreamPatterns.slice(0, 15).map((dream, index) => (
@@ -289,11 +345,16 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                     )) :
                     <p className="no-data">No dreams recorded yet. Enter sleep mode to generate dream patterns.</p>}
                 </div>
-              </div>
+              </motion.div>
 
               {/* Unresolved Ideas */}
-              <div className="growth-card ideas wide">
-                <h3>Unresolved Ideas</h3>
+              <motion.div
+                className="growth-card ideas wide"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+              >
+                <h3><Lightbulb size={18} style={{ display: 'inline', marginRight: '8px' }} />Unresolved Ideas</h3>
                 <div className="scrollable-list">
                   {growthData.unresolvedIdeas && growthData.unresolvedIdeas.length > 0 ?
                     growthData.unresolvedIdeas.slice(0, 10).map((idea, index) => (
@@ -309,11 +370,12 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                     )) :
                     <p className="no-data">No unresolved ideas recorded yet</p>}
                 </div>
-              </div>
+              </motion.div>
             </div>
           )}
-        </div>
-      </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
 
       <style>{`
         .growth-modal-overlay {

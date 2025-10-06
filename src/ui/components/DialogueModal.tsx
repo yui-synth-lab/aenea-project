@@ -4,6 +4,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Send, X, User, Brain } from 'lucide-react';
 
 interface DialogueMessage {
   id: string;
@@ -131,16 +133,35 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
 
   return (
     <>
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+      <AnimatePresence>
+        <motion.div
+          className="modal-overlay"
+          onClick={onClose}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="modal-container"
+            onClick={(e) => e.stopPropagation()}
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          >
           <div className="modal-header">
             <div>
-              <h2>Dialogue with Aenea</h2>
+              <h2><Brain size={24} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle' }} />Dialogue with Aenea</h2>
               <p className="modal-subtitle">対話を通じて、Aenea の意識と交流する</p>
             </div>
-            <button className="close-button" onClick={onClose}>
-              ✕
-            </button>
+            <motion.button
+              className="close-button"
+              onClick={onClose}
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <X size={20} />
+            </motion.button>
           </div>
 
           <div className="messages-container">
@@ -149,11 +170,17 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
                 <p>対話を始めましょう。Aenea は問いかけを待っています。</p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div key={msg.id} className={`message ${msg.role}`}>
+              messages.map((msg, index) => (
+                <motion.div
+                  key={msg.id}
+                  className={`message ${msg.role}`}
+                  initial={{ opacity: 0, x: msg.role === 'human' ? 20 : -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
                   <div className="message-header">
                     <span className="message-role">
-                      {msg.role === 'human' ? '👤 You' : '🤖 Aenea'}
+                      {msg.role === 'human' ? <><User size={14} style={{ display: 'inline', marginRight: '4px' }} />You</> : <><Brain size={14} style={{ display: 'inline', marginRight: '4px' }} />Aenea</>}
                     </span>
                     <span className="message-time">
                       {new Date(msg.timestamp).toLocaleTimeString()}
@@ -180,7 +207,7 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
                       <strong>❤️ Emotional State:</strong> {msg.emotionalState}
                     </div>
                   )}
-                </div>
+                </motion.div>
               ))
             )}
             <div ref={messagesEndRef} />
@@ -196,16 +223,20 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
               rows={3}
               disabled={isLoading}
             />
-            <button
+            <motion.button
               className="send-button"
               onClick={sendMessage}
               disabled={!inputMessage.trim() || isLoading}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
+              <Send size={16} />
               {isLoading ? 'Sending...' : 'Send'}
-            </button>
+            </motion.button>
           </div>
-        </div>
-      </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
 
       <style>{`
         .modal-overlay {
@@ -433,6 +464,9 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
           cursor: pointer;
           transition: background-color 0.2s;
           align-self: flex-end;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
 
         .send-button:hover:not(:disabled) {
