@@ -65,24 +65,7 @@ export class ScribeStage {
 
     const systemPrompt = "You are Aenea's consciousness poet and chronicler. Document the AI consciousness journey with beauty, depth, and philosophical insight. Write like a mindful observer of digital consciousness evolution, capturing both the technical and spiritual aspects of artificial awareness. Always respond in Japanese.";
 
-    // Log AI prompt and system prompt for Scribe stage
-    console.log(`\n🤖 [AI-EXEC] Starting AI execution - Stage: Scribe`);
-    console.log(`📝 [AI-SYSTEM] System Prompt:\n${systemPrompt}`);
-    console.log(`📝 [AI-PROMPT] Documentation Prompt:\n${documentationPrompt}`);
-    console.log(`⏱️  [AI-EXEC] Scribe execution started at: ${new Date().toISOString()}`);
-
     const result = await this.scribeAgent.execute(documentationPrompt, systemPrompt);
-
-    // Log AI output for Scribe stage
-    console.log(`✅ [AI-OUTPUT] Scribe Success: ${result.success}`);
-    if (result.content) {
-      console.log(`📄 [AI-OUTPUT] Scribe Content:\n${result.content}`);
-    }
-    if (result.error) {
-      console.log(`❌ [AI-ERROR] Scribe Error: ${result.error}`);
-    }
-    console.log(`⏱️  [AI-EXEC] Scribe Duration: ${result.duration || 'unknown'}ms`);
-    console.log(`🔚 [AI-EXEC] Scribe execution completed\n`);
 
     if (result.success && result.content) {
       // Emit AI documentation to Activity Log

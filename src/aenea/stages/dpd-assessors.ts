@@ -14,7 +14,7 @@ export class DPDAssessmentStage {
     this.engine = new DPDEngine(initialWeights, evaluatorAgent, eventEmitter);
   }
 
-  async run(thoughts: StructuredThought[], reflections: MutualReflection[], audit: AuditorResult): Promise<{ scores: DPDScores; assessment: DPDAssessment; weights: DPDWeights; }> {
+  async run(thoughts: StructuredThought[], reflections: MutualReflection[], audit: AuditorResult, trigger?: { source: string }): Promise<{ scores: DPDScores; assessment: DPDAssessment; weights: DPDWeights; }> {
     // Emit DPD evaluation start to Activity Log
     if (this.eventEmitter) {
       this.eventEmitter.emit('agentThought', {
@@ -27,7 +27,7 @@ export class DPDAssessmentStage {
       });
     }
 
-    const assessment = await this.engine.performAssessment(thoughts, reflections, audit);
+    const assessment = await this.engine.performAssessment(thoughts, reflections, audit, trigger);
     const weights = this.engine.getCurrentWeights();
 
     // Emit final DPD scores to Activity Log

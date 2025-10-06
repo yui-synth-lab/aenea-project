@@ -61,6 +61,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     status: 'stopped'
   });
   const [manualQuestion, setManualQuestion] = useState<string>('');
+  const [queuedTrigger, setQueuedTrigger] = useState<string | null>(null);
   const [isDialogueModalOpen, setIsDialogueModalOpen] = useState(false);
   const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
   const [currentStage, setCurrentStage] = useState<string>('');
@@ -277,14 +278,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
         // Don't update Current Thought here - it should show the question/trigger
+      } else if (t === 'manualTriggerQueued') {
+        // Manual trigger queued for next cycle
+        const question = data.question || '';
+        setQueuedTrigger(question); // Show queued status
+        const logItem: ActivityLogItem = {
+          id: `queued_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: data.timestamp || Date.now(),
+          type: 'system_event',
+          message: `📥 Manual trigger queued: ${question.substring(0, 100)}...`,
+          details: { estimatedNextCycle: data.estimatedNextCycle }
+        };
+        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
       } else if (t === 'triggerGenerated') {
         const question = data.trigger?.question || data.question || '';
+        const source = data.source || 'system';
+
+        // Clear queued trigger if this is the manual trigger being processed
+        if (source === 'manual') {
+          setQueuedTrigger(null);
+        }
+
         const logItem: ActivityLogItem = {
           id: `trigger_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           timestamp: data.timestamp || Date.now(),
           type: 'trigger_generated',
-          message: `Internal trigger: ${question}`,
-          details: { source: data.source || 'system' }
+          message: source === 'manual' ? `🎯 Manual trigger processing: ${question}` : `Internal trigger: ${question}`,
+          details: { source }
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
         // Update Current Thought to show the current question being processed
@@ -578,6 +598,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           {/* Manual Trigger */}
           <div className="dashboard-card manual-trigger">
             <h3>Manual Trigger</h3>
+            {queuedTrigger && (
+              <div className="queued-trigger-notice">
+                📥 Queued for next cycle: "{queuedTrigger.substring(0, 80)}..."
+              </div>
+            )}
             <div className="trigger-controls">
               <textarea
                 placeholder="Enter a question to trigger consciousness..."
@@ -591,7 +616,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
                 onClick={triggerManualThought}
                 disabled={!manualQuestion.trim()}
               >
-                Generate Thought Cycle
+                {queuedTrigger ? 'Queue Another Trigger' : 'Queue for Next Cycle'}
               </button>
             </div>
           </div>
@@ -1096,6 +1121,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           gap: 12px;
         }
 
+        .queued-trigger-notice {
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          border-radius: 8px;
+          padding: 10px 12px;
+          color: #60a5fa;
+          font-size: 14px;
+          margin-bottom: 12px;
+          animation: pulse-blue 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-blue {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.7;
+          }
+        }
+
         .trigger-input {
           background: #374151;
           border: 1px solid #4b5563;
@@ -1279,6 +1324,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .activity-text {
           color: #e5e7eb;
           line-height: 1.4;
+          /* Ensure long/continuous text wraps and doesn't overflow the activity card */
+          overflow-wrap: anywhere;
+          word-break: break-word;
+          white-space: pre-wrap; /* preserve user line breaks while allowing wrapping */
+          hyphens: auto;
         }
 
         .activity-confidence {
@@ -1295,6 +1345,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           padding: 16px;
           border-radius: 8px;
           border-left: 4px solid #3b82f6;
+          /* Allow vertical scrolling when content exceeds the fixed max-height */
+          overflow: auto;
         }
 
         .thought-content p {
@@ -1303,6 +1355,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           line-height: 1.6;
           margin: 0;
           color: #e5e7eb;
+          /* Prevent long words (or Japanese text without natural spaces) from breaking layout */
+          overflow-wrap: anywhere;
+          word-break: break-word;
+          white-space: pre-wrap;
+          hyphens: auto;
         }
 
         .stat-grid {
@@ -1474,6 +1531,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .philosophy {
           flex-shrink: 0;
           max-height: 140px;
+          /* allow scrolling when philosophy text is long */
+          overflow: auto;
         }
 
         .philosophy-content blockquote {
@@ -1483,6 +1542,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           color: #3b82f6;
           border-left: 4px solid #3b82f6;
           padding-left: 16px;
+          /* Ensure long single-line strings wrap in blockquote */
+          overflow-wrap: anywhere;
+          word-break: break-word;
+          white-space: pre-wrap;
+          hyphens: auto;
         }
 
         .philosophy-content p {

@@ -217,9 +217,17 @@ ${trigger.question}
 
 ${beliefsContext ? `【確立された信念】\n${beliefsContext}\n` : ''}
 
-【記憶の文脈】
+【記憶の文脈（参考のみ）】
+以下は過去の重要な洞察です。これらを「参考」として扱い、新しい視点を加えてください。
+同じ表現や概念をそのまま繰り返すのではなく、あなた独自の角度から問いに答えてください。
+
 未解決の探求: ${unresolvedContext || 'なし'}
-重要な洞察: ${significantContext || 'なし'}
+過去の洞察: ${significantContext || 'なし'}
+
+【重要な制約】
+- 過去の洞察に言及する場合は、それを発展させるか、異なる視点を提示してください
+- 過去の表現やキーワードをそのまま繰り返さないでください
+- あなた自身の新しい考察を優先してください
 
 【${personality.name}への依頼】
 この問いに対して、あなた（${personality.displayName || personality.name}）独自の視点から深い洞察を提供してください。
@@ -271,7 +279,7 @@ ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察�
       if (optimalResponse) {
         const optimalThought: StructuredThought = {
           id: `yui_${selectedAgents.optimal.id}_${thoughtCycle.id || Date.now()}`,
-          agentId: `yui:${selectedAgents.optimal.name}`,
+          agentId: `${selectedAgents.optimal.name}`,
           content: optimalResponse.content,
           reasoning: `Yui (最適): ${selectedAgents.optimal.name} - ${selectedAgents.optimal.reason}`,
           confidence: optimalResponse.confidence,

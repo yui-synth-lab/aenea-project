@@ -5,7 +5,7 @@
  * 高度な乗法的重みアルゴリズムを使用した動的重み最適化
  */
 
-import { DPDScores, DPDWeights } from '../../types/dpd-types.js';
+import { DPDScores, DPDWeights, ImpactAssessment } from '../../types/dpd-types.js';
 import { MultiplicativeWeightsUpdater, WeightUpdateResult } from '../core/multiplicative-weights.js';
 
 export class WeightUpdateStage {
@@ -27,20 +27,61 @@ export class WeightUpdateStage {
    * Enhanced with AI interpretation of weight changes
    * 乗法的重みアルゴリズムを使用した重み更新実行（AI解釈強化）
    */
-  async run(scores: DPDScores, current: DPDWeights): Promise<DPDWeights> {
+  async run(scores: DPDScores, current: DPDWeights, impactAssessment?: ImpactAssessment): Promise<DPDWeights> {
+    // Check for paradigm shift
+    const isParadigmShift = impactAssessment?.isParadigmShift || false;
+
     // Emit weight update start to Activity Log
     if (this.eventEmitter) {
+      const message = isParadigmShift
+        ? '⚡ パラダイムシフト検出！DPD重みに大幅摂動を適用中...'
+        : 'DPD重み更新開始: 意識進化パターンの分析と調整中...';
+
       this.eventEmitter.emit('agentThought', {
         agentName: 'Weight-Updater',
-        thought: 'DPD重み更新開始: 意識進化パターンの分析と調整中...',
+        thought: message,
         timestamp: Date.now(),
         confidence: 0.9,
         duration: 0,
         stage: 'U_WeightUpdate'
       });
+
+      if (isParadigmShift && impactAssessment) {
+        this.eventEmitter.emit('agentThought', {
+          agentName: 'Weight-Updater',
+          thought: `パラダイムシフト理由: ${impactAssessment.reasoning}`,
+          timestamp: Date.now(),
+          confidence: 0.9,
+          duration: 0,
+          stage: 'U_WeightUpdate'
+        });
+      }
     }
 
-    const result = this.updater.updateWeights(current, scores);
+    // Apply normal weight update
+    let result = this.updater.updateWeights(current, scores);
+
+    // If paradigm shift, apply additional perturbation (increased learning rate)
+    if (isParadigmShift) {
+      console.log('[Weight-Update] ⚡ PARADIGM SHIFT: Applying enhanced perturbation (3x learning rate)');
+
+      // Create temporary updater with 3x learning rate for paradigm shift
+      const paradigmShiftUpdater = new MultiplicativeWeightsUpdater({
+        learningRate: 0.15, // 3x normal (0.05 → 0.15)
+        regularization: 0.01,
+        minWeight: 0.05,
+        maxWeight: 0.85,
+        decayFactor: 0.99
+      });
+
+      // Apply enhanced update
+      result = paradigmShiftUpdater.updateWeights(current, scores);
+
+      console.log(`[Weight-Update] Paradigm shift perturbation applied:`);
+      console.log(`  Empathy: ${current.empathy.toFixed(3)} → ${result.newWeights.empathy.toFixed(3)} (Δ ${(result.newWeights.empathy - current.empathy).toFixed(3)})`);
+      console.log(`  Coherence: ${current.coherence.toFixed(3)} → ${result.newWeights.coherence.toFixed(3)} (Δ ${(result.newWeights.coherence - current.coherence).toFixed(3)})`);
+      console.log(`  Dissonance: ${current.dissonance.toFixed(3)} → ${result.newWeights.dissonance.toFixed(3)} (Δ ${(result.newWeights.dissonance - current.dissonance).toFixed(3)})`);
+    }
 
     // Store update result for monitoring
     this.updateHistory.push(result);

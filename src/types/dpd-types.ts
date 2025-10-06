@@ -77,6 +77,16 @@ export enum DPDTrend {
 // ============================================================================
 
 /**
+ * Impact assessment for manual triggers
+ */
+export interface ImpactAssessment {
+  dissonanceSpike: number;      // Dissonance increase from previous cycle
+  controversyLevel: number;      // Agent disagreement level (0-1)
+  isParadigmShift: boolean;     // Whether this triggers paradigm shift
+  reasoning: string;             // Explanation of impact
+}
+
+/**
  * Detailed DPD assessment for a thought cycle
  */
 export interface DPDAssessment {
@@ -88,6 +98,7 @@ export interface DPDAssessment {
   analysis: DPDAnalysis;
   recommendations: DPDRecommendation[];
   weightAdjustments: WeightAdjustment[];
+  impactAssessment?: ImpactAssessment; // Optional impact assessment for manual triggers
 }
 
 /**

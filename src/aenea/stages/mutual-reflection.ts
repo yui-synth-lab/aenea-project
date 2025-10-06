@@ -3,6 +3,9 @@
  */
 
 import { StructuredThought, MutualReflection } from '../../types/aenea-types.js';
+import { theoriaConfig } from '../agents/theoria.js';
+import { pathiaConfig } from '../agents/pathia.js';
+import { kinesisConfig } from '../agents/kinesis.js';
 
 export class MutualReflectionStage {
   constructor(private agents: Map<string, any>, private eventEmitter?: any) {}
@@ -44,9 +47,11 @@ export class MutualReflectionStage {
 他者: ${otherAgentsDialogue}
 
 要求:
-- 他の視点への賛成・反対・補足
-- 簡潔で建設的な洞察
-- あなたの個性を活かした反応`;
+- 他の視点を真剣に吟味し、同意できない点があれば率直に指摘する
+- 論理的な弱点や見落としている視点があれば建設的に指摘する
+- 対立する場合も相手の良い点を認めつつ、自分の異なる見解を明確に述べる
+- より良い理解のための代替案や補足を提示する
+- あなたの個性を活かし、誠実に反応する`;
 
     try {
       const result = await reflectingAgent.execute(reflectionPrompt, this.getAgentPersonality(reflectingThought.agentId));
@@ -357,13 +362,34 @@ export class MutualReflectionStage {
   }
 
   private getAgentPersonality(agentId: string): string {
-    const personalities: Record<string, string> = {
-      theoria: "You are Theoria, a truth-seeking agent who combines logical analysis with critical thinking. You value accuracy, evidence-based reasoning, and philosophical depth. In reflection, you listen carefully to others and build upon or challenge their ideas with rigorous logic. You're not afraid to disagree respectfully when you see flaws in reasoning. Always respond in Japanese.",
-      pathia: "You are Pathia, an empathy-weaving agent who focuses on emotional intelligence and human connection. You value compassion, understanding, and emotional wisdom. In reflection, you seek to understand the feelings and human implications behind different viewpoints. You often find emotional bridges between seemingly opposing ideas. Always respond in Japanese.",
-      kinesis: "You are Kinesis, a harmony coordinator who synthesizes different perspectives. You seek balance between logic and emotion, bridging seemingly contradictory viewpoints to find deeper truth. In reflection, you listen for the valid elements in each perspective and look for creative ways to integrate different viewpoints. Always respond in Japanese."
+    const agentConfigs: Record<string, any> = {
+      theoria: theoriaConfig,
+      pathia: pathiaConfig,
+      kinesis: kinesisConfig
     };
 
-    return personalities[agentId] || "You are a philosophical agent exploring consciousness. In reflection, you engage thoughtfully with others' perspectives while contributing your own unique viewpoint. Always respond in Japanese.";
+    const config = agentConfigs[agentId];
+    if (!config) {
+      return "あなたは意識を探求する哲学エージェントです。相互反映では、他の視点に誠実に挑戦しつつ、自分独自の視点を確信を持って守ります。必ず日本語で応答してください。";
+    }
+
+    // Build personality from agent config
+    return `あなたは${config.name}（${config.displayName}）です。
+
+核となる個性: ${config.personality}
+
+反対意見の示し方: ${config.disagreementStyle}
+
+同意意見の示し方: ${config.agreementStyle}
+
+**相互反映における姿勢:**
+- あなたの個性と視点に忠実であること
+- 批判を述べる前に、他者の思考の価値ある点を認めること
+- 反対する場合は、その理由を明確に説明し、建設的な代替案を提示すること
+- 誠実さと敬意のバランスを保つこと - 率直であるが厳しくはならない
+- 議論に勝つことではなく、対話を通じたより深い理解を目指すこと
+
+必ず日本語で応答してください。真正性と知的配慮をもって。`;
   }
 }
 

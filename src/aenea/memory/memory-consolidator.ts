@@ -468,6 +468,216 @@ ${thoughtsSummary}
   ): void {
     this.db.updateConsolidationJob(jobId, status, thoughtsProcessed, beliefsCreated, beliefsUpdated, duration, error);
   }
+
+  /**
+   * Merge similar core beliefs (called during sleep mode)
+   */
+  async mergeSimilarBeliefs(similarityThreshold: number = 0.75): Promise<{ merged: number; kept: number }> {
+    if (!this.aiExecutor) {
+      log.warn('MemoryConsolidator', 'AI executor not available, skipping belief merging');
+      return { merged: 0, kept: 0 };
+    }
+
+    log.info('MemoryConsolidator', '🔄 Starting core beliefs similarity merging...');
+    const startTime = Date.now();
+
+    const allBeliefs = this.db.getCoreBeliefs(200);
+    if (allBeliefs.length < 2) {
+      log.info('MemoryConsolidator', 'Not enough beliefs to merge');
+      return { merged: 0, kept: allBeliefs.length };
+    }
+
+    log.info('MemoryConsolidator', `Analyzing ${allBeliefs.length} beliefs for similarity...`);
+
+    // Identify similar clusters using AI
+    const clusters = await this.identifySimilarBeliefClusters(allBeliefs, similarityThreshold);
+
+    let totalMerged = 0;
+    let totalKept = allBeliefs.length;
+
+    for (const cluster of clusters) {
+      if (cluster.beliefs.length > 1) {
+        try {
+          const mergedBelief = await this.mergeBeliefCluster(cluster.beliefs);
+          if (mergedBelief) {
+            // Delete old beliefs by ID
+            for (const oldBelief of cluster.beliefs) {
+              if (oldBelief.id) {
+                this.db.deleteCoreBelief(oldBelief.id);
+              }
+            }
+            // Create new merged belief
+            this.db.createCoreBelief(mergedBelief);
+
+            totalMerged += cluster.beliefs.length - 1;
+            totalKept = totalKept - (cluster.beliefs.length - 1);
+            log.info('MemoryConsolidator', `✓ Merged ${cluster.beliefs.length} similar beliefs into one`);
+          }
+        } catch (error) {
+          log.error('MemoryConsolidator', `Failed to merge cluster: ${error}`);
+        }
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    log.info('MemoryConsolidator', `✅ Belief merging complete: ${totalMerged} merged, ${totalKept} kept (${duration}ms)`);
+
+    return { merged: totalMerged, kept: totalKept };
+  }
+
+  private async identifySimilarBeliefClusters(
+    beliefs: any[],
+    threshold: number
+  ): Promise<Array<{ beliefs: any[]; reason: string }>> {
+    if (!this.aiExecutor) return [];
+
+    const beliefsList = beliefs.map((b, idx) => {
+      return `[${idx}] "${b.belief_content}" (strength: ${b.strength.toFixed(1)})`;
+    }).join('\n');
+
+    const prompt = `類似した信念のグループを特定してください。
+
+=== 信念リスト (${beliefs.length}個) ===
+${beliefsList}
+
+評価基準:
+- 意味的類似度 > ${threshold}
+- 本質的に同じ主張
+
+返答形式:
+クラスター: [インデックス番号]
+理由: [説明]
+
+例:
+クラスター: 0,3,7
+理由: すべて共感の重要性を主張
+
+注: 類似なしの場合は「類似なし」と返答`;
+
+    try {
+      const result = await this.aiExecutor.execute(
+        prompt,
+        'You are a belief similarity analyzer. Group similar beliefs accurately. Always respond in Japanese.'
+      );
+
+      if (result.success && result.content) {
+        return this.parseBeliefClusters(result.content, beliefs);
+      }
+    } catch (error) {
+      log.warn('MemoryConsolidator', 'AI clustering failed:', error);
+    }
+
+    return [];
+  }
+
+  private parseBeliefClusters(response: string, beliefs: any[]): Array<{ beliefs: any[]; reason: string }> {
+    const clusters: Array<{ beliefs: any[]; reason: string }> = [];
+    const lines = response.split('\n');
+
+    let currentCluster: number[] = [];
+    let currentReason = '';
+
+    for (const line of lines) {
+      if (line.includes('類似なし')) return [];
+
+      if (line.match(/クラスター[：:]/)) {
+        const match = line.match(/クラスター[：:]\s*([0-9,\s]+)/);
+        if (match) {
+          currentCluster = match[1].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+        }
+      }
+
+      if (line.match(/理由[：:]/)) {
+        currentReason = line.split(/理由[：:]/)[1]?.trim() || '';
+
+        if (currentCluster.length > 1 && currentReason) {
+          const clusterBeliefs = currentCluster
+            .filter(idx => idx >= 0 && idx < beliefs.length)
+            .map(idx => beliefs[idx]);
+
+          if (clusterBeliefs.length > 1) {
+            clusters.push({ beliefs: clusterBeliefs, reason: currentReason });
+          }
+        }
+
+        currentCluster = [];
+        currentReason = '';
+      }
+    }
+
+    return clusters;
+  }
+
+  private async mergeBeliefCluster(beliefs: any[]): Promise<CoreBelief | null> {
+    if (!this.aiExecutor || beliefs.length === 0) return null;
+
+    const beliefTexts = beliefs.map((b, idx) => {
+      return `[${idx + 1}] "${b.belief_content}"`;
+    }).join('\n');
+
+    const prompt = `以下の類似信念を1つにまとめてください。
+
+${beliefTexts}
+
+要求: 50文字以内、本質を保持
+
+返答形式:
+統合信念: [50文字以内]`;
+
+    try {
+      const result = await this.aiExecutor.execute(
+        prompt,
+        'You are a belief synthesizer. Merge similar beliefs concisely. Always respond in Japanese.'
+      );
+
+      if (result.success && result.content) {
+        const match = result.content.match(/統合信念[：:]\s*(.+)/);
+        if (match) {
+          const mergedContent = match[1].trim().substring(0, 50);
+
+          const totalStrength = beliefs.reduce((sum, b) => sum + (b.strength || 0), 0);
+          const maxConfidence = Math.max(...beliefs.map(b => b.confidence || 0));
+          const totalReinforcements = beliefs.reduce((sum, b) => sum + (b.reinforcement_count || 0), 0);
+
+          const mergedBelief: CoreBelief = {
+            belief_content: mergedContent,
+            category: beliefs[0].category,
+            confidence: maxConfidence,
+            strength: totalStrength / beliefs.length,
+            source_thoughts: beliefs.flatMap(b => b.source_thoughts || []),
+            first_formed: Math.min(...beliefs.map(b => b.first_formed)),
+            last_reinforced: Date.now(),
+            reinforcement_count: totalReinforcements,
+            contradiction_count: beliefs.reduce((sum, b) => sum + (b.contradiction_count || 0), 0),
+            agent_affinity: this.mergeAgentAffinities(beliefs)
+          };
+
+          return mergedBelief;
+        }
+      }
+    } catch (error) {
+      log.error('MemoryConsolidator', 'Belief merging failed:', error);
+    }
+
+    return null;
+  }
+
+  private mergeAgentAffinities(beliefs: any[]): CoreBelief['agent_affinity'] {
+    const affinities: CoreBelief['agent_affinity'] = {};
+    const agents = ['theoria', 'pathia', 'kinesis'] as const;
+
+    for (const agent of agents) {
+      const values = beliefs
+        .map(b => b.agent_affinity?.[agent])
+        .filter(v => v !== undefined && v !== null);
+
+      if (values.length > 0) {
+        affinities[agent] = values.reduce((sum, v) => sum + v, 0) / values.length;
+      }
+    }
+
+    return affinities;
+  }
 }
 
 export default MemoryConsolidator;

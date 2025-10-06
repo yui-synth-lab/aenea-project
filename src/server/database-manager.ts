@@ -1035,6 +1035,22 @@ class DatabaseManager {
     }
   }
 
+  deleteCoreBelief(beliefId: number): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      // Delete related belief_evolution records first (FOREIGN KEY constraint)
+      this.db.prepare('DELETE FROM belief_evolution WHERE belief_id = ?').run(beliefId);
+      // Then delete the core belief
+      this.db.prepare('DELETE FROM core_beliefs WHERE id = ?').run(beliefId);
+    } catch (err) {
+      console.error('Error deleting core belief:', err);
+      throw err; // Re-throw to let caller handle
+    }
+  }
+
   reinforceCoreBelief(beliefId: number, newSourceThoughts: string[]): void {
     if (!this.isReady || !this.db) {
       return;

@@ -15,7 +15,7 @@ import CompilerStage from '../aenea/stages/compiler.js';
 import ScribeStage from '../aenea/stages/scribe.js';
 import WeightUpdateStage from '../aenea/stages/weight-update.js';
 import { StructuredThought, MutualReflection, AuditorResult, SynthesisResult, DocumentationResult } from '../types/aenea-types.js';
-import { DPDScores, DPDWeights } from '../types/dpd-types.js';
+import { DPDScores, DPDWeights, ImpactAssessment } from '../types/dpd-types.js';
 import { MemoryConsolidator } from '../aenea/memory/memory-consolidator.js';
 import { CoreBeliefs } from '../aenea/memory/core-beliefs.js';
 import { theoriaConfig } from '../aenea/agents/theoria.js';
@@ -42,6 +42,7 @@ interface ThoughtCycle {
   mutualReflections?: MutualReflection[];  // Array of reflections from S2
   auditorResult?: AuditorResult;
   dpdScores?: DPDScores;
+  impactAssessment?: ImpactAssessment;  // Impact assessment from S4
   synthesis?: SynthesisResult;
   documentation?: DocumentationResult;
   dpdWeights?: DPDWeights;
@@ -103,6 +104,12 @@ class ConsciousnessBackend extends EventEmitter {
   // Yui Protocol 5 agents integration
   private yuiAgentsBridge: YuiAgentsBridge;
 
+  // Manual trigger queue (next cycle processing)
+  private pendingManualTrigger: InternalTrigger | null;
+
+  // Previous cycle DPD scores for impact assessment
+  private previousDpdScores: DPDScores | null;
+
   constructor() {
     super(); // Call EventEmitter constructor
 
@@ -122,6 +129,8 @@ class ConsciousnessBackend extends EventEmitter {
     this.lastSaveTime = 0;
     this.databaseManager = new DatabaseManager();
     this.energyManager = getEnergyManager();
+    this.pendingManualTrigger = null;
+    this.previousDpdScores = null;
 
     // Initialize DPD weights with defaults (will be overwritten by restoreFromDatabase if data exists)
     this.dpdWeights = {
@@ -862,13 +871,19 @@ class ConsciousnessBackend extends EventEmitter {
         ethicsScore: 0.8,
         concerns: [],
         recommendations: []
-      }
+      },
+      thoughtCycle.trigger // Pass trigger for impact assessment
     );
 
     thoughtCycle.dpdScores = result.scores;
+    thoughtCycle.impactAssessment = result.assessment.impactAssessment; // Store impact assessment
     this.dpdWeights = result.weights; // Update current weights
 
     console.log(`[Backend S4] DPD Scores calculated: empathy=${result.scores.empathy.toFixed(3)}, coherence=${result.scores.coherence.toFixed(3)}, dissonance=${result.scores.dissonance.toFixed(3)}, weighted=${result.scores.weightedTotal.toFixed(3)} at ${new Date().toISOString()}`);
+
+    if (result.assessment.impactAssessment?.isParadigmShift) {
+      console.log(`[Backend S4] ⚡ PARADIGM SHIFT DETECTED: ${result.assessment.impactAssessment.reasoning}`);
+    }
 
     log.info('StageS4', `DPD Assessment completed at ${new Date().toISOString()}`);
 
@@ -999,13 +1014,18 @@ class ConsciousnessBackend extends EventEmitter {
     if (thoughtCycle.dpdScores) {
       const updatedWeights = await this.weightUpdateStage.run(
         thoughtCycle.dpdScores,
-        this.dpdWeights
+        this.dpdWeights,
+        thoughtCycle.impactAssessment // Pass impact assessment for paradigm shift detection
       );
 
       this.dpdWeights = updatedWeights;
       thoughtCycle.dpdWeights = { ...updatedWeights };
 
       console.log(`DPD weights updated: empathy=${updatedWeights.empathy.toFixed(3)}, coherence=${updatedWeights.coherence.toFixed(3)}, dissonance=${updatedWeights.dissonance.toFixed(3)}`);
+
+      if (thoughtCycle.impactAssessment?.isParadigmShift) {
+        console.log(`[Backend U] ⚡ Paradigm shift perturbation applied to DPD weights`);
+      }
 
       // Save DPD weights to database
       this.databaseManager.saveDPDWeights(updatedWeights);
@@ -1420,7 +1440,27 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
     // Note: Energy consumption for trigger generation (S0) is handled by executeAdaptiveThoughtCycle
     // Don't consume energy here to avoid double-counting
 
-    // Generate evolved questions from previous discussions (70% chance when data available)
+    // Priority 1: Check for pending manual trigger
+    if (this.pendingManualTrigger) {
+      const trigger = this.pendingManualTrigger;
+      this.pendingManualTrigger = null; // Clear after retrieval
+
+      log.info('Trigger', `🎯 Processing queued manual trigger: "${trigger.question.substring(0, 50)}..."`);
+
+      // Emit trigger generation event for UI
+      this.emit('triggerGenerated', {
+        id: trigger.id,
+        question: trigger.question.substring(0, 150),
+        category: trigger.category,
+        importance: trigger.importance,
+        source: 'manual',
+        timestamp: Date.now()
+      });
+
+      return trigger;
+    }
+
+    // Priority 2: Generate evolved questions from previous discussions (70% chance when data available)
     const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(10);
     const significantThoughts = this.databaseManager.getSignificantThoughts(5);
     const coreBeliefs = this.databaseManager.getCoreBeliefs(5);
@@ -1523,10 +1563,21 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
       source: 'manual'
     };
 
+    // Queue trigger for next cycle instead of immediate processing
+    this.pendingManualTrigger = trigger;
     this.databaseManager.saveQuestion(trigger);
-    await this.executeAdaptiveThoughtCycle(trigger);
 
-    return { success: true, trigger };
+    // Emit event to notify UI that trigger is queued
+    this.emit('manualTriggerQueued', {
+      id: trigger.id,
+      question: trigger.question.substring(0, 150),
+      estimatedNextCycle: this.systemClock + 30, // Approximate next cycle time
+      timestamp: Date.now()
+    });
+
+    log.info('Trigger', `📥 Manual trigger queued for next cycle: "${question.substring(0, 50)}..."`);
+
+    return { success: true, trigger, queued: true };
   }
 
   getHistory(): any {
@@ -2210,13 +2261,17 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
       sleepLog.push(`REM phase skipped: ${(error as Error).message}`);
     }
 
-    // Phase 2: Deep Sleep - Memory consolidation
+    // Phase 2: Deep Sleep - Memory consolidation + Core Beliefs merging
     this.emit('sleepPhaseChanged', { phase: 'Deep Sleep', progress: 50 });
-    sleepLog.push('--- Deep Sleep Phase: Memory Consolidation ---');
+    sleepLog.push('--- Deep Sleep Phase: Memory Consolidation & Belief Merging ---');
     try {
       const consolidated = await this.consolidateSignificantThoughts();
       stats.beliefsMerged = consolidated.merged;
       sleepLog.push(`Consolidated ${consolidated.merged} thoughts into ${consolidated.beliefs} beliefs`);
+
+      // Merge similar core beliefs
+      const mergeResult = await this.memoryConsolidator.mergeSimilarBeliefs(0.75);
+      sleepLog.push(`Merged ${mergeResult.merged} similar beliefs, ${mergeResult.kept} beliefs remain`);
     } catch (error) {
       sleepLog.push(`Deep sleep phase skipped: ${(error as Error).message}`);
     }

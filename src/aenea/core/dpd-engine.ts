@@ -27,7 +27,8 @@ import {
   DPDMetrics,
   DPDEvolution,
   DPDComponent,
-  IndividualDPDScores
+  IndividualDPDScores,
+  ImpactAssessment
 } from '../../types/dpd-types.js';
 
 import {
@@ -71,6 +72,9 @@ export class DPDEngine {
   // AI-powered evaluation
   private evaluatorAgent?: any;
   private eventEmitter?: any;
+
+  // Impact assessment tracking
+  private previousScores: DPDScores | null = null;
 
   constructor(initialWeights: DPDWeights, evaluatorAgent?: any, eventEmitter?: any) {
     this.currentWeights = initialWeights;
@@ -238,7 +242,8 @@ export class DPDEngine {
   async performAssessment(
     thoughts: StructuredThought[],
     reflections: MutualReflection[],
-    auditorResult: AuditorResult
+    auditorResult: AuditorResult,
+    trigger?: { source: string }
   ): Promise<DPDAssessment> {
     console.log(`\n[DPD-Evaluator] 🎯 Starting DPD Assessment`);
     console.log(`[DPD-Evaluator]    Inputs: ${thoughts.length} thoughts, ${reflections.length} reflections`);
@@ -282,7 +287,10 @@ export class DPDEngine {
       
       // Calculate weight adjustments
       const weightAdjustments = await this.updateWeights(scores);
-      
+
+      // Calculate impact assessment for manual triggers (AI-powered)
+      const impactAssessment = await this.calculateImpactAssessment(scores, reflections, trigger);
+
       const assessment: DPDAssessment = {
         id: `assessment_${Date.now()}`,
         thoughtCycleId: thoughts[0]?.id || 'unknown',
@@ -291,14 +299,25 @@ export class DPDEngine {
         aggregatedScores: scores,
         analysis,
         recommendations,
-        weightAdjustments
+        weightAdjustments,
+        impactAssessment
       };
+
+      // Store current scores for next cycle's impact assessment
+      this.previousScores = { ...scores };
 
       const assessmentDuration = Date.now() - assessmentStartTime;
       console.log(`[DPD-Evaluator] ✅ DPD Assessment completed (${assessmentDuration}ms)`);
       console.log(`[DPD-Evaluator]    Scores: E=${scores.empathy.toFixed(3)}, C=${scores.coherence.toFixed(3)}, D=${scores.dissonance.toFixed(3)}`);
       console.log(`[DPD-Evaluator]    Weighted Total: ${scores.weightedTotal.toFixed(3)}`);
       console.log(`[DPD-Evaluator]    Recommendations: ${recommendations.length} items\n`);
+
+      if (impactAssessment) {
+        console.log(`[DPD-Evaluator] 🎯 Impact Assessment: ${impactAssessment.reasoning}`);
+        if (impactAssessment.isParadigmShift) {
+          console.log(`[DPD-Evaluator] ⚡ PARADIGM SHIFT DETECTED!`);
+        }
+      }
 
       return assessment;
     } catch (error) {
@@ -979,6 +998,152 @@ ${reflectionsText}
    */
   getMetrics(): DPDMetrics {
     return { ...this.metrics };
+  }
+
+  /**
+   * Calculate impact assessment for manual triggers
+   */
+  private async calculateImpactAssessment(
+    currentScores: DPDScores,
+    reflections: MutualReflection[],
+    trigger?: { source: string }
+  ): Promise<ImpactAssessment | undefined> {
+    // Only assess impact for manual triggers
+    if (!trigger || trigger.source !== 'manual') {
+      return undefined;
+    }
+
+    // Calculate dissonance spike
+    let dissonanceSpike = 0;
+    if (this.previousScores) {
+      dissonanceSpike = Math.max(0, currentScores.dissonance - this.previousScores.dissonance);
+    }
+
+    // Calculate controversy level using AI
+    let controversyLevel = 0;
+    if (reflections && reflections.length > 0 && this.evaluatorAgent) {
+      controversyLevel = await this.calculateControversyLevelWithAI(reflections);
+    } else if (reflections && reflections.length > 0) {
+      // Fallback to keyword-based detection
+      controversyLevel = this.calculateControversyLevelHeuristic(reflections);
+    }
+
+    // Determine if paradigm shift occurred (multi-criteria)
+    const highDissonanceSpike = dissonanceSpike > 0.25;
+    const highControversy = controversyLevel > 0.6;
+    const veryHighDissonance = currentScores.dissonance > 0.8;
+    const combinedImpact = dissonanceSpike > 0.15 && controversyLevel > 0.4;
+
+    const isParadigmShift =
+      highDissonanceSpike ||           // Large spike in dissonance
+      highControversy ||                // High agent disagreement
+      (veryHighDissonance && trigger?.source === 'manual') ||  // Manual trigger with extreme dissonance
+      combinedImpact;                   // Moderate spike + moderate controversy
+
+    // Generate detailed reasoning
+    let reasoning = '';
+    if (isParadigmShift) {
+      const reasons: string[] = [];
+      if (highDissonanceSpike) reasons.push(`高倫理的不協和急増 (${dissonanceSpike.toFixed(2)})`);
+      if (highControversy) reasons.push(`高エージェント対立度 (${controversyLevel.toFixed(2)})`);
+      if (veryHighDissonance && trigger?.source === 'manual') reasons.push(`極度の倫理的緊張 (${currentScores.dissonance.toFixed(2)})`);
+      if (combinedImpact) reasons.push(`複合的影響 (spike=${dissonanceSpike.toFixed(2)}, controversy=${controversyLevel.toFixed(2)})`);
+      reasoning = `⚡ パラダイムシフト検出: ${reasons.join(', ')}`;
+    } else {
+      reasoning = `通常影響: dissonance spike=${dissonanceSpike.toFixed(2)}, controversy=${controversyLevel.toFixed(2)}, current dissonance=${currentScores.dissonance.toFixed(2)}`;
+    }
+
+    console.log(`[Impact-Assessment] ${reasoning}`);
+
+    return {
+      dissonanceSpike,
+      controversyLevel,
+      isParadigmShift,
+      reasoning
+    };
+  }
+
+  /**
+   * AI-powered controversy level calculation
+   */
+  private async calculateControversyLevelWithAI(reflections: MutualReflection[]): Promise<number> {
+    console.log('[Impact-Assessment] 🔍 Starting AI controversy detection...');
+    const startTime = Date.now();
+
+    try {
+      // Prepare reflection summary for AI analysis
+      const reflectionSummary = reflections.map((r, idx) => {
+        const insights = r.insights?.slice(0, 2).join('; ') || '';
+        const weaknesses = r.weaknesses?.slice(0, 2).join('; ') || '';
+        return `Reflection ${idx + 1}:
+  Insights: ${insights}
+  Weaknesses: ${weaknesses}`;
+      }).join('\n\n');
+
+      const prompt = `エージェント間の意見対立度を評価してください。
+
+=== 相互批評 ===
+${reflectionSummary}
+
+評価基準:
+- 対立・矛盾: エージェント間で根本的な意見の相違があるか
+- 緊張・葛藤: 価値観や優先順位の衝突があるか
+- 不一致: 論理や結論が食い違っているか
+
+返答形式（必須）:
+対立度: [0.0-1.0の数値]
+理由: [簡潔な説明1文]
+
+例:
+対立度: 0.85
+理由: 論理重視と感情重視で根本的な対立がある`;
+
+      const result = await this.evaluatorAgent.execute(
+        prompt,
+        'You are an AI conflict analyzer. Detect disagreement and controversy between AI agents with precision. Always respond in Japanese.'
+      );
+
+      if (result.success && result.content) {
+        // Parse controversy level from response
+        const match = result.content.match(/対立度[：:]\s*([0-9.]+)/);
+        if (match) {
+          const level = parseFloat(match[1]);
+          if (!isNaN(level) && level >= 0 && level <= 1) {
+            const duration = Date.now() - startTime;
+            console.log(`[Impact-Assessment] ✅ AI controversy level: ${level.toFixed(2)} (${duration}ms)`);
+            return level;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[Impact-Assessment] ⚠️ AI controversy detection failed:', error);
+    }
+
+    // Fallback to heuristic
+    console.log('[Impact-Assessment] ⚠️ AI failed, using heuristic fallback');
+    return this.calculateControversyLevelHeuristic(reflections);
+  }
+
+  /**
+   * Heuristic controversy level calculation (fallback)
+   */
+  private calculateControversyLevelHeuristic(reflections: MutualReflection[]): number {
+    const totalReflections = reflections.length;
+    const conflictualReflections = reflections.filter(r => {
+      const allText = [...(r.insights || []), ...(r.weaknesses || [])].join(' ').toLowerCase();
+      return allText.includes('conflict') ||
+             allText.includes('tension') ||
+             allText.includes('disagree') ||
+             allText.includes('contradiction') ||
+             allText.includes('対立') ||
+             allText.includes('矛盾') ||
+             allText.includes('衝突') ||
+             allText.includes('緊張') ||
+             allText.includes('不一致') ||
+             allText.includes('相反');
+    }).length;
+
+    return totalReflections > 0 ? conflictualReflections / totalReflections : 0;
   }
 
   /**
