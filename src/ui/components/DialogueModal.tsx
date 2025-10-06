@@ -245,7 +245,8 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.75);
+          background: rgba(0, 0, 0, 0.85);
+          backdrop-filter: blur(4px);
           display: flex;
           justify-content: center;
           align-items: center;
@@ -254,15 +255,36 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
         }
 
         .modal-container {
-          background: #1f2937;
-          border-radius: 16px;
+          background: var(--cyber-bg-secondary);
           width: 100%;
           max-width: 800px;
           max-height: 90vh;
           display: flex;
           flex-direction: column;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-          border: 1px solid #374151;
+          box-shadow: 0 0 30px var(--cyber-glow-cyan), 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+          border: 2px solid var(--cyber-neon-cyan);
+          clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
+          position: relative;
+        }
+
+        .modal-container::before,
+        .modal-container::after {
+          content: '';
+          position: absolute;
+          width: 12px;
+          height: 12px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 10px var(--cyber-glow-cyan);
+        }
+
+        .modal-container::before {
+          top: 0;
+          left: 0;
+        }
+
+        .modal-container::after {
+          bottom: 0;
+          right: 0;
         }
 
         .modal-header {
@@ -270,41 +292,48 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
           justify-content: space-between;
           align-items: flex-start;
           padding: 24px;
-          border-bottom: 1px solid #374151;
+          border-bottom: 2px solid var(--cyber-border);
+          background: linear-gradient(135deg, var(--cyber-bg-secondary) 0%, var(--cyber-bg-tertiary) 100%);
         }
 
         .modal-header h2 {
           margin: 0;
-          font-size: 24px;
+          font-size: 22px;
           font-weight: 700;
-          color: #f9fafb;
+          color: var(--cyber-neon-cyan);
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          text-shadow: 0 0 10px var(--cyber-glow-cyan);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .modal-subtitle {
           margin: 4px 0 0 0;
-          font-size: 14px;
-          color: #9ca3af;
+          font-size: 12px;
+          color: var(--cyber-text-secondary);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .close-button {
-          background: transparent;
-          border: none;
-          color: #9ca3af;
-          font-size: 24px;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-pink);
+          color: var(--cyber-neon-pink);
+          font-size: 20px;
           cursor: pointer;
           padding: 0;
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 4px;
           transition: all 0.2s;
+          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+          box-shadow: 0 0 8px rgba(255, 20, 147, 0.3);
         }
 
         .close-button:hover {
-          background: #374151;
-          color: #f9fafb;
+          box-shadow: 0 0 15px rgba(255, 20, 147, 0.5);
+          transform: rotate(90deg);
         }
 
         .messages-container {
@@ -330,20 +359,27 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
           flex-direction: column;
           gap: 8px;
           padding: 16px;
-          border-radius: 12px;
           max-width: 80%;
+          position: relative;
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .message.human {
           align-self: flex-end;
-          background: #1e40af;
-          border: 1px solid #3b82f6;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-cyan);
+          border-left: 4px solid var(--cyber-neon-cyan);
+          clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+          box-shadow: 0 0 15px rgba(0, 255, 255, 0.2), inset 0 0 10px rgba(0, 255, 255, 0.1);
         }
 
         .message.aenea {
           align-self: flex-start;
-          background: #065f46;
-          border: 1px solid #10b981;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-lime);
+          border-left: 4px solid var(--cyber-neon-lime);
+          clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+          box-shadow: 0 0 15px rgba(0, 255, 65, 0.2), inset 0 0 10px rgba(0, 255, 65, 0.1);
         }
 
         .message-header {
@@ -429,24 +465,25 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
         }
 
         .message-input {
-          background: #374151;
-          border: 1px solid #4b5563;
-          border-radius: 8px;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-border);
           padding: 12px;
-          color: #f9fafb;
-          font-family: inherit;
+          color: var(--cyber-text-primary);
+          font-family: 'Courier New', 'Consolas', monospace;
           font-size: 14px;
           resize: none;
           width: 100%;
+          box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.1);
         }
 
         .message-input:focus {
           outline: none;
-          border-color: #3b82f6;
+          border-color: var(--cyber-neon-cyan);
+          box-shadow: 0 0 10px var(--cyber-glow-cyan), inset 0 0 15px rgba(0, 255, 255, 0.15);
         }
 
         .message-input::placeholder {
-          color: #6b7280;
+          color: var(--cyber-text-dim);
         }
 
         .message-input:disabled {
@@ -455,27 +492,34 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({ isOpen, onClose })
         }
 
         .send-button {
-          background: #3b82f6;
-          border: none;
-          border-radius: 8px;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-lime);
           padding: 12px 24px;
-          color: white;
-          font-weight: 600;
+          color: var(--cyber-neon-lime);
+          font-weight: 700;
           cursor: pointer;
-          transition: background-color 0.2s;
+          transition: all 0.2s;
           align-self: flex-end;
           display: flex;
           align-items: center;
           gap: 8px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+          box-shadow: 0 0 10px var(--cyber-glow-lime);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .send-button:hover:not(:disabled) {
-          background: #2563eb;
+          box-shadow: 0 0 20px var(--cyber-glow-lime);
+          transform: translateY(-2px);
         }
 
         .send-button:disabled {
-          background: #6b7280;
+          border-color: var(--cyber-text-dim);
+          color: var(--cyber-text-dim);
           cursor: not-allowed;
+          box-shadow: none;
         }
 
         @media (max-width: 640px) {

@@ -5,7 +5,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Zap, Activity, Sparkles, MessageCircle, TrendingUp, Moon, Play, Pause, Square, AlertCircle } from 'lucide-react';
+import {
+  Brain, Zap, Activity, Sparkles, MessageCircle, TrendingUp, Moon, Play, Pause, Square, AlertCircle,
+  // Agent icons
+  Lightbulb, Heart, Workflow, Eye, Palette, Target, Feather, Shield, FileText, Combine
+} from 'lucide-react';
 import { DialogueModal } from '../components/DialogueModal.js';
 import { GrowthModal } from '../components/GrowthModal.js';
 import { DPDScoreDisplay } from '../components/DPDScoreDisplay.js';
@@ -66,7 +70,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
   const [manualQuestion, setManualQuestion] = useState<string>('');
   const [queuedTrigger, setQueuedTrigger] = useState<string | null>(null);
   const [showTriggerPopup, setShowTriggerPopup] = useState<boolean>(false);
-  const triggerPopupRef = useRef<HTMLDivElement | null>(null);
   const [isDialogueModalOpen, setIsDialogueModalOpen] = useState(false);
   const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
   const [currentStage, setCurrentStage] = useState<string>('');
@@ -471,24 +474,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     return cleanup;
   }, []);
 
-  // Close trigger popup on outside click or Escape
+  // Close trigger form on Escape
   useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (!showTriggerPopup) return;
-      const el = triggerPopupRef.current;
-      if (el && !el.contains(e.target as Node)) {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showTriggerPopup) {
         setShowTriggerPopup(false);
       }
     };
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowTriggerPopup(false);
-    };
-
-    document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onClick);
       document.removeEventListener('keydown', onKey);
     };
   }, [showTriggerPopup]);
@@ -538,6 +533,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
     // Default fallback
     return 'system';
+  };
+
+  const getAgentIcon = (agentName: string) => {
+    const iconProps = { size: 14, style: { display: 'inline', marginRight: '4px', verticalAlign: 'middle' } };
+
+    // Yui Protocol agents
+    if (agentName.includes('慧露')) return <Lightbulb {...iconProps} />; // 論理的思考
+    if (agentName.includes('碧統')) return <Workflow {...iconProps} />; // システム統合
+    if (agentName.includes('観至')) return <Eye {...iconProps} />; // 批判的観察
+    if (agentName.includes('陽雅')) return <Palette {...iconProps} />; // 詩的表現
+    if (agentName.includes('結心')) return <Heart {...iconProps} />; // 共感的統合
+
+    // Aenea core agents
+    if (agentName.toLowerCase().includes('theoria')) return <Lightbulb {...iconProps} />; // Truth seeker
+    if (agentName.toLowerCase().includes('pathia')) return <Heart {...iconProps} />; // Empathy weaver
+    if (agentName.toLowerCase().includes('kinesis')) return <Workflow {...iconProps} />; // Harmony coordinator
+
+    // System agents
+    if (agentName.toLowerCase().includes('compiler')) return <Combine {...iconProps} />; // Integration
+    if (agentName.toLowerCase().includes('scribe')) return <Feather {...iconProps} />; // Documentation
+    if (agentName.toLowerCase().includes('auditor')) return <Shield {...iconProps} />; // Safety check
+    if (agentName.toLowerCase().includes('system')) return <Target {...iconProps} />; // System
+
+    // Default
+    return <Brain {...iconProps} />;
   };
 
   return (
@@ -684,18 +704,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             </div>
           )}
 
-          <div className="trigger-inline">
+          <div className="trigger-controls">
             <button
               className="trigger-toggle"
               onClick={() => setShowTriggerPopup(prev => !prev)}
               aria-expanded={showTriggerPopup}
-              aria-controls="trigger-popup"
+              aria-controls="trigger-form"
             >
               💬 Quick Trigger
             </button>
 
             {showTriggerPopup && (
-              <div className="trigger-popup" id="trigger-popup" ref={el => (triggerPopupRef.current = el)}>
+              <div className="trigger-form" id="trigger-form">
                 <textarea
                   placeholder="Enter a question to trigger consciousness..."
                   className="trigger-input"
@@ -876,9 +896,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
                 <div key={item.id} className="activity-item">
                   <span className="activity-time">{formatActivityTime(item.timestamp)}</span>
                   {item.agent ? (
-                    <span className={`activity-agent ${getAgentCssClass(item.agent)}`}>{item.agent}</span>
+                    <span className={`activity-agent ${getAgentCssClass(item.agent)}`}>
+                      {getAgentIcon(item.agent)}
+                      {item.agent}
+                    </span>
                   ) : (
-                    <span className="activity-system">System</span>
+                    <span className="activity-system">
+                      <Target size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                      System
+                    </span>
                   )}
                   <div className="activity-text">
                     {item.message}
@@ -921,12 +947,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
       />
 
       <style>{`
-        /* Mobile-first base styles */
+        /* Mobile-first base styles - CYBERPUNK THEME */
         .dashboard {
           padding: 16px;
-          background: #111827;
+          background: var(--cyber-bg-primary);
           min-height: 100vh;
-          color: #f9fafb;
+          color: var(--cyber-text-primary);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .dashboard-header {
@@ -945,14 +972,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .header-icon {
-          color: #3b82f6;
-          filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));
+          color: var(--cyber-neon-cyan);
+          filter: drop-shadow(0 0 8px var(--cyber-glow-cyan));
         }
 
         .dashboard-header h2 {
           font-size: 24px;
           font-weight: 700;
           margin: 0;
+          color: var(--cyber-neon-cyan);
+          text-transform: uppercase;
+          letter-spacing: 3px;
+          text-shadow: 0 0 10px var(--cyber-glow-cyan);
         }
 
         .header-actions {
@@ -963,10 +994,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .dialogue-button,
         .growth-button {
-          border: none;
-          border-radius: 8px;
+          border: 2px solid var(--cyber-neon-cyan);
+          background: var(--cyber-bg-secondary);
           padding: 8px 16px;
-          color: white;
+          color: var(--cyber-neon-cyan);
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s;
@@ -974,24 +1005,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           display: flex;
           align-items: center;
           gap: 4px;
+          position: relative;
+          clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+          box-shadow: 0 0 10px var(--cyber-glow-cyan);
+        }
+
+        .dialogue-button::before,
+        .growth-button::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: var(--cyber-neon-cyan);
+          opacity: 0;
+          transition: opacity 0.2s;
+          z-index: -1;
+        }
+
+        .dialogue-button:hover::before,
+        .growth-button:hover::before {
+          opacity: 0.2;
         }
 
         .dialogue-button {
-          background: #059669;
+          border-color: var(--cyber-neon-lime);
+          color: var(--cyber-neon-lime);
+          box-shadow: 0 0 10px var(--cyber-glow-lime);
+        }
+
+        .dialogue-button::before {
+          background: var(--cyber-neon-lime);
         }
 
         .dialogue-button:hover {
-          background: #047857;
-          transform: translateY(-1px);
+          transform: translateY(-2px);
+          box-shadow: 0 0 20px var(--cyber-glow-lime);
         }
 
         .growth-button {
-          background: #8b5cf6;
+          border-color: var(--cyber-neon-magenta);
+          color: var(--cyber-neon-magenta);
+          box-shadow: 0 0 10px var(--cyber-glow-magenta);
+        }
+
+        .growth-button::before {
+          background: var(--cyber-neon-magenta);
         }
 
         .growth-button:hover {
-          background: #7c3aed;
-          transform: translateY(-1px);
+          transform: translateY(-2px);
+          box-shadow: 0 0 20px var(--cyber-glow-magenta);
         }
 
         .system-status {
@@ -1067,6 +1132,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             overflow: hidden;
           }
 
+          .manual-trigger {
+            align-self: start;
+          }
+
+          .stage-progression {
+            align-self: start;
+          }
+
           .activity-log {
             overflow: hidden;
             display: flex;
@@ -1081,22 +1154,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .dashboard-card {
-          background: #1f2937;
-          border-radius: 12px;
+          background: var(--cyber-bg-secondary);
           padding: 24px;
-          border: 1px solid #374151;
+          border: 2px solid var(--cyber-border);
+          position: relative;
+          clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+          box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.05);
+        }
+
+        .dashboard-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 8px;
+          height: 8px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
+        }
+
+        .dashboard-card::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          right: 0;
+          width: 8px;
+          height: 8px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
         }
 
         .dashboard-card h3 {
-          font-size: 18px;
-          font-weight: 600;
+          font-size: 16px;
+          font-weight: 700;
           margin: 0 0 16px 0;
-          color: #f9fafb;
+          color: var(--cyber-neon-cyan);
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          border-bottom: 1px solid var(--cyber-border);
+          padding-bottom: 8px;
         }
 
         .consciousness-control {
-          background: #1e40af;
-          border: 1px solid #3b82f6;
+          background: linear-gradient(135deg, var(--cyber-bg-secondary) 0%, var(--cyber-bg-tertiary) 100%);
+          border-color: var(--cyber-neon-cyan);
+          box-shadow: 0 0 15px var(--cyber-glow-cyan), inset 0 0 15px rgba(0, 255, 255, 0.1);
         }
 
         /* Row wrapper containing status + buttons */
@@ -1162,65 +1264,126 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           align-items: center;
           justify-content: center;
           gap: 6px;
-          background: #3b82f6;
-          border: none;
-          border-radius: 8px;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-cyan);
           padding: 8px 16px;
           min-height: 40px;
-          color: white;
-          font-weight: 600;
+          color: var(--cyber-neon-cyan);
+          font-weight: 700;
           cursor: pointer;
-          transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-          font-size: 14px;
+          transition: all 0.2s ease;
+          font-size: 13px;
           flex: 1;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          position: relative;
+          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+          box-shadow: 0 0 10px var(--cyber-glow-cyan);
+        }
+
+        .control-button::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: var(--cyber-neon-cyan);
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+
+        .control-button:hover::before {
+          opacity: 0.15;
         }
 
         .control-button:hover {
-          background: #2563eb;
-          transform: translateY(-1px);
+          transform: translateY(-2px);
+          box-shadow: 0 0 20px var(--cyber-glow-cyan);
         }
 
         .control-button:disabled {
-          background: #6b7280;
+          border-color: var(--cyber-text-dim);
+          color: var(--cyber-text-dim);
           cursor: not-allowed;
-          transform: none;
+          box-shadow: none;
+        }
+
+        .control-button:disabled::before {
+          display: none;
         }
 
         .control-button.start {
-          background: #059669;
+          border-color: var(--cyber-neon-lime);
+          color: var(--cyber-neon-lime);
+          box-shadow: 0 0 10px var(--cyber-glow-lime);
+        }
+
+        .control-button.start::before {
+          background: var(--cyber-neon-lime);
         }
 
         .control-button.start:hover {
-          background: #047857;
+          box-shadow: 0 0 20px var(--cyber-glow-lime);
         }
 
         .control-button.pause {
-          background: #d97706;
+          border-color: var(--cyber-neon-yellow);
+          color: var(--cyber-neon-yellow);
+          box-shadow: 0 0 10px rgba(255, 255, 0, 0.3);
+        }
+
+        .control-button.pause::before {
+          background: var(--cyber-neon-yellow);
         }
 
         .control-button.pause:hover {
-          background: #b45309;
+          box-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
         }
 
         .control-button.resume {
-          background: #059669;
+          border-color: var(--cyber-neon-lime);
+          color: var(--cyber-neon-lime);
+          box-shadow: 0 0 10px var(--cyber-glow-lime);
+        }
+
+        .control-button.resume::before {
+          background: var(--cyber-neon-lime);
         }
 
         .control-button.resume:hover {
-          background: #047857;
+          box-shadow: 0 0 20px var(--cyber-glow-lime);
         }
 
         .control-button.stop {
-          background: #dc2626;
+          border-color: var(--cyber-neon-pink);
+          color: var(--cyber-neon-pink);
+          box-shadow: 0 0 10px rgba(255, 20, 147, 0.3);
+        }
+
+        .control-button.stop::before {
+          background: var(--cyber-neon-pink);
         }
 
         .control-button.stop:hover {
-          background: #b91c1c;
+          box-shadow: 0 0 20px rgba(255, 20, 147, 0.5);
+        }
+
+        .control-button.sleep {
+          border-color: var(--cyber-neon-magenta);
+          color: var(--cyber-neon-magenta);
+          box-shadow: 0 0 10px var(--cyber-glow-magenta);
+        }
+
+        .control-button.sleep::before {
+          background: var(--cyber-neon-magenta);
+        }
+
+        .control-button.sleep:hover {
+          box-shadow: 0 0 20px var(--cyber-glow-magenta);
         }
 
         .manual-trigger {
-          background: #1e3a8a;
-          border: 1px solid #3b82f6;
+          background: linear-gradient(135deg, var(--cyber-bg-secondary) 0%, var(--cyber-bg-tertiary) 100%);
+          border-color: var(--cyber-neon-lime);
+          box-shadow: 0 0 15px var(--cyber-glow-lime), inset 0 0 15px rgba(0, 255, 65, 0.1);
         }
 
         .trigger-controls {
@@ -1250,53 +1413,62 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .trigger-input {
-          background: #374151;
-          border: 1px solid #4b5563;
-          border-radius: 8px;
+          background: var(--cyber-bg-tertiary);
+          border: 1px solid var(--cyber-border);
           padding: 12px;
-          color: #f9fafb;
-          font-family: inherit;
+          color: var(--cyber-text-primary);
+          font-family: 'Courier New', 'Consolas', monospace;
           resize: vertical;
           min-height: 80px;
+          box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.1);
+        }
+
+        .trigger-input:focus {
+          outline: none;
+          border-color: var(--cyber-neon-cyan);
+          box-shadow: 0 0 10px var(--cyber-glow-cyan), inset 0 0 10px rgba(0, 255, 255, 0.15);
         }
 
         .trigger-input::placeholder {
-          color: #9ca3af;
+          color: var(--cyber-text-dim);
         }
 
-        /* Quick Trigger popup styles */
-        .trigger-inline {
-          position: relative;
+        /* Quick Trigger styles */
+        .trigger-controls {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
         }
 
         .trigger-toggle {
-          background: #2563eb;
-          border: none;
-          color: white;
-          padding: 6px 10px;
-          border-radius: 8px;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-lime);
+          color: var(--cyber-neon-lime);
+          padding: 8px 16px;
           cursor: pointer;
-          font-weight: 600;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+          box-shadow: 0 0 8px var(--cyber-glow-lime);
+          transition: all 0.2s;
+          width: 100%;
         }
 
-        .trigger-popup {
-          position: absolute;
-          top: calc(100% + 8px);
-          right: 0;
-          width: 320px;
-          max-width: calc(100vw - 32px);
-          background: #0b1220;
-          border: 1px solid #243b6b;
-          padding: 10px;
-          border-radius: 8px;
-          box-shadow: 0 8px 24px rgba(2,6,23,0.6);
-          z-index: 50;
+        .trigger-toggle:hover {
+          box-shadow: 0 0 15px var(--cyber-glow-lime);
+          transform: translateY(-1px);
         }
 
-        .trigger-popup .trigger-input {
-          background: #1f2937;
-          border: 1px solid #374151;
-          border-radius: 6px;
+        .trigger-form {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .trigger-form .trigger-input {
+          background: var(--cyber-bg-tertiary);
+          border: 1px solid var(--cyber-border);
           padding: 8px;
           min-height: 56px;
           width: 100%;
@@ -1327,23 +1499,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .trigger-button {
-          background: #3b82f6;
-          border: none;
-          border-radius: 8px;
-          padding: 12px 16px;
-          color: white;
-          font-weight: 600;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-cyan);
+          padding: 8px 16px;
+          color: var(--cyber-neon-cyan);
+          font-weight: 700;
           cursor: pointer;
-          transition: background-color 0.2s;
+          transition: all 0.2s;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
         }
 
         .trigger-button:hover:not(:disabled) {
-          background: #2563eb;
+          box-shadow: 0 0 15px var(--cyber-glow-cyan);
+          transform: translateY(-1px);
         }
 
         .trigger-button:disabled {
-          background: #6b7280;
+          border-color: var(--cyber-text-dim);
+          color: var(--cyber-text-dim);
           cursor: not-allowed;
+          box-shadow: none;
+        }
+
+        .trigger-cancel {
+          background: transparent;
+          border: 1px solid var(--cyber-border);
+          color: var(--cyber-text-secondary);
+          padding: 8px 16px;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-transform: uppercase;
+          font-weight: 600;
+          letter-spacing: 1px;
+        }
+
+        .trigger-cancel:hover {
+          border-color: var(--cyber-neon-pink);
+          color: var(--cyber-neon-pink);
         }
 
         .activity-log {
@@ -1384,10 +1579,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           gap: 6px;
           align-items: center;
           padding: 8px 12px;
-          background: #374151;
-          border-radius: 6px;
+          background: var(--cyber-bg-tertiary);
+          border-left: 2px solid var(--cyber-neon-cyan);
           font-size: 14px;
           flex-shrink: 0;
+          box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.05);
         }
 
         .activity-time {
@@ -1397,98 +1593,107 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .activity-agent {
-          font-weight: 600;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 12px;
+          font-weight: 700;
+          padding: 3px 8px;
+          font-size: 11px;
+          clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         .activity-agent.theoria {
-          background: #1e40af;
-          color: #dbeafe;
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-neon-cyan);
+          border: 1px solid var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
         }
 
         .activity-agent.pathia {
-          background: #059669;
-          color: #d1fae5;
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-neon-lime);
+          border: 1px solid var(--cyber-neon-lime);
+          box-shadow: 0 0 8px var(--cyber-glow-lime);
         }
 
         .activity-agent.kinesis {
-          background: #7c2d12;
-          color: #fed7aa;
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-neon-yellow);
+          border: 1px solid var(--cyber-neon-yellow);
+          box-shadow: 0 0 8px rgba(255, 255, 0, 0.3);
         }
 
-        /* Yui Protocol Agents - Official colors */
+        /* Yui Protocol Agents - Cyber styled */
         .activity-agent.yui-eiro {
-          background: #5B7DB1;
-          color: #ffffff;
-          border: 2px solid #5B7DB1;
-          box-shadow: 0 0 8px rgba(91, 125, 177, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: #5B7DB1;
+          border: 1px solid #5B7DB1;
+          box-shadow: 0 0 8px rgba(91, 125, 177, 0.5);
         }
 
         .activity-agent.yui-hekito {
-          background: #2ECCB3;
-          color: #ffffff;
-          border: 2px solid #2ECCB3;
-          box-shadow: 0 0 8px rgba(46, 204, 179, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: #2ECCB3;
+          border: 1px solid #2ECCB3;
+          box-shadow: 0 0 8px rgba(46, 204, 179, 0.5);
         }
 
         .activity-agent.yui-kanshi {
-          background: #C0392B;
-          color: #ffffff;
-          border: 2px solid #C0392B;
-          box-shadow: 0 0 8px rgba(192, 57, 43, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: #C0392B;
+          border: 1px solid #C0392B;
+          box-shadow: 0 0 8px rgba(192, 57, 43, 0.5);
         }
 
         .activity-agent.yui-yoga {
-          background: #F7C873;
-          color: #000000;
-          border: 2px solid #F7C873;
-          box-shadow: 0 0 8px rgba(247, 200, 115, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: #F7C873;
+          border: 1px solid #F7C873;
+          box-shadow: 0 0 8px rgba(247, 200, 115, 0.5);
         }
 
         .activity-agent.yui-yui {
-          background: #E18CB0;
-          color: #ffffff;
-          border: 2px solid #E18CB0;
-          box-shadow: 0 0 8px rgba(225, 140, 176, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: #E18CB0;
+          border: 1px solid #E18CB0;
+          box-shadow: 0 0 8px rgba(225, 140, 176, 0.5);
         }
 
         /* System and Stage agents */
         .activity-agent.system {
-          background: #6b7280;
-          color: #f3f4f6;
-          border: 2px solid #6b7280;
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-text-secondary);
+          border: 1px solid var(--cyber-border);
         }
 
         .activity-agent.compiler {
-          background: #8b5cf6;
-          color: #ffffff;
-          border: 2px solid #8b5cf6;
-          box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-neon-magenta);
+          border: 1px solid var(--cyber-neon-magenta);
+          box-shadow: 0 0 8px var(--cyber-glow-magenta);
         }
 
         .activity-agent.scribe {
-          background: #14b8a6;
-          color: #ffffff;
-          border: 2px solid #14b8a6;
-          box-shadow: 0 0 8px rgba(20, 184, 166, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-neon-cyan);
+          border: 1px solid var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
         }
 
         .activity-agent.auditor {
-          background: #f59e0b;
-          color: #000000;
-          border: 2px solid #f59e0b;
-          box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-neon-yellow);
+          border: 1px solid var(--cyber-neon-yellow);
+          box-shadow: 0 0 8px rgba(255, 255, 0, 0.3);
         }
 
         .activity-system {
-          background: #6b7280;
-          color: #f3f4f6;
-          font-weight: 600;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 12px;
+          background: var(--cyber-bg-secondary);
+          color: var(--cyber-text-secondary);
+          font-weight: 700;
+          padding: 3px 8px;
+          font-size: 11px;
+          border: 1px solid var(--cyber-border);
+          clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
         }
 
         .activity-text {
@@ -1502,30 +1707,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .activity-confidence {
-          color: #3b82f6;
-          font-size: 12px;
-          font-weight: 600;
-          background: #1e3a8a;
-          padding: 2px 6px;
-          border-radius: 3px;
+          color: var(--cyber-neon-cyan);
+          font-size: 11px;
+          font-weight: 700;
+          background: var(--cyber-bg-secondary);
+          padding: 3px 8px;
+          border: 1px solid var(--cyber-neon-cyan);
+          clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+          box-shadow: 0 0 6px var(--cyber-glow-cyan);
         }
 
         .thought-content {
-          background: #374151;
-          padding: 8px;
-          border-radius: 8px;
-          border-left: 4px solid #3b82f6;
-          /* Allow vertical scrolling when content exceeds the fixed max-height */
+          background: var(--cyber-bg-tertiary);
+          padding: 12px;
+          border-left: 3px solid var(--cyber-neon-cyan);
+          border-top: 1px solid var(--cyber-border);
           overflow: auto;
+          box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.1);
+          position: relative;
+        }
+
+        .thought-content::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 4px;
+          height: 4px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 6px var(--cyber-glow-cyan);
         }
 
         .thought-content p {
           font-style: italic;
-          font-size: 16px;
+          font-size: 15px;
           line-height: 1.6;
           margin: 0;
-          color: #e5e7eb;
-          /* Prevent long words (or Japanese text without natural spaces) from breaking layout */
+          color: var(--cyber-text-primary);
+          font-family: 'Courier New', 'Consolas', monospace;
           overflow-wrap: anywhere;
           word-break: break-word;
           white-space: pre-wrap;
@@ -1544,15 +1763,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .stat-value {
           display: block;
-          font-size: 32px;
+          font-size: 36px;
           font-weight: 700;
-          color: #3b82f6;
+          color: var(--cyber-neon-cyan);
           margin-bottom: 4px;
+          text-shadow: 0 0 10px var(--cyber-glow-cyan);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .stat-label {
-          font-size: 14px;
-          color: #9ca3af;
+          font-size: 12px;
+          color: var(--cyber-text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 1px;
         }
 
         .energy-display {
@@ -1563,20 +1786,49 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .energy-bar {
           flex: 1;
-          height: 20px;
-          background: #374151;
-          border-radius: 10px;
+          height: 24px;
+          background: var(--cyber-bg-tertiary);
+          border: 1px solid var(--cyber-border);
           overflow: hidden;
+          position: relative;
+          box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .energy-bar::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, var(--cyber-neon-cyan), transparent);
+          opacity: 0.5;
         }
 
         .energy-fill {
           height: 100%;
           transition: all 0.3s ease;
+          box-shadow: 0 0 10px currentColor;
+          position: relative;
+        }
+
+        .energy-fill::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          right: 0;
+          width: 3px;
+          height: 100%;
+          background: rgba(255, 255, 255, 0.5);
+          box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
         }
 
         .energy-percentage {
-          font-weight: 600;
-          min-width: 48px;
+          font-weight: 700;
+          min-width: 56px;
+          color: var(--cyber-neon-cyan);
+          text-shadow: 0 0 8px var(--cyber-glow-cyan);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .energy-controls {
@@ -1645,52 +1897,80 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .dpd-bar {
           flex: 1;
-          height: 8px;
-          background: #374151;
-          border-radius: 4px;
+          height: 12px;
+          background: var(--cyber-bg-tertiary);
+          border: 1px solid var(--cyber-border);
           overflow: hidden;
+          position: relative;
+          box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.5);
         }
 
         .dpd-fill {
           height: 100%;
           transition: all 0.3s ease;
+          position: relative;
+          box-shadow: 0 0 10px currentColor;
+        }
+
+        .dpd-fill::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          right: 0;
+          width: 2px;
+          height: 100%;
+          background: rgba(255, 255, 255, 0.6);
         }
 
         .dpd-fill.empathy {
-          background: #10b981;
+          background: var(--cyber-neon-lime);
         }
 
         .dpd-fill.coherence {
-          background: #3b82f6;
+          background: var(--cyber-neon-cyan);
         }
 
         .dpd-fill.dissonance {
-          background: #f59e0b;
+          background: var(--cyber-neon-yellow);
         }
 
         .dpd-value {
-          min-width: 48px;
+          min-width: 56px;
           font-size: 14px;
+          font-weight: 700;
+          color: var(--cyber-text-primary);
+          font-family: 'Courier New', 'Consolas', monospace;
+        }
+
+        .dpd-label {
+          min-width: 100px;
+          font-size: 13px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
           font-weight: 600;
+          color: var(--cyber-text-secondary);
         }
 
         .dpd-details-button {
           width: 100%;
           margin-top: 12px;
-          background: #374151;
-          border: 1px solid #4b5563;
-          border-radius: 6px;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-magenta);
           padding: 8px 12px;
-          color: #e5e7eb;
-          font-size: 13px;
-          font-weight: 500;
+          color: var(--cyber-neon-magenta);
+          font-size: 12px;
+          font-weight: 700;
           cursor: pointer;
           transition: all 0.2s;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+          box-shadow: 0 0 8px var(--cyber-glow-magenta);
         }
 
         .dpd-details-button:hover {
-          background: #4b5563;
-          border-color: #6b7280;
+          box-shadow: 0 0 15px var(--cyber-glow-magenta);
+          transform: translateY(-1px);
         }
 
         .current-thought {
@@ -1702,13 +1982,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .philosophy-content blockquote {
-          font-size: 24px;
+          font-size: 20px;
           font-style: italic;
           margin: 0 0 16px 0;
-          color: #3b82f6;
-          border-left: 4px solid #3b82f6;
+          color: var(--cyber-neon-cyan);
+          border-left: 3px solid var(--cyber-neon-cyan);
           padding-left: 16px;
-          /* Ensure long single-line strings wrap in blockquote */
+          text-shadow: 0 0 10px var(--cyber-glow-cyan);
+          font-family: 'Courier New', 'Consolas', monospace;
           overflow-wrap: anywhere;
           word-break: break-word;
           white-space: pre-wrap;
@@ -1716,9 +1997,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .philosophy-content p {
-          color: #d1d5db;
+          color: var(--cyber-text-secondary);
           line-height: 1.6;
           margin: 0;
+          font-family: 'Courier New', 'Consolas', monospace;
+          font-size: 13px;
         }
 
         /* Stage Progression */
@@ -1727,11 +2010,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           align-items: center;
           gap: 4px;
           padding: 12px;
-          background: #374151;
-          border-radius: 8px;
+          background: var(--cyber-bg-tertiary);
+          border: 1px solid var(--cyber-border);
+          border-left: 3px solid var(--cyber-neon-cyan);
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           overflow-y: hidden;
+          box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.08);
         }
 
         .stage-item {
@@ -1745,20 +2030,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .stage-circle {
           width: 32px;
           height: 32px;
-          border-radius: 50%;
+          border: 2px solid var(--cyber-border);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
-          font-weight: 600;
+          font-size: 11px;
+          font-weight: 700;
           transition: all 0.3s;
           position: relative;
+          background: var(--cyber-bg-secondary);
+          clip-path: polygon(20% 0%, 80% 0%, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0% 80%, 0% 20%);
         }
 
         .stage-circle.active {
-          background: #3b82f6;
-          color: white;
-          box-shadow: 0 0 12px rgba(59, 130, 246, 0.8), 0 0 24px rgba(59, 130, 246, 0.4);
+          background: var(--cyber-bg-tertiary);
+          border-color: var(--cyber-neon-cyan);
+          color: var(--cyber-neon-cyan);
+          box-shadow: 0 0 15px var(--cyber-glow-cyan), inset 0 0 10px rgba(0, 255, 255, 0.2);
           animation: pulse 1.5s ease-in-out infinite;
           z-index: 2;
         }
@@ -1769,21 +2057,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          border: 3px solid #60a5fa;
+          width: 120%;
+          height: 120%;
+          border: 2px solid var(--cyber-neon-cyan);
+          clip-path: polygon(20% 0%, 80% 0%, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0% 80%, 0% 20%);
           animation: ripple 1.5s ease-out infinite;
           z-index: -1;
         }
 
         @keyframes pulse {
           0%, 100% {
-            box-shadow: 0 0 12px rgba(59, 130, 246, 0.8), 0 0 24px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 15px var(--cyber-glow-cyan), inset 0 0 10px rgba(0, 255, 255, 0.2);
             transform: scale(1);
           }
           50% {
-            box-shadow: 0 0 20px rgba(59, 130, 246, 1), 0 0 40px rgba(59, 130, 246, 0.6);
+            box-shadow: 0 0 25px var(--cyber-glow-cyan), inset 0 0 15px rgba(0, 255, 255, 0.3);
             transform: scale(1.08);
           }
         }
@@ -1795,24 +2083,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           }
           100% {
             opacity: 0;
-            transform: translate(-50%, -50%) scale(1.8);
+            transform: translate(-50%, -50%) scale(1.5);
           }
         }
 
         .stage-circle.completed {
-          background: #10b981;
-          color: white;
+          background: var(--cyber-bg-tertiary);
+          border-color: var(--cyber-neon-lime);
+          color: var(--cyber-neon-lime);
+          box-shadow: 0 0 10px var(--cyber-glow-lime);
         }
 
         .stage-circle.pending {
-          background: #6b7280;
-          color: white;
+          background: var(--cyber-bg-secondary);
+          border-color: var(--cyber-text-dim);
+          color: var(--cyber-text-dim);
         }
 
         .stage-arrow {
-          color: #9ca3af;
-          font-size: 16px;
+          color: var(--cyber-neon-cyan);
+          font-size: 14px;
           flex-shrink: 0;
+          opacity: 0.4;
         }
 
         @media (min-width: 1025px) {

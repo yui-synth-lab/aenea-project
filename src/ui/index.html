@@ -7,15 +7,58 @@
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Cyberpunk Theme Variables */
+        :root {
+            --cyber-bg-primary: #0a0e15;
+            --cyber-bg-secondary: #0f1419;
+            --cyber-bg-tertiary: #1a1f2e;
+            --cyber-border: #1e2433;
+            --cyber-neon-cyan: #00ffff;
+            --cyber-neon-magenta: #ff00ff;
+            --cyber-neon-lime: #00ff41;
+            --cyber-neon-yellow: #ffff00;
+            --cyber-neon-pink: #ff1493;
+            --cyber-text-primary: #e0e6ed;
+            --cyber-text-secondary: #8b95a5;
+            --cyber-text-dim: #4a5568;
+            --cyber-glow-cyan: rgba(0, 255, 255, 0.3);
+            --cyber-glow-magenta: rgba(255, 0, 255, 0.3);
+            --cyber-glow-lime: rgba(0, 255, 65, 0.3);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #111827;
-            color: #f9fafb;
+            font-family: 'Courier New', 'Consolas', monospace;
+            background: var(--cyber-bg-primary);
+            color: var(--cyber-text-primary);
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            position: relative;
+            overflow-x: hidden;
         }
-        #root { min-height: 100vh; }
+
+        /* Cyberpunk grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 30px 30px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #root {
+            min-height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
 
         /* Prevent text size adjustment on iOS */
         html {
@@ -27,26 +70,65 @@
             -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
         }
 
-        /* Loading spinner */
+        /* Loading spinner - CYBER VERSION */
         .loading-container {
             display: flex;
             align-items: center;
             justify-content: center;
             height: 100vh;
+            background: var(--cyber-bg-primary);
         }
 
         .loading-content {
             text-align: center;
+            border: 2px solid var(--cyber-neon-cyan);
+            padding: 48px;
+            background: var(--cyber-bg-secondary);
+            box-shadow:
+                0 0 20px var(--cyber-glow-cyan),
+                inset 0 0 20px rgba(0, 255, 255, 0.1);
+            position: relative;
+        }
+
+        .loading-content::before,
+        .loading-content::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--cyber-neon-cyan);
+            box-shadow: 0 0 10px var(--cyber-glow-cyan);
+        }
+
+        .loading-content::before {
+            top: -2px;
+            left: -2px;
+        }
+
+        .loading-content::after {
+            bottom: -2px;
+            right: -2px;
         }
 
         .spinner {
             width: 48px;
             height: 48px;
-            border: 4px solid #374151;
-            border-top: 4px solid #3b82f6;
-            border-radius: 50%;
+            border: 3px solid var(--cyber-border);
+            border-top: 3px solid var(--cyber-neon-cyan);
+            border-right: 3px solid var(--cyber-neon-magenta);
             animation: spin 1s linear infinite;
             margin: 0 auto 24px;
+            box-shadow:
+                0 0 15px var(--cyber-glow-cyan),
+                inset 0 0 15px rgba(0, 255, 255, 0.2);
+        }
+
+        .loading-content h2 {
+            color: var(--cyber-neon-cyan);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
+            text-shadow: 0 0 10px var(--cyber-glow-cyan);
         }
 
         @keyframes spin {

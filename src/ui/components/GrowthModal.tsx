@@ -384,7 +384,8 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.8);
+          background: rgba(0, 0, 0, 0.85);
+          backdrop-filter: blur(4px);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -393,14 +394,36 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         }
 
         .growth-modal-container {
-          background: #111827;
-          border-radius: 16px;
+          background: var(--cyber-bg-secondary);
           padding: 32px;
           max-width: 90vw;
           max-height: 90vh;
           overflow: auto;
-          border: 1px solid #374151;
+          border: 2px solid var(--cyber-neon-magenta);
           min-width: min(800px, 90vw);
+          clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
+          box-shadow: 0 0 30px var(--cyber-glow-magenta), 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+          position: relative;
+        }
+
+        .growth-modal-container::before,
+        .growth-modal-container::after {
+          content: '';
+          position: absolute;
+          width: 12px;
+          height: 12px;
+          background: var(--cyber-neon-magenta);
+          box-shadow: 0 0 10px var(--cyber-glow-magenta);
+        }
+
+        .growth-modal-container::before {
+          top: 0;
+          left: 0;
+        }
+
+        .growth-modal-container::after {
+          bottom: 0;
+          right: 0;
         }
 
         .growth-modal-header {
@@ -408,28 +431,39 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           justify-content: space-between;
           align-items: center;
           margin-bottom: 24px;
+          padding-bottom: 16px;
+          border-bottom: 2px solid var(--cyber-border);
         }
 
         .growth-modal-header h2 {
-          font-size: 28px;
+          font-size: 24px;
           font-weight: 700;
           margin: 0;
-          color: #f9fafb;
+          color: var(--cyber-neon-magenta);
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          text-shadow: 0 0 10px var(--cyber-glow-magenta);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .close-button {
-          background: #6b7280;
-          border: none;
-          border-radius: 8px;
+          background: var(--cyber-bg-tertiary);
+          border: 2px solid var(--cyber-neon-pink);
           padding: 8px 16px;
-          color: white;
-          font-weight: 600;
+          color: var(--cyber-neon-pink);
+          font-weight: 700;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: all 0.2s;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+          box-shadow: 0 0 8px rgba(255, 20, 147, 0.3);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .close-button:hover {
-          background: #4b5563;
+          box-shadow: 0 0 15px rgba(255, 20, 147, 0.5);
+          transform: translateY(-2px);
         }
 
         .loading-state {
@@ -447,10 +481,34 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         }
 
         .growth-card {
-          background: #1f2937;
-          border-radius: 12px;
+          background: var(--cyber-bg-tertiary);
           padding: 20px;
-          border: 1px solid #374151;
+          border: 2px solid var(--cyber-border);
+          clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+          box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.05);
+          position: relative;
+        }
+
+        .growth-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 8px;
+          height: 8px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
+        }
+
+        .growth-card::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          right: 0;
+          width: 8px;
+          height: 8px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
         }
 
         .growth-card.wide {
@@ -459,23 +517,30 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
 
         .growth-card h3 {
           margin: 0 0 16px 0;
-          font-size: 18px;
-          font-weight: 600;
+          font-size: 16px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 1.5px;
+          font-family: 'Courier New', 'Consolas', monospace;
+          border-bottom: 1px solid var(--cyber-border);
+          padding-bottom: 8px;
         }
 
-        .growth-card.overview h3 { color: #60a5fa; }
-        .growth-card.personality h3 { color: #10b981; }
-        .growth-card.dpd h3 { color: #f59e0b; }
-        .growth-card.metrics h3 { color: #8b5cf6; }
-        .growth-card.thoughts h3 { color: #ef4444; }
-        .growth-card.beliefs h3 { color: #a78bfa; }
-        .growth-card.dreams h3 { color: #ec4899; }
-        .growth-card.ideas h3 { color: #06b6d4; }
+        .growth-card.overview h3 { color: var(--cyber-neon-cyan); text-shadow: 0 0 8px var(--cyber-glow-cyan); }
+        .growth-card.personality h3 { color: var(--cyber-neon-lime); text-shadow: 0 0 8px var(--cyber-glow-lime); }
+        .growth-card.dpd h3 { color: var(--cyber-neon-yellow); text-shadow: 0 0 8px rgba(255, 255, 0, 0.3); }
+        .growth-card.metrics h3 { color: var(--cyber-neon-magenta); text-shadow: 0 0 8px var(--cyber-glow-magenta); }
+        .growth-card.thoughts h3 { color: var(--cyber-neon-pink); text-shadow: 0 0 8px rgba(255, 20, 147, 0.3); }
+        .growth-card.beliefs h3 { color: var(--cyber-neon-magenta); text-shadow: 0 0 8px var(--cyber-glow-magenta); }
+        .growth-card.dreams h3 { color: var(--cyber-neon-pink); text-shadow: 0 0 8px rgba(255, 20, 147, 0.3); }
+        .growth-card.ideas h3 { color: var(--cyber-neon-cyan); text-shadow: 0 0 8px var(--cyber-glow-cyan); }
 
         .growth-card p {
-          color: #e5e7eb;
+          color: var(--cyber-text-primary);
           line-height: 1.6;
           margin-bottom: 8px;
+          font-family: 'Courier New', 'Consolas', monospace;
+          font-size: 13px;
         }
 
         .dpd-current-values {
@@ -483,12 +548,14 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         }
 
         .dpd-evolution-chart {
-          background: #374151;
+          background: var(--cyber-bg-secondary);
           padding: 16px;
           padding-bottom: 32px;
-          border-radius: 8px;
           height: 220px;
           position: relative;
+          border: 1px solid var(--cyber-border);
+          border-left: 3px solid var(--cyber-neon-cyan);
+          box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.05);
         }
 
         .dpd-evolution-chart svg {
@@ -528,10 +595,12 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           right: 8px;
           display: flex;
           gap: 12px;
-          font-size: 12px;
-          background: rgba(31, 41, 55, 0.8);
-          padding: 4px 8px;
-          border-radius: 4px;
+          font-size: 11px;
+          background: var(--cyber-bg-tertiary);
+          padding: 6px 10px;
+          border: 1px solid var(--cyber-border);
+          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .legend-item {
@@ -541,24 +610,27 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         }
 
         .legend-color {
-          width: 12px;
-          height: 2px;
+          width: 16px;
+          height: 3px;
+          box-shadow: 0 0 4px currentColor;
         }
 
         .legend-color.empathy {
-          background: #10b981;
+          background: var(--cyber-neon-lime);
         }
 
         .legend-color.coherence {
-          background: #3b82f6;
+          background: var(--cyber-neon-cyan);
         }
 
         .legend-color.dissonance {
-          background: #f59e0b;
+          background: var(--cyber-neon-yellow);
         }
 
         .legend-item span {
-          color: #e5e7eb;
+          color: var(--cyber-text-primary);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         .scrollable-list {
@@ -570,46 +642,56 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         }
 
         .list-item {
-          background: #374151;
+          background: var(--cyber-bg-secondary);
           padding: 12px;
-          border-radius: 8px;
+          border: 1px solid var(--cyber-border);
+          clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+          box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.03);
+          position: relative;
         }
 
-        .thoughts-item { border-left: 4px solid #ef4444; }
-        .beliefs-item { border-left: 4px solid #a78bfa; }
-        .dreams-item { border-left: 4px solid #ec4899; }
-        .ideas-item { border-left: 4px solid #06b6d4; }
+        .thoughts-item { border-left: 3px solid var(--cyber-neon-pink); }
+        .beliefs-item { border-left: 3px solid var(--cyber-neon-magenta); }
+        .dreams-item { border-left: 3px solid var(--cyber-neon-pink); }
+        .ideas-item { border-left: 3px solid var(--cyber-neon-cyan); }
 
         .item-content {
-          color: #e5e7eb;
+          color: var(--cyber-text-primary);
           margin-bottom: 8px;
           line-height: 1.4;
+          font-family: 'Courier New', 'Consolas', monospace;
+          font-size: 13px;
         }
 
         .beliefs-item .item-content {
-          font-weight: 600;
+          font-weight: 700;
+          color: var(--cyber-neon-magenta);
         }
 
         .dreams-item .item-content {
           font-style: italic;
-          color: #f9a8d4;
+          color: var(--cyber-neon-pink);
         }
 
         .emotional-tone {
-          color: #ec4899;
-          font-weight: 500;
+          color: var(--cyber-neon-pink);
+          font-weight: 600;
         }
 
         .item-meta {
-          font-size: 12px;
-          color: #9ca3af;
+          font-size: 11px;
+          color: var(--cyber-text-secondary);
           display: flex;
           gap: 12px;
           flex-wrap: wrap;
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .no-data {
-          color: #9ca3af;
+          color: var(--cyber-text-dim);
+          font-family: 'Courier New', 'Consolas', monospace;
+          text-align: center;
+          padding: 40px 20px;
         }
 
         @media (max-width: 1024px) {

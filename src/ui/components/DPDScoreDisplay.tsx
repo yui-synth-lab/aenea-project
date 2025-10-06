@@ -131,15 +131,15 @@ export const DPDScoreDisplay: React.FC = () => {
   const getDPDColor = (dimension: string, value: number): string => {
     switch (dimension) {
       case 'empathy':
-        return `hsl(${120 * value}, 70%, 50%)`; // Green spectrum
+        return '#00ff41'; // Cyber lime
       case 'coherence':
-        return `hsl(${240 * value}, 70%, 50%)`; // Blue spectrum
+        return '#00ffff'; // Cyber cyan
       case 'dissonance':
-        return `hsl(${(1 - value) * 60}, 70%, 50%)`; // Red-Yellow spectrum (inverted)
+        return '#ffff00'; // Cyber yellow
       case 'total':
-        return `hsl(${180 * value}, 70%, 50%)`; // Cyan spectrum
+        return '#ff00ff'; // Cyber magenta
       default:
-        return '#6b7280';
+        return '#4a5568';
     }
   };
 
@@ -199,12 +199,12 @@ export const DPDScoreDisplay: React.FC = () => {
               {history.length > 1 ? (
                 <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
                   {/* Stacked area chart */}
-                  {/* Bottom: Dissonance (orange) */}
+                  {/* Bottom: Dissonance (yellow) */}
                   <polygon
-                    fill="#f59e0b"
-                    fillOpacity="0.7"
-                    stroke="#f59e0b"
-                    strokeWidth="0.5"
+                    fill="#ffff00"
+                    fillOpacity="0.6"
+                    stroke="#ffff00"
+                    strokeWidth="0.8"
                     points={
                       history.map((entry, index) => {
                         const x = (index / (history.length - 1)) * 100;
@@ -217,12 +217,12 @@ export const DPDScoreDisplay: React.FC = () => {
                       }).reverse().join(' ')
                     }
                   />
-                  {/* Middle: Coherence (blue) */}
+                  {/* Middle: Coherence (cyan) */}
                   <polygon
-                    fill="#3b82f6"
-                    fillOpacity="0.7"
-                    stroke="#3b82f6"
-                    strokeWidth="0.5"
+                    fill="#00ffff"
+                    fillOpacity="0.6"
+                    stroke="#00ffff"
+                    strokeWidth="0.8"
                     points={
                       history.map((entry, index) => {
                         const x = (index / (history.length - 1)) * 100;
@@ -236,12 +236,12 @@ export const DPDScoreDisplay: React.FC = () => {
                       }).reverse().join(' ')
                     }
                   />
-                  {/* Top: Empathy (green) */}
+                  {/* Top: Empathy (lime) */}
                   <polygon
-                    fill="#10b981"
-                    fillOpacity="0.7"
-                    stroke="#10b981"
-                    strokeWidth="0.5"
+                    fill="#00ff41"
+                    fillOpacity="0.6"
+                    stroke="#00ff41"
+                    strokeWidth="0.8"
                     points={
                       history.map((entry, index) => {
                         const x = (index / (history.length - 1)) * 100;
@@ -358,10 +358,34 @@ export const DPDScoreDisplay: React.FC = () => {
 
       <style>{`
         .dpd-score-display {
-          background: #1f2937;
-          border-radius: 12px;
+          background: var(--cyber-bg-tertiary);
           padding: 24px;
-          border: 1px solid #374151;
+          border: 2px solid var(--cyber-border);
+          clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+          box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.05);
+          position: relative;
+        }
+
+        .dpd-score-display::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 8px;
+          height: 8px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
+        }
+
+        .dpd-score-display::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          right: 0;
+          width: 8px;
+          height: 8px;
+          background: var(--cyber-neon-cyan);
+          box-shadow: 0 0 8px var(--cyber-glow-cyan);
         }
 
         .dpd-header {
@@ -369,32 +393,46 @@ export const DPDScoreDisplay: React.FC = () => {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 16px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--cyber-border);
         }
 
         .header-title h3 {
           margin: 0;
-          font-size: 18px;
-          font-weight: 600;
-          color: #f9fafb;
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--cyber-neon-cyan);
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          text-shadow: 0 0 8px var(--cyber-glow-cyan);
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .subtitle {
-          color: #9ca3af;
-          font-size: 12px;
+          color: var(--cyber-text-secondary);
+          font-size: 11px;
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .expand-toggle {
-          background: #374151;
-          border: none;
-          border-radius: 4px;
-          padding: 4px 8px;
-          color: #f9fafb;
+          background: var(--cyber-bg-secondary);
+          border: 2px solid var(--cyber-neon-cyan);
+          padding: 4px 12px;
+          color: var(--cyber-neon-cyan);
           cursor: pointer;
-          font-size: 14px;
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+          box-shadow: 0 0 6px var(--cyber-glow-cyan);
+          transition: all 0.2s;
+          font-family: 'Courier New', 'Consolas', monospace;
         }
 
         .expand-toggle:hover {
-          background: #4b5563;
+          box-shadow: 0 0 12px var(--cyber-glow-cyan);
+          transform: translateY(-1px);
         }
 
         .dpd-content {
@@ -431,30 +469,58 @@ export const DPDScoreDisplay: React.FC = () => {
         }
 
         .dimension-bar {
-          height: 8px;
-          background: #374151;
-          border-radius: 4px;
+          height: 12px;
+          background: var(--cyber-bg-secondary);
+          border: 1px solid var(--cyber-border);
           overflow: hidden;
+          position: relative;
+          box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .dimension-bar::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, var(--cyber-neon-cyan), transparent);
+          opacity: 0.5;
         }
 
         .dimension-fill {
           height: 100%;
           transition: width 0.3s ease;
+          box-shadow: 0 0 10px currentColor;
+          position: relative;
+        }
+
+        .dimension-fill::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          right: 0;
+          width: 2px;
+          height: 100%;
+          background: rgba(255, 255, 255, 0.6);
         }
 
         .weight-evolution {
-          background: #374151;
+          background: var(--cyber-bg-secondary);
           padding: 16px;
-          border-radius: 8px;
+          border: 1px solid var(--cyber-border);
+          border-left: 3px solid var(--cyber-neon-cyan);
+          box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.05);
         }
 
         .evolution-chart {
-          background: #1f2937;
+          background: var(--cyber-bg-tertiary);
           padding: 16px;
-          border-radius: 8px;
+          border: 1px solid var(--cyber-border);
           height: 200px;
           position: relative;
           margin-bottom: 16px;
+          box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
         }
 
         .evolution-chart svg {
