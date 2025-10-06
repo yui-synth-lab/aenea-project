@@ -304,11 +304,13 @@ router.get('/events', (req, res) => {
         systemClock: data.systemClock,
         totalQuestions: data.totalQuestions,
         totalThoughts: data.totalThoughts,
-        averageConfidence: data.averageConfidence
+        averageConfidence: data.averageConfidence,
+        energy: data.energy // Add energy to systemStats for UI
       },
       dpdScores: data.dpdScores,
       dpdWeights: data.dpdWeights
     };
+    console.log(`[SSE] Sending thoughtCycleCompleted with energy=${data.energy}`);
     sendEvent('thoughtCycleCompleted', eventData);
   };
   const thoughtCycleFailedListener = (data: any) => sendEvent('thoughtCycleFailed', data);
@@ -329,6 +331,7 @@ router.get('/events', (req, res) => {
   const sleepErrorListener = (data: any) => sendEvent('sleepError', data);
   const consciousnessAwakenedListener = (data: any) => sendEvent('consciousnessAwakened', data);
   const energyUpdatedListener = (data: any) => sendEvent('energyUpdated', data);
+  const cycleProcessingChangedListener = (data: any) => sendEvent('cycleProcessingChanged', data);
 
   console.log('🔗 Registering SSE event listeners...');
   consciousness.on('triggerGenerated', triggerGeneratedListener);
@@ -355,7 +358,8 @@ router.get('/events', (req, res) => {
   consciousness.on('sleepPhaseChanged', sleepPhaseChangedListener);
   consciousness.on('sleepCompleted', sleepCompletedListener);
   consciousness.on('sleepError', sleepErrorListener);
-  console.log('✅ SSE event listeners registered (24 events)');
+  consciousness.on('cycleProcessingChanged', cycleProcessingChangedListener);
+  console.log('✅ SSE event listeners registered (25 events)');
 
   // Clean up on client disconnect
   req.on('close', () => {
@@ -383,6 +387,7 @@ router.get('/events', (req, res) => {
     consciousness.removeListener('sleepPhaseChanged', sleepPhaseChangedListener);
     consciousness.removeListener('sleepCompleted', sleepCompletedListener);
     consciousness.removeListener('sleepError', sleepErrorListener);
+    consciousness.removeListener('cycleProcessingChanged', cycleProcessingChangedListener);
     console.log('SSE client disconnected');
   });
 });

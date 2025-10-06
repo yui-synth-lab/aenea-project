@@ -56,6 +56,7 @@ export interface ConsciousnessState {
   energy: number;
   isRunning: boolean;
   isPaused: boolean;
+  isProcessingCycle?: boolean;
   totalQuestions: number;
   totalThoughts: number;
   lastActivity: string;
@@ -71,6 +72,7 @@ class ConsciousnessBackend extends EventEmitter {
   private isPaused: boolean;
   private isDormant: boolean;
   private isSleeping: boolean;
+  private isProcessingCycle: boolean; // True during thought cycle execution
   private lastSleepTime: number;
   private criticalModeDuration: number;
   private agents: Map<string, AIExecutor>;
@@ -113,6 +115,7 @@ class ConsciousnessBackend extends EventEmitter {
     this.isPaused = false;
     this.isDormant = false;
     this.isSleeping = false;
+    this.isProcessingCycle = false;
     this.lastSleepTime = 0;
     this.criticalModeDuration = 0;
     this.agents = new Map<string, AIExecutor>();
@@ -359,6 +362,7 @@ class ConsciousnessBackend extends EventEmitter {
       energy: energyState.available,
       isRunning: this.isRunning,
       isPaused: this.isPaused,
+      isProcessingCycle: this.isProcessingCycle,
       totalQuestions: this.questionHistory.length,
       totalThoughts: this.thoughtHistory.length,
       lastActivity: new Date().toISOString(),
@@ -372,14 +376,16 @@ class ConsciousnessBackend extends EventEmitter {
 
   private saveConsciousnessState(): void {
     try {
+      const currentEnergy = this.energyManager.getEnergyState().available;
       const state = {
         systemClock: this.systemClock,
-        energy: this.energyManager.getEnergyState().available,
+        energy: currentEnergy,
         totalQuestions: this.questionHistory.length,
         totalThoughts: this.thoughtHistory.length,
         lastActivity: new Date().toISOString()
       };
 
+      console.log(`[DB] Saving consciousness state: clock=${this.systemClock}, energy=${currentEnergy.toFixed(1)}`);
       this.databaseManager.saveConsciousnessState(state);
     } catch (error) {
       log.error('Consciousness', 'Failed to save consciousness state', error);
@@ -455,6 +461,13 @@ class ConsciousnessBackend extends EventEmitter {
 
       try {
         await this.processThoughtCycle();
+
+        // Check if automatic sleep should be triggered
+        if (this.shouldEnterSleep()) {
+          log.info('Consciousness', '💤 Auto-sleep triggered');
+          await this.enterSleepMode(false);
+        }
+
         await this.sleep(5000); // Wait 5 seconds between cycles
       } catch (error) {
         console.error('❌ Error in consciousness loop:', error);
@@ -464,71 +477,72 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async processThoughtCycle(): Promise<void> {
-    // Calculate minimum energy required for a thought cycle
-    // Critical mode minimum: S0(1.0) + S1(1.0) + S5(0.8) + S6(0.3) + U(0.2) = 3.3
-    // Plus minEnergy reserve (5.0) = 8.3 total needed
-    const energyState = this.energyManager.getEnergyState();
-    const minimumCycleEnergy = 3.3;
-    const minEnergyReserve = 5.0; // Must maintain minimum energy reserve
-    const minimumEnergyRequired = minimumCycleEnergy + minEnergyReserve;
+    // Mark cycle as processing
+    this.isProcessingCycle = true;
 
-    // If insufficient energy, enter dormancy mode with automatic recovery
-    if (energyState.available < minimumEnergyRequired) {
-      // Check if already in dormancy
-      if (!this.isDormant) {
-        this.isDormant = true;
-        log.info('Dormancy', `⏸️ Entering dormancy mode - energy too low (${energyState.available.toFixed(1)}/${minimumEnergyRequired})`);
+    // Emit event for UI to update button states
+    this.emit('cycleProcessingChanged', { isProcessingCycle: true });
 
-        // Emit dormancy event for UI
-        this.emit('consciousnessDormant', {
-          reason: 'insufficient_energy',
+    try {
+      // Calculate minimum energy required for a thought cycle
+      // Critical mode minimum: S0(1.0) + S1(1.0) + S5(0.8) + S6(0.3) + U(0.2) = 3.3
+      // Plus minEnergy reserve (5.0) = 8.3 total needed
+      const energyState = this.energyManager.getEnergyState();
+      const minimumCycleEnergy = 3.3;
+      const minEnergyReserve = 5.0; // Must maintain minimum energy reserve
+      const minimumEnergyRequired = minimumCycleEnergy + minEnergyReserve;
+
+      // If insufficient energy, enter dormancy mode
+      if (energyState.available < minimumEnergyRequired) {
+        // Check if already in dormancy
+        if (!this.isDormant) {
+          this.isDormant = true;
+          log.info('Dormancy', `⏸️ Entering dormancy mode - energy too low (${energyState.available.toFixed(1)}/${minimumEnergyRequired})`);
+
+          // Emit dormancy event for UI
+          this.emit('consciousnessDormant', {
+            reason: 'insufficient_energy',
+            currentEnergy: energyState.available,
+            requiredEnergy: minimumEnergyRequired,
+            timestamp: Date.now()
+          });
+        }
+
+        // No passive recovery - energy only recovers through Sleep
+        // This ensures automatic sleep triggers when energy is critically low
+
+        return;
+      }
+
+      // Exit dormancy mode if we had been dormant
+      if (this.isDormant) {
+        this.isDormant = false;
+        log.info('Dormancy', `▶️ Exiting dormancy mode - energy restored (${energyState.available.toFixed(1)}/${minimumEnergyRequired})`);
+
+        // Emit awakening event for UI
+        this.emit('consciousnessAwakened', {
           currentEnergy: energyState.available,
-          requiredEnergy: minimumEnergyRequired,
           timestamp: Date.now()
         });
       }
 
-      // Perform passive energy recovery during dormancy
-      const recoveryAmount = 0.5; // Slow passive recovery
-      this.energyManager.rechargeEnergy(recoveryAmount);
-      log.info('Dormancy', `🔋 Passive recovery: +${recoveryAmount} energy (${energyState.available.toFixed(1)} → ${(energyState.available + recoveryAmount).toFixed(1)})`);
+      log.info('EnergyWait', `Energy sufficient for thought cycle (${energyState.available.toFixed(1)}/${minimumEnergyRequired}), proceeding...`);
 
-      // Update energy state and save
-      const newEnergyState = this.energyManager.getEnergyState();
-      this.saveConsciousnessState();
+      // Generate internal trigger
+      const trigger = await this.generateInternalTrigger();
+      if (!trigger) {
+        return;
+      }
 
-      // Emit energy update for UI
-      this.emit('energyUpdated', {
-        energyState: newEnergyState,
-        dormant: true,
-        timestamp: Date.now()
-      });
+      // Execute thought cycle
+      await this.executeAdaptiveThoughtCycle(trigger);
+    } finally {
+      // Always mark cycle as completed, even if stopped or error occurs
+      this.isProcessingCycle = false;
 
-      return;
+      // Emit event for UI to re-enable buttons
+      this.emit('cycleProcessingChanged', { isProcessingCycle: false });
     }
-
-    // Exit dormancy mode if we had been dormant
-    if (this.isDormant) {
-      this.isDormant = false;
-      log.info('Dormancy', `▶️ Exiting dormancy mode - energy restored (${energyState.available.toFixed(1)}/${minimumEnergyRequired})`);
-
-      // Emit awakening event for UI
-      this.emit('consciousnessAwakened', {
-        currentEnergy: energyState.available,
-        timestamp: Date.now()
-      });
-    }
-
-    log.info('EnergyWait', `Energy sufficient for thought cycle (${energyState.available.toFixed(1)}/${minimumEnergyRequired}), proceeding...`);
-
-    // Generate internal trigger
-    const trigger = await this.generateInternalTrigger();
-    if (!trigger) {
-      return;
-    }
-
-    // Execute thought cycle
-    await this.executeAdaptiveThoughtCycle(trigger);
   }
 
   private async executeAdaptiveThoughtCycle(trigger: InternalTrigger): Promise<void> {
@@ -1987,17 +2001,17 @@ class ConsciousnessBackend extends EventEmitter {
     const hoursSinceLastSleep = (Date.now() - this.lastSleepTime) / (1000 * 60 * 60);
 
     // Sleep conditions:
-    // - Energy critical (<=20) for extended period (>60 min)
+    // - Energy critical (<=20) for extended period (>10 cycles = ~10 min)
     // - Or 24 hours since last sleep
     const criticalDuration = energy <= 20;
     if (criticalDuration) {
-      this.criticalModeDuration += 1; // Increment per minute check
+      this.criticalModeDuration += 1; // Increment per cycle check
     } else {
       this.criticalModeDuration = 0;
     }
 
     return (
-      (energy <= 20 && this.criticalModeDuration > 60) ||
+      (energy <= 20 && this.criticalModeDuration > 10) ||
       hoursSinceLastSleep > 24
     );
   }
@@ -2011,17 +2025,23 @@ class ConsciousnessBackend extends EventEmitter {
       return;
     }
 
-    if (this.isRunning && !manual) {
-      log.warn('Consciousness', '⚠️ Cannot enter automatic sleep while consciousness is running');
-      return;
-    }
-
     const energyBefore = this.energyManager.getEnergyState().available;
     const startTime = Date.now();
 
     const reason = manual ? 'manual' :
                    energyBefore <= 20 ? 'energy_critical' :
                    'scheduled';
+
+    // Auto-stop consciousness if running and entering sleep due to energy crisis
+    if (this.isRunning) {
+      if (!manual && energyBefore <= 20) {
+        log.info('Consciousness', `⏸️ Auto-stopping consciousness for critical sleep (energy: ${energyBefore.toFixed(1)})`);
+        this.stop();
+      } else if (!manual) {
+        log.warn('Consciousness', '⚠️ Cannot enter automatic sleep while consciousness is running');
+        return;
+      }
+    }
 
     log.info('Consciousness', `💤 Entering sleep mode (reason: ${reason})`);
 
@@ -2058,6 +2078,12 @@ class ConsciousnessBackend extends EventEmitter {
         energyAfter,
         timestamp: Date.now()
       });
+
+      // Auto-restart consciousness after automatic sleep (but not manual sleep)
+      if (!manual) {
+        log.info('Consciousness', `▶️ Auto-restarting consciousness after automatic sleep`);
+        this.start();
+      }
 
     } catch (error) {
       log.error('Consciousness', 'Sleep mode error', error);

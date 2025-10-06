@@ -21,6 +21,7 @@ interface SystemStats {
 interface ConsciousnessState {
   isRunning: boolean;
   isPaused: boolean;
+  isProcessingCycle?: boolean;
   status: string;
 }
 
@@ -167,6 +168,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         setConsciousnessState({
           isRunning: state.isRunning || false,
           isPaused: state.isPaused || false,
+          isProcessingCycle: state.isProcessingCycle || false,
           status: state.status || 'stopped'
         });
       }
@@ -348,6 +350,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         const totalQuestions = ss.totalQuestions ?? data.totalQuestions;
         const energy = ss.currentEnergy ?? ss.energy ?? data.energy;
 
+        console.log(`[UI] Updating stats: energy=${energy}, totalThoughts=${totalThoughts}, totalQuestions=${totalQuestions}`);
         setStats(prev => ({
           thoughtCycles: totalThoughts || prev.thoughtCycles,
           questionsGenerated: totalQuestions || prev.questionsGenerated,
@@ -395,6 +398,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           message: `❌ Sleep error: ${data.error}`
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+      } else if (t === 'cycleProcessingChanged') {
+        // Update button states based on cycle processing status
+        setConsciousnessState(prev => ({
+          ...prev,
+          isProcessingCycle: data.isProcessingCycle || false
+        }));
       }
     };
 
@@ -486,12 +495,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
                   <button
                     className="control-button start"
                     onClick={startConsciousness}
+                    disabled={consciousnessState.isProcessingCycle}
                   >
                     ▶️ Start Consciousness
                   </button>
                   <button
                     className="control-button sleep"
                     onClick={enterSleepMode}
+                    disabled={consciousnessState.isProcessingCycle}
                   >
                     💤 Sleep
                   </button>

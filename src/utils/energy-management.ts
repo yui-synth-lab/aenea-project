@@ -132,15 +132,11 @@ export class EnergyManager {
       return false;
     }
 
-    // 緊急時の保護
-    if (this.state.available - required < this.config.minEnergy) {
-      console.warn(`Energy consumption would drop below minimum: ${activity}`);
-      return false;
-    }
-
-    // エネルギー消費実行
+    // エネルギー消費実行 (minEnergy保護は削除 - 0まで使い切れる)
+    const before = this.state.available;
     this.state.available -= required;
     this.state.efficiency *= this.config.efficiencyDecay;
+    console.log(`[Energy] Consumed ${required.toFixed(1)} for ${activity}: ${before.toFixed(1)} → ${this.state.available.toFixed(1)}`);
 
     // 履歴記録用
     const consumption: EnergyConsumption = {
@@ -254,9 +250,9 @@ export class EnergyManager {
     const toRelease = amount ? Math.min(amount, this.state.reserved) : this.state.reserved;
 
     this.state.reserved -= toRelease;
-    this.state.available += toRelease;
+    // Do NOT add back to available - energy was already consumed by stages
 
-    console.log(`Released ${toRelease} reserved energy, available: ${this.state.available.toFixed(1)}`);
+    console.log(`Released ${toRelease} reserved energy (not returned to available), current available: ${this.state.available.toFixed(1)}`);
     return toRelease;
   }
 
