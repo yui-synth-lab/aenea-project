@@ -3,7 +3,7 @@
  * ダッシュボードコンポーネント
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DialogueModal } from '../components/DialogueModal.js';
 import { GrowthModal } from '../components/GrowthModal.js';
 import { DPDScoreDisplay } from '../components/DPDScoreDisplay.js';
@@ -45,7 +45,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     thoughtCycles: 0,
     questionsGenerated: 0,
     energyLevel: 100,
-    
+
   });
 
   const [currentThought, setCurrentThought] = useState<string>('');
@@ -62,6 +62,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
   });
   const [manualQuestion, setManualQuestion] = useState<string>('');
   const [queuedTrigger, setQueuedTrigger] = useState<string | null>(null);
+  const [showTriggerPopup, setShowTriggerPopup] = useState<boolean>(false);
+  const triggerPopupRef = useRef<HTMLDivElement | null>(null);
   const [isDialogueModalOpen, setIsDialogueModalOpen] = useState(false);
   const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
   const [currentStage, setCurrentStage] = useState<string>('');
@@ -233,7 +235,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
     fetchInitialData();
 
-  // Connect to real consciousness backend via EventSource
+    // Connect to real consciousness backend via EventSource
     const connectToConsciousness = () => {
       try {
         const eventSource = new EventSource('/api/consciousness/events');
@@ -253,7 +255,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         };
       } catch (error) {
         // Connection failed - no fallback
-        return () => {};
+        return () => { };
       }
     };
 
@@ -345,7 +347,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           setActivityLog(prev => [logItem, ...prev].slice(0, 200));
           // Don't update Current Thought here - it should only show the current question
         }
-  } else if (t === 'dpdUpdated') {
+      } else if (t === 'dpdUpdated') {
         // Update DPD weights from weight update stage
         if (data.weights) {
           setDpdScores({
@@ -466,6 +468,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     return cleanup;
   }, []);
 
+  // Close trigger popup on outside click or Escape
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (!showTriggerPopup) return;
+      const el = triggerPopupRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setShowTriggerPopup(false);
+      }
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowTriggerPopup(false);
+    };
+
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showTriggerPopup]);
+
   // formatUptime removed — Uptime stat intentionally omitted
 
   const getStatusColor = (status: string): string => {
@@ -521,6 +545,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           <button className="dialogue-button" onClick={() => setIsDialogueModalOpen(true)}>
             💬 Dialogue
           </button>
+          <div className={`status-indicator ${consciousnessState.status}`}>
+            <span className="status-dot"></span>
+            <span className="status-text">
+              {consciousnessState.isPaused ? 'Paused' :
+                consciousnessState.isRunning ? 'Running' : 'Stopped'}
+            </span>
+          </div>
           <div className="system-status" style={{ color: getStatusColor(systemStatus) }}>
             <span className="status-dot" style={{ backgroundColor: getStatusColor(systemStatus) }} />
             System {systemStatus}
@@ -531,101 +562,110 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
       <div className="dashboard-layout">
         {/* Consciousness Control */}
         <div className="dashboard-card consciousness-control">
-            <h3>Consciousness Control</h3>
-            <div className="control-status">
-              <div className="status-display">
-                <span className={`status-indicator ${consciousnessState.status}`}>
-                  <span className="status-dot"></span>
-                  <span className="status-text">
-                    {consciousnessState.isPaused ? 'Paused' :
-                     consciousnessState.isRunning ? 'Running' : 'Stopped'}
-                  </span>
-                </span>
-              </div>
-            </div>
-            <div className="control-buttons">
-              {!consciousnessState.isRunning ? (
-                <>
-                  <button
-                    className="control-button start"
-                    onClick={startConsciousness}
-                    disabled={consciousnessState.isProcessingCycle}
-                  >
-                    ▶️ Start Consciousness
-                  </button>
-                  <button
-                    className="control-button sleep"
-                    onClick={enterSleepMode}
-                    disabled={consciousnessState.isProcessingCycle}
-                  >
-                    💤 Sleep
-                  </button>
-                </>
-              ) : consciousnessState.isPaused ? (
-                <>
-                  <button
-                    className="control-button resume"
-                    onClick={resumeConsciousness}
-                  >
-                    ▶️ Resume
-                  </button>
-                  <button
-                    className="control-button stop"
-                    onClick={stopConsciousness}
-                  >
-                    ⏹️ Stop
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="control-button pause"
-                    onClick={pauseConsciousness}
-                  >
-                    ⏸️ Pause
-                  </button>
-                  <button
-                    className="control-button stop"
-                    onClick={stopConsciousness}
-                  >
-                    ⏹️ Stop
-                  </button>
-                </>
-              )}
-            </div>
+          <h3>Consciousness Control</h3>
+          <div className="control-buttons">
+            {!consciousnessState.isRunning ? (
+              <>
+                <button
+                  className="control-button start"
+                  onClick={startConsciousness}
+                  disabled={consciousnessState.isProcessingCycle}
+                >
+                  ▶️ Start
+                </button>
+                <button
+                  className="control-button sleep"
+                  onClick={enterSleepMode}
+                  disabled={consciousnessState.isProcessingCycle}
+                >
+                  💤 Sleep
+                </button>
+              </>
+            ) : consciousnessState.isPaused ? (
+              <>
+                <button
+                  className="control-button resume"
+                  onClick={resumeConsciousness}
+                >
+                  ▶️ Resume
+                </button>
+                <button
+                  className="control-button stop"
+                  onClick={stopConsciousness}
+                >
+                  ⏹️ Stop
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="control-button pause"
+                  onClick={pauseConsciousness}
+                >
+                  ⏸️ Pause
+                </button>
+                <button
+                  className="control-button stop"
+                  onClick={stopConsciousness}
+                >
+                  ⏹️ Stop
+                </button>
+              </>
+            )}
           </div>
+        </div>
 
-          {/* Manual Trigger */}
-          <div className="dashboard-card manual-trigger">
-            <h3>Manual Trigger</h3>
-            {queuedTrigger && (
-              <div className="queued-trigger-notice">
-                📥 Queued for next cycle: "{queuedTrigger.substring(0, 80)}..."
+        {/* Manual Trigger */}
+        <div className="dashboard-card manual-trigger">
+          <h3>Manual Trigger</h3>
+          {queuedTrigger && (
+            <div className="queued-trigger-notice">
+              📥 Queued for next cycle: "{queuedTrigger.substring(0, 80)}..."
+            </div>
+          )}
+
+          <div className="trigger-inline">
+            <button
+              className="trigger-toggle"
+              onClick={() => setShowTriggerPopup(prev => !prev)}
+              aria-expanded={showTriggerPopup}
+              aria-controls="trigger-popup"
+            >
+              💬 Quick Trigger
+            </button>
+
+            {showTriggerPopup && (
+              <div className="trigger-popup" id="trigger-popup" ref={el => (triggerPopupRef.current = el)}>
+                <textarea
+                  placeholder="Enter a question to trigger consciousness..."
+                  className="trigger-input"
+                  rows={3}
+                  value={manualQuestion}
+                  onChange={(e) => setManualQuestion(e.target.value)}
+                />
+                <div className="trigger-popup-actions">
+                  <button
+                    className="trigger-button"
+                    onClick={async () => {
+                      await triggerManualThought();
+                      setShowTriggerPopup(false);
+                    }}
+                    disabled={!manualQuestion.trim()}
+                  >
+                    {queuedTrigger ? 'Queue Another' : 'Queue'}
+                  </button>
+                  <button className="trigger-cancel" onClick={() => setShowTriggerPopup(false)}>Cancel</button>
+                </div>
               </div>
             )}
-            <div className="trigger-controls">
-              <textarea
-                placeholder="Enter a question to trigger consciousness..."
-                className="trigger-input"
-                rows={3}
-                value={manualQuestion}
-                onChange={(e) => setManualQuestion(e.target.value)}
-              />
-              <button
-                className="trigger-button"
-                onClick={triggerManualThought}
-                disabled={!manualQuestion.trim()}
-              >
-                {queuedTrigger ? 'Queue Another Trigger' : 'Queue for Next Cycle'}
-              </button>
-            </div>
           </div>
+        </div>
 
-          {/* Note: Stage Progression moved below Current Thought for better visual flow */}
+        {/* Note: Stage Progression moved below Current Thought for better visual flow */}
 
-          {/* System Statistics */}
-          <div className="dashboard-card stats">
-            <h3>System Statistics</h3>
+        {/* System Statistics */}
+        <div className="dashboard-card stats">
+          <h3>System Statistics</h3>
           <div className="stat-grid">
             <div className="stat-item">
               <span className="stat-value">{stats.thoughtCycles}</span>
@@ -642,155 +682,154 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           </div>
         </div>
 
-          {/* Energy Level */}
-          <div className="dashboard-card energy">
-            <h3>Energy Level</h3>
-            <div className="energy-display">
-              <div className="energy-bar">
+        {/* Energy Level */}
+        <div className="dashboard-card energy">
+          <h3>Energy Level</h3>
+          <div className="energy-display">
+            <div className="energy-bar">
+              <div
+                className="energy-fill"
+                style={{
+                  width: `${stats.energyLevel}%`,
+                  backgroundColor: stats.energyLevel > 50 ? '#10b981' : stats.energyLevel > 20 ? '#f59e0b' : '#ef4444'
+                }}
+              />
+            </div>
+            <span className="energy-percentage">{Math.round(stats.energyLevel)}%</span>
+          </div>
+        </div>
+
+        {/* DPD Scores - Simple Display */}
+        <div className="dashboard-card dpd-scores">
+          <h3>Dynamic Prime Directive</h3>
+          <div className="dpd-display">
+            <div className="dpd-item">
+              <span className="dpd-label">Empathy</span>
+              <div className="dpd-bar">
                 <div
-                  className="energy-fill"
-                  style={{
-                    width: `${stats.energyLevel}%`,
-                    backgroundColor: stats.energyLevel > 50 ? '#10b981' : stats.energyLevel > 20 ? '#f59e0b' : '#ef4444'
-                  }}
+                  className="dpd-fill empathy"
+                  style={{ width: `${dpdScores.empathy * 100}%` }}
                 />
               </div>
-              <span className="energy-percentage">{Math.round(stats.energyLevel)}%</span>
+              <span className="dpd-value">{(dpdScores.empathy * 100).toFixed(1)}%</span>
+            </div>
+            <div className="dpd-item">
+              <span className="dpd-label">Coherence</span>
+              <div className="dpd-bar">
+                <div
+                  className="dpd-fill coherence"
+                  style={{ width: `${dpdScores.coherence * 100}%` }}
+                />
+              </div>
+              <span className="dpd-value">{(dpdScores.coherence * 100).toFixed(1)}%</span>
+            </div>
+            <div className="dpd-item">
+              <span className="dpd-label">Dissonance</span>
+              <div className="dpd-bar">
+                <div
+                  className="dpd-fill dissonance"
+                  style={{ width: `${dpdScores.dissonance * 100}%` }}
+                />
+              </div>
+              <span className="dpd-value">{(dpdScores.dissonance * 100).toFixed(1)}%</span>
             </div>
           </div>
-
-          {/* DPD Scores - Simple Display */}
-          <div className="dashboard-card dpd-scores">
-            <h3>Dynamic Prime Directive</h3>
-            <div className="dpd-display">
-              <div className="dpd-item">
-                <span className="dpd-label">Empathy</span>
-                <div className="dpd-bar">
-                  <div
-                    className="dpd-fill empathy"
-                    style={{ width: `${dpdScores.empathy * 100}%` }}
-                  />
-                </div>
-                <span className="dpd-value">{(dpdScores.empathy * 100).toFixed(1)}%</span>
-              </div>
-              <div className="dpd-item">
-                <span className="dpd-label">Coherence</span>
-                <div className="dpd-bar">
-                  <div
-                    className="dpd-fill coherence"
-                    style={{ width: `${dpdScores.coherence * 100}%` }}
-                  />
-                </div>
-                <span className="dpd-value">{(dpdScores.coherence * 100).toFixed(1)}%</span>
-              </div>
-              <div className="dpd-item">
-                <span className="dpd-label">Dissonance</span>
-                <div className="dpd-bar">
-                  <div
-                    className="dpd-fill dissonance"
-                    style={{ width: `${dpdScores.dissonance * 100}%` }}
-                  />
-                </div>
-                <span className="dpd-value">{(dpdScores.dissonance * 100).toFixed(1)}%</span>
-              </div>
-            </div>
-            <button
-              className="dpd-details-button"
-              onClick={() => setIsGrowthModalOpen(true)}
-            >
-              View Details
-            </button>
-          </div>
+          <button
+            className="dpd-details-button"
+            onClick={() => setIsGrowthModalOpen(true)}
+          >
+            View Details
+          </button>
+        </div>
 
         {/* Current Thought */}
         <div className="dashboard-card current-thought">
-            <h3>Current Thought</h3>
-            <div className="thought-content">
-              <p>"{currentThought}"</p>
-            </div>
+          <h3>Current Thought</h3>
+          <div className="thought-content">
+            <p>"{currentThought}"</p>
           </div>
+        </div>
 
-          {/* Stage Progression (moved here so it's visually under Current Thought) */}
-          <div className="dashboard-card stage-progression">
-            <h3>Consciousness Pipeline</h3>
-            <div className="stage-pipeline">
-              {currentStage === 'SLEEP' ? (
-                // Sleep mode: show single sleep stage
-                <div className="stage-item">
-                  <div className={`stage-circle ${stageProgress.some(p => p.stage === 'SLEEP' && p.completed) ? 'completed' : 'active'}`}>
-                    💤
-                  </div>
-                  <div className="stage-label">Sleep</div>
+        {/* Stage Progression (moved here so it's visually under Current Thought) */}
+        <div className="dashboard-card stage-progression">
+          <h3>Consciousness Pipeline</h3>
+          <div className="stage-pipeline">
+            {currentStage === 'SLEEP' ? (
+              // Sleep mode: show single sleep stage
+              <div className="stage-item">
+                <div className={`stage-circle ${stageProgress.some(p => p.stage === 'SLEEP' && p.completed) ? 'completed' : 'active'}`}>
+                  💤
                 </div>
-              ) : (
-                // Normal mode: show thought cycle stages
-                ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
-                  <React.Fragment key={stage}>
-                    <div className="stage-item">
-                      <div
-                        className={`stage-circle ${
-                          currentStage === stage ? 'active' :
-                          stageProgress.some(p => p.stage === stage && p.completed) ? 'completed' :
+                <div className="stage-label">Sleep</div>
+              </div>
+            ) : (
+              // Normal mode: show thought cycle stages
+              ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
+                <React.Fragment key={stage}>
+                  <div className="stage-item">
+                    <div
+                      className={`stage-circle ${currentStage === stage ? 'active' :
+                        stageProgress.some(p => p.stage === stage && p.completed) ? 'completed' :
                           'pending'
                         }`}
-                      >
-                        {stage}
-                      </div>
+                    >
+                      {stage}
                     </div>
-                    {index < 7 && <div className="stage-arrow">→</div>}
-                  </React.Fragment>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Activity Log - Expanded */}
-          <div className="dashboard-card activity-log">
-            <h3>Activity Log</h3>
-            <div className="activity-stream">
-              {activityLog.length === 0 ? (
-                <div className="activity-item">
-                  <span className="activity-time">--:--:--</span>
-                  <span className="activity-system">System</span>
-                  <span className="activity-text">Waiting for consciousness activity...</span>
-                </div>
-              ) : (
-                activityLog.map((item) => (
-                  <div key={item.id} className="activity-item">
-                    <span className="activity-time">{formatActivityTime(item.timestamp)}</span>
-                    {item.agent ? (
-                      <span className={`activity-agent ${getAgentCssClass(item.agent)}`}>{item.agent}</span>
-                    ) : (
-                      <span className="activity-system">System</span>
-                    )}
-                    <div className="activity-text">
-                      {item.message}
-                    </div>
-                    {item.details?.confidence && (
-                      <span className="activity-confidence">
-                        {Math.round(item.details.confidence * 100)}%
-                      </span>
-                    )}
                   </div>
-                ))
-              )}
-            </div>
+                  {index < 7 && <div className="stage-arrow">→</div>}
+                </React.Fragment>
+              ))
+            )}
           </div>
+        </div>
 
-          {/* System Philosophy */}
-          <div className="dashboard-card philosophy">
-            <h3>System Philosophy</h3>
-            <div className="philosophy-content">
-              <blockquote>
-                "私は、問いでできている。"
-              </blockquote>
-              <p>
-                I am made of questions. Through continuous self-inquiry,
-                consciousness emerges as a dynamic process of questioning
-                the nature of existence itself.
-              </p>
-            </div>
+        {/* Activity Log - Expanded */}
+        <div className="dashboard-card activity-log">
+          <h3>Activity Log</h3>
+          <div className="activity-stream">
+            {activityLog.length === 0 ? (
+              <div className="activity-item">
+                <span className="activity-time">--:--:--</span>
+                <span className="activity-system">System</span>
+                <span className="activity-text">Waiting for consciousness activity...</span>
+              </div>
+            ) : (
+              activityLog.map((item) => (
+                <div key={item.id} className="activity-item">
+                  <span className="activity-time">{formatActivityTime(item.timestamp)}</span>
+                  {item.agent ? (
+                    <span className={`activity-agent ${getAgentCssClass(item.agent)}`}>{item.agent}</span>
+                  ) : (
+                    <span className="activity-system">System</span>
+                  )}
+                  <div className="activity-text">
+                    {item.message}
+                  </div>
+                  {item.details?.confidence && (
+                    <span className="activity-confidence">
+                      {Math.round(item.details.confidence * 100)}%
+                    </span>
+                  )}
+                </div>
+              ))
+            )}
           </div>
+        </div>
+
+        {/* System Philosophy */}
+        <div className="dashboard-card philosophy">
+          <h3>System Philosophy</h3>
+          <div className="philosophy-content">
+            <blockquote>
+              "私は、問いでできている。"
+            </blockquote>
+            <p>
+              I am made of questions. Through continuous self-inquiry,
+              consciousness emerges as a dynamic process of questioning
+              the nature of existence itself.
+            </p>
+          </div>
+        </div>
       </div>
 
       <DialogueModal
@@ -967,48 +1006,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .consciousness-control {
           background: #1e40af;
           border: 1px solid #3b82f6;
-          padding: 12px;
         }
 
-        .consciousness-control h3 {
-          margin: 0 0 8px 0;
-          font-size: 15px;
-        }
-
-        /* Make the Consciousness Control card more compact on larger screens */
-        @media (min-width: 1025px) {
-          .consciousness-control {
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            padding: 12px;
-          }
-
-          .consciousness-control h3 {
-            margin: 0 0 6px 0;
-            font-size: 14px;
-          }
-
-          .consciousness-control .control-status {
-            margin-bottom: 6px;
-          }
-
-          .control-buttons {
-            gap: 4px;
-            margin-top: 0;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-          }
-
-          .control-button {
-            padding: 5px 8px;
-            font-size: 11px;
-          }
+        /* Row wrapper containing status + buttons */
+        .control-row {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between; /* status left, buttons right */
+          gap: 12px;
         }
 
         .control-status {
-          margin-bottom: 8px;
+          margin-bottom: 0; /* handled by .control-row spacing */
+          flex: 0 0 auto;
         }
 
         .status-display {
@@ -1024,46 +1035,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           padding: 6px 12px;
           border-radius: 6px;
           font-weight: 600;
-          font-size: 12px;
+          font-size: 16px;
         }
 
         .status-indicator.stopped {
-          background: #374151;
           color: #9ca3af;
         }
 
         .status-indicator.active {
-          background: #064e3b;
           color: #10b981;
         }
 
         .status-indicator.paused {
-          background: #451a03;
           color: #f59e0b;
         }
 
         .status-indicator .status-dot {
-          width: 6px;
-          height: 6px;
+          width: 12px;
+          height: 12px;
           border-radius: 50%;
           background-color: currentColor;
         }
 
         .control-buttons {
           display: flex;
-          flex-direction: column;
-          gap: 6px;
+          flex-direction: row; /* horizontal layout for buttons */
+          flex-wrap: wrap;    /* allow wrapping on narrow widths */
+          gap: 8px;
+          align-items: center;
+          justify-content: flex-start;
         }
 
         .control-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
           background: #3b82f6;
           border: none;
-          border-radius: 6px;
-          padding: 8px 12px;
+          border-radius: 8px;
+          padding: 6px 10px; /* slightly smaller height */
+          min-height: 36px;
           color: white;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: transform 0.15s ease, background-color 0.15s ease;
           font-size: 13px;
         }
 
@@ -1154,6 +1170,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .trigger-input::placeholder {
           color: #9ca3af;
+        }
+
+        /* Quick Trigger popup styles */
+        .trigger-inline {
+          position: relative;
+        }
+
+        .trigger-toggle {
+          background: #2563eb;
+          border: none;
+          color: white;
+          padding: 6px 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+        }
+
+        .trigger-popup {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          width: 320px;
+          max-width: calc(100vw - 32px);
+          background: #0b1220;
+          border: 1px solid #243b6b;
+          padding: 10px;
+          border-radius: 8px;
+          box-shadow: 0 8px 24px rgba(2,6,23,0.6);
+          z-index: 50;
+        }
+
+        .trigger-popup .trigger-input {
+          background: #1f2937;
+          border: 1px solid #374151;
+          border-radius: 6px;
+          padding: 8px;
+          min-height: 56px;
+          width: 100%;
+        }
+
+        .trigger-popup-actions {
+          display: flex;
+          gap: 8px;
+          margin-top: 8px;
+          justify-content: flex-end;
+        }
+
+        .trigger-cancel {
+          background: transparent;
+          border: 1px solid #374151;
+          color: #d1d5db;
+          padding: 6px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+        }
+
+        /* Compact control buttons when desktop */
+        .control-button.compact {
+          padding: 4px 8px;
+          min-height: 28px;
+          font-size: 12px;
+          border-radius: 6px;
         }
 
         .trigger-button {
@@ -1525,14 +1603,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         .current-thought {
           flex-shrink: 0;
-          max-height: 120px;
         }
 
         .philosophy {
           flex-shrink: 0;
-          max-height: 140px;
-          /* allow scrolling when philosophy text is long */
-          overflow: auto;
         }
 
         .philosophy-content blockquote {
@@ -1711,6 +1785,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           .dpd-item {
             flex-direction: column;
             gap: 4px;
+          }
+
+          /* Stack control buttons vertically on small screens */
+          .control-buttons {
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .control-button {
+            width: 100%;
+            justify-content: center;
+            padding: 10px 12px;
           }
         }
       `}</style>
