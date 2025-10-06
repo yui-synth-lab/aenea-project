@@ -67,9 +67,10 @@ export class MultiplicativeWeightsUpdater {
 
     // Calculate performance feedback (loss) for each dimension
     // 各次元のパフォーマンスフィードバック（損失）を計算
+    // Following paper formula: U(t) = α×Empathy + β×Coherence - γ×Dissonance
     const empathyLoss = this.calculateLoss(scores.empathy, performanceTarget);
     const coherenceLoss = this.calculateLoss(scores.coherence, performanceTarget);
-    const dissonanceLoss = this.calculateLoss(scores.dissonance, 0.5); // Moderate dissonance is creative
+    const dissonanceLoss = -this.calculateLoss(scores.dissonance, 0.0); // Minimize dissonance (negative sign in formula)
 
     // Apply multiplicative updates with regularization
     // 正則化付き乗法的更新を適用
