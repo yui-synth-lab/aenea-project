@@ -908,15 +908,27 @@ ${reflectionsText}
   }
 
   /**
-   * Normalize weights to sum to 1
+   * Normalize weights to sum to 1 with boundary constraints
    */
   private normalizeWeights(weights: DPDWeights): DPDWeights {
-    const total = weights.empathy + weights.coherence + weights.dissonance;
-    
+    const minWeight = 0.15;  // Prevent extreme imbalance
+    const maxWeight = 0.70;  // Maintain diversity
+
+    // Apply boundary constraints before normalization
+    let empathy = Math.max(minWeight, Math.min(maxWeight, weights.empathy));
+    let coherence = Math.max(minWeight, Math.min(maxWeight, weights.coherence));
+    let dissonance = Math.max(minWeight, Math.min(maxWeight, weights.dissonance));
+
+    // Normalize to sum to 1
+    const total = empathy + coherence + dissonance;
+    empathy /= total;
+    coherence /= total;
+    dissonance /= total;
+
     return {
-      empathy: weights.empathy / total,
-      coherence: weights.coherence / total,
-      dissonance: weights.dissonance / total,
+      empathy: Math.round(empathy * 1000) / 1000,
+      coherence: Math.round(coherence * 1000) / 1000,
+      dissonance: Math.round(dissonance * 1000) / 1000,
       timestamp: Date.now(),
       version: weights.version + 1
     };
