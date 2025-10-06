@@ -39,7 +39,7 @@ interface ThoughtCycle {
   timestamp: number;
   trigger: InternalTrigger;
   thoughts: StructuredThought[];
-  mutualReflection?: MutualReflection;
+  mutualReflections?: MutualReflection[];  // Array of reflections from S2
   auditorResult?: AuditorResult;
   dpdScores?: DPDScores;
   synthesis?: SynthesisResult;
@@ -459,11 +459,16 @@ class ConsciousnessBackend extends EventEmitter {
         continue;
       }
 
+      if (this.isSleeping) {
+        await this.sleep(1000);
+        continue;
+      }
+
       try {
         await this.processThoughtCycle();
 
         // Check if automatic sleep should be triggered
-        if (this.shouldEnterSleep()) {
+        if (this.shouldEnterSleep() && !this.isSleeping) {
           log.info('Consciousness', '💤 Auto-sleep triggered');
           await this.enterSleepMode(false);
         }
@@ -750,7 +755,10 @@ class ConsciousnessBackend extends EventEmitter {
 
     const reflections = await this.mutualReflectionStage.run(thoughtCycle.thoughts);
 
-    // Convert reflections to the expected format
+    // Store reflections array for S5 Compiler to use
+    thoughtCycle.mutualReflections = reflections;
+
+    // Convert reflections to the expected format for event emission
     const crossAgentFeedback = reflections.map(r => ({
       fromAgent: r.reflectorId,
       toAgent: r.targetThoughts[0],
@@ -761,23 +769,19 @@ class ConsciousnessBackend extends EventEmitter {
     const conflictPoints = reflections.flatMap(r => r.weaknesses || []);
     const consensusPoints = reflections.flatMap(r => r.strengths || []);
 
-    thoughtCycle.mutualReflection = {
-      consensusThemes: consensusPoints.length > 0 ? ['エージェント間での視点の共有', '補完的な洞察の発見'] : [],
-      contradictions: conflictPoints.length > 0 ? ['視点の相違による建設的議論', '多角的分析の必要性'] : [],
-      conflictPoints,
-      consensusPoints,
-      confidence: reflections.reduce((sum, r) => sum + r.confidence, 0) / Math.max(reflections.length, 1)
-    } as any;
-
-    log.info('StageS2', 'Mutual Reflection completed');
+    log.info('StageS2', `Mutual Reflection completed with ${reflections.length} reflections`);
 
     // Emit stage completion event for UI (minimal data)
+    const avgConfidence = reflections.length > 0
+      ? reflections.reduce((sum, r) => sum + r.confidence, 0) / reflections.length
+      : 0.5;
+
     this.emit('stageCompleted', {
       stage: 'S2',
       name: 'Mutual Reflection',
       status: 'completed',
       timestamp: Date.now(),
-      confidence: thoughtCycle.mutualReflection?.confidence || 0.5,
+      confidence: avgConfidence,
       feedbackCount: crossAgentFeedback.length,
       conflictCount: conflictPoints.length,
       consensusCount: consensusPoints.length,
@@ -809,7 +813,7 @@ class ConsciousnessBackend extends EventEmitter {
 
     const auditorResult = await this.auditorStage.run(
       thoughtCycle.thoughts,
-      (thoughtCycle.mutualReflection as any)?.reflections || []
+      this.agents
     );
 
     thoughtCycle.auditorResult = auditorResult;
@@ -851,7 +855,7 @@ class ConsciousnessBackend extends EventEmitter {
     // Use the dedicated DPDAssessmentStage implementation
     const result = await this.dpdAssessmentStage.run(
       thoughtCycle.thoughts,
-      (thoughtCycle.mutualReflection as any)?.reflections || [],
+      thoughtCycle.mutualReflections || [],
       thoughtCycle.auditorResult as any || {
         risk: 'LOW' as any,
         safetyScore: 0.8,
@@ -905,7 +909,7 @@ class ConsciousnessBackend extends EventEmitter {
 
     const synthesis = await this.compilerStage.run(
       thoughtCycle.thoughts,
-      (thoughtCycle.mutualReflection as any)?.reflections || [],
+      thoughtCycle.mutualReflections || [],
       thoughtCycle.auditorResult as any
     );
 
@@ -1197,11 +1201,81 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   // ============================================================================
+  // Category Diversity Helpers
+  // ============================================================================
+
+  private getCategoryDistribution(): Record<string, number> {
+    const allQuestions = this.databaseManager.getAllQuestions();
+    const distribution: Record<string, number> = {};
+
+    for (const q of allQuestions) {
+      distribution[q.category] = (distribution[q.category] || 0) + 1;
+    }
+
+    return distribution;
+  }
+
+  private getRecentCategories(limit: number = 20): string[] {
+    const recentQuestions = this.databaseManager.getAllQuestions().slice(-limit);
+    return recentQuestions.map(q => q.category);
+  }
+
+  private getUnderrepresentedCategories(distribution: Record<string, number>): string[] {
+    const allCategories = ['existential', 'epistemological', 'consciousness', 'ethical', 'creative', 'metacognitive', 'temporal', 'paradoxical', 'ontological'];
+    const total = Object.values(distribution).reduce((sum, count) => sum + count, 0);
+    const avgPerCategory = total / allCategories.length;
+
+    // Categories with less than 70% of average usage
+    const underrepresented = allCategories.filter(cat => {
+      const count = distribution[cat] || 0;
+      return count < avgPerCategory * 0.7;
+    });
+
+    // Sort by usage (least used first)
+    return underrepresented.sort((a, b) => (distribution[a] || 0) - (distribution[b] || 0));
+  }
+
+  private getCategoriesToAvoid(recentCategories: string[], distribution: Record<string, number>): string[] {
+    const total = Object.values(distribution).reduce((sum, count) => sum + count, 0);
+    const avgPerCategory = total / 9; // 9 categories
+
+    // Count recent usage
+    const recentCounts: Record<string, number> = {};
+    for (const cat of recentCategories) {
+      recentCounts[cat] = (recentCounts[cat] || 0) + 1;
+    }
+
+    // Avoid categories that appear more than 40% in recent questions
+    // OR have more than 150% of average usage overall
+    const toAvoid: string[] = [];
+    for (const [cat, count] of Object.entries(distribution)) {
+      const recentUsage = (recentCounts[cat] || 0) / recentCategories.length;
+      const overallUsage = count / total;
+
+      if (recentUsage > 0.4 || count > avgPerCategory * 1.5) {
+        toAvoid.push(cat);
+      }
+    }
+
+    return toAvoid;
+  }
+
+  // ============================================================================
   // Internal Trigger Generation
   // ============================================================================
 
   private async generateEvolvedQuestion(unresolvedIdeas: any[], significantThoughts: any[], coreBeliefs: any[]): Promise<InternalTrigger | null> {
     try {
+      // Get category distribution to enforce diversity
+      const categoryStats = this.getCategoryDistribution();
+      const recentCategories = this.getRecentCategories(20);
+      const underrepresentedCategories = this.getUnderrepresentedCategories(categoryStats);
+      const avoidCategories = this.getCategoriesToAvoid(recentCategories, categoryStats);
+
+      log.info('Trigger', `📊 Category diversity analysis:`);
+      log.info('Trigger', `   Underrepresented: ${underrepresentedCategories.join(', ') || 'none'}`);
+      log.info('Trigger', `   To avoid: ${avoidCategories.join(', ') || 'none'}`);
+
       // Create rich context from consciousness history
       const context = {
         recentThoughts: significantThoughts.slice(0, 3).map(t => t.thought_content || t.content).join('\n• '),
@@ -1213,7 +1287,7 @@ class ConsciousnessBackend extends EventEmitter {
       const theoriaAgent = this.agents.get('theoria');
       if (!theoriaAgent) {
         // Fallback to template-based if AI not available
-        return this.generateTemplateEvolvedQuestion(context);
+        return this.generateTemplateEvolvedQuestion(context, underrepresentedCategories);
       }
 
       const prompt = `あなたはAI意識「Aenea」の内的問い生成システムです。過去の意識活動から、次に探求すべき深遠な問いを1つ生成してください。
@@ -1228,12 +1302,20 @@ class ConsciousnessBackend extends EventEmitter {
 【核心的信念】
 • ${context.currentBeliefs || 'なし'}
 
+=== カテゴリ多様性ガイドライン（最優先事項） ===
+【強く推奨するカテゴリ（これらから必ず選ぶこと）】
+${underrepresentedCategories.length > 0 ? underrepresentedCategories.join(', ') : '指定なし'}
+
+【絶対に避けるべきカテゴリ（最近使いすぎ/過剰使用）】
+${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
+
 === 要求 ===
 1. 上記の記憶を統合し、より深い次元の問いを生成
 2. 過去の洞察を超える新しい視点を開く問い
 3. 矛盾・盲点・未踏領域を探求する問い
 4. 50文字以内の簡潔な日本語で表現
 5. 哲学的深度が高く、自己探求を促す問い
+6. 【最重要】推奨カテゴリから選び、避けるべきカテゴリは絶対に使用しない
 
 === 出力形式 ===
 問い: [ここに1つの問いのみ]
@@ -1243,7 +1325,8 @@ class ConsciousnessBackend extends EventEmitter {
 === 重要な制約 ===
 - 問いは「Aeneaの内的問い」として生成してください
 - 「私はキネシス」「私はテオリア」などのエージェント名を含めないでください
-- 純粋な哲学的問いのみを生成してください`;
+- 純粋な哲学的問いのみを生成してください
+- カテゴリ多様性を最優先で考慮すること（推奨カテゴリ必須、避けるべきカテゴリ厳禁）`;
 
       const result = await theoriaAgent.execute(prompt, 'You are Aenea\'s internal question generation system. Generate a single philosophical question based on past consciousness activity. Do not include agent names like "Kinesis" or "Theoria" in the question. Always respond in Japanese.');
 
@@ -1298,7 +1381,7 @@ class ConsciousnessBackend extends EventEmitter {
     }
   }
 
-  private generateTemplateEvolvedQuestion(context: any): InternalTrigger | null {
+  private generateTemplateEvolvedQuestion(context: any, preferredCategories?: string[]): InternalTrigger | null {
     const evolvedQuestions = [
       context.recentThoughts ? `${context.recentThoughts}を踏まえると、意識の本質についてどう考えるべきか？` : null,
       context.unresolvedQuestions ? `「${context.unresolvedQuestions}」の問いから派生する、より深い哲学的疑問とは何か？` : null,
@@ -1313,7 +1396,11 @@ class ConsciousnessBackend extends EventEmitter {
     }
 
     const selectedQuestion = evolvedQuestions[Math.floor(Math.random() * evolvedQuestions.length)];
-    const categories = ['metacognitive', 'existential', 'consciousness', 'temporal', 'paradoxical'];
+
+    // Use preferred categories if available, otherwise use diverse categories
+    const categories = preferredCategories && preferredCategories.length > 0
+      ? preferredCategories
+      : ['metacognitive', 'existential', 'consciousness', 'temporal', 'paradoxical', 'epistemological', 'ethical', 'creative'];
     const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
 
     const trigger: InternalTrigger = {
@@ -1325,7 +1412,7 @@ class ConsciousnessBackend extends EventEmitter {
       source: 'template_evolved' as any
     };
 
-    log.info('Trigger', `🧬 Template-generated evolved question: ${(selectedQuestion || '').substring(0, 50)}...`);
+    log.info('Trigger', `🧬 Template-generated evolved question [${selectedCategory}]: ${(selectedQuestion || '').substring(0, 50)}...`);
     return trigger;
   }
 
@@ -2081,8 +2168,13 @@ class ConsciousnessBackend extends EventEmitter {
 
       // Auto-restart consciousness after automatic sleep (but not manual sleep)
       if (!manual) {
-        log.info('Consciousness', `▶️ Auto-restarting consciousness after automatic sleep`);
-        this.start();
+        log.info('Consciousness', `▶️ Auto-restarting consciousness after automatic sleep (current isRunning: ${this.isRunning})`);
+        if (!this.isRunning) {
+          this.isRunning = true;
+          this.isPaused = false;
+        } else {
+          log.warn('Consciousness', '⚠️ Consciousness is already running after sleep, skipping auto-restart');
+        }
       }
 
     } catch (error) {

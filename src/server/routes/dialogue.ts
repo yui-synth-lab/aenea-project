@@ -15,14 +15,20 @@ import { aeneaConfig } from '../../aenea/agents/aenea.js';
 let dialogueHandler: DialogueHandler | null = null;
 
 export function initializeDialogueRoutes(db: DatabaseManager): void {
-  // Use Aenea agent configuration for dialogue
+  // Use custom LLM for dialogue (configurable via environment variables)
+  // Defaults to Aenea agent configuration if not specified
+  const dialogueProvider = process.env.DIALOGUE_PROVIDER || aeneaConfig.provider;
+  const dialogueModel = process.env.DIALOGUE_MODEL || aeneaConfig.model;
+
   const aiExecutor = createAIExecutor(
-    aeneaConfig.id,
+    'dialogue-llm',
     {
-      provider: aeneaConfig.provider as any,
-      model: aeneaConfig.model
+      provider: dialogueProvider as any,
+      model: dialogueModel
     }
   );
+
+  console.log(`[Dialogue] Using LLM: provider=${dialogueProvider}, model=${dialogueModel}`);
   dialogueHandler = new DialogueHandler(db, aiExecutor);
 }
 

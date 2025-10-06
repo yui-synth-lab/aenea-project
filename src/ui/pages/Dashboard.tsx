@@ -366,6 +366,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         };
         setActivityLog(prev => [logItem, ...prev].slice(0, 200));
         setCurrentThought(`Sleep Mode: ${data.reason}`);
+
+        // Reset stage progress and show sleep mode
+        setStageProgress([{ stage: 'SLEEP', completed: false, timestamp: Date.now() }]);
+        setCurrentStage('SLEEP');
       } else if (t === 'sleepPhaseChanged') {
         // Sleep phase changed
         const logItem: ActivityLogItem = {
@@ -389,6 +393,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         setActivityLog(prev => [logItem, ...prev].slice(0, 200));
         setStats(prev => ({ ...prev, energyLevel: data.energyAfter }));
         setCurrentThought('');
+
+        // Mark sleep stage as completed
+        setStageProgress(prev => prev.map(p => p.stage === 'SLEEP' ? { ...p, completed: true } : p));
+        setCurrentStage('');
       } else if (t === 'sleepError') {
         // Sleep error
         const logItem: ActivityLogItem = {
@@ -404,6 +412,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           ...prev,
           isProcessingCycle: data.isProcessingCycle || false
         }));
+      } else if (t === 'consciousnessDormant') {
+        // Consciousness entered dormancy (low energy)
+        const logItem: ActivityLogItem = {
+          id: `dormant_${Date.now()}`,
+          timestamp: data.timestamp || Date.now(),
+          type: 'system_event',
+          message: `⏸️ Entered dormancy: ${data.reason} (Energy: ${data.currentEnergy?.toFixed(1)})`
+        };
+        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+      } else if (t === 'consciousnessAwakened') {
+        // Consciousness awakened from dormancy
+        const logItem: ActivityLogItem = {
+          id: `awakened_${Date.now()}`,
+          timestamp: data.timestamp || Date.now(),
+          type: 'system_event',
+          message: `▶️ Awakened from dormancy (Energy: ${data.currentEnergy?.toFixed(1)})`
+        };
+        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+
+        // Update energy level
+        if (data.currentEnergy !== undefined) {
+          setStats(prev => ({ ...prev, energyLevel: data.currentEnergy }));
+        }
+
+        // Refresh consciousness state to update control buttons
+        fetchConsciousnessState();
       }
     };
 
@@ -655,22 +689,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           <div className="dashboard-card stage-progression">
             <h3>Consciousness Pipeline</h3>
             <div className="stage-pipeline">
-              {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
-                <React.Fragment key={stage}>
-                  <div className="stage-item">
-                    <div
-                      className={`stage-circle ${
-                        currentStage === stage ? 'active' :
-                        stageProgress.some(p => p.stage === stage && p.completed) ? 'completed' :
-                        'pending'
-                      }`}
-                    >
-                      {stage}
-                    </div>
+              {currentStage === 'SLEEP' ? (
+                // Sleep mode: show single sleep stage
+                <div className="stage-item">
+                  <div className={`stage-circle ${stageProgress.some(p => p.stage === 'SLEEP' && p.completed) ? 'completed' : 'active'}`}>
+                    💤
                   </div>
-                  {index < 7 && <div className="stage-arrow">→</div>}
-                </React.Fragment>
-              ))}
+                  <div className="stage-label">Sleep</div>
+                </div>
+              ) : (
+                // Normal mode: show thought cycle stages
+                ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'U'].map((stage, index) => (
+                  <React.Fragment key={stage}>
+                    <div className="stage-item">
+                      <div
+                        className={`stage-circle ${
+                          currentStage === stage ? 'active' :
+                          stageProgress.some(p => p.stage === stage && p.completed) ? 'completed' :
+                          'pending'
+                        }`}
+                      >
+                        {stage}
+                      </div>
+                    </div>
+                    {index < 7 && <div className="stage-arrow">→</div>}
+                  </React.Fragment>
+                ))
+              )}
             </div>
           </div>
 

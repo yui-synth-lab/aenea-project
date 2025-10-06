@@ -420,6 +420,25 @@ class DatabaseManager {
     }
   }
 
+  getAllQuestions(): any[] {
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+
+    try {
+      const rows = this.db.prepare(`
+        SELECT id, timestamp, question, category, importance, source
+        FROM questions
+        ORDER BY timestamp ASC
+      `).all();
+
+      return rows as any[];
+    } catch (err) {
+      console.error('Error getting all questions:', err);
+      return [];
+    }
+  }
+
   // Thought cycle management
   saveThoughtCycle(cycle: any): void {
     if (!this.isReady || !this.db) {
