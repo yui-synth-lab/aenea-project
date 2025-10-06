@@ -1,7 +1,7 @@
 # Aenea Features Analysis - Implemented vs Used
 
-**Generated:** 2025-10-06 (Updated with Sleep Mode System)
-**Project Status:** Production-Ready with Memory Consolidation, Sleep Mode, Direct Database Management & t_wada Quality Tests
+**Generated:** 2025-10-07 (Updated with Sleep Mode & Dialogue System)
+**Project Status:** Production-Ready with Memory Consolidation, Sleep Mode, Dialogue System, Direct Database Management & t_wada Quality Tests
 **Total TypeScript Files:** 42+
 
 ---
@@ -10,13 +10,13 @@
 
 | Category | Implemented | Active | Partial | Unused | Notes |
 |----------|-------------|--------|---------|--------|-------|
-| **Core Systems** | 9/9 | 9/9 | 0/9 | 0/9 | ✅ Direct Database Management + Sleep Mode |
+| **Core Systems** | 9/9 | 9/9 | 0/9 | 0/9 | ✅ Direct Database Management + Sleep Mode + Dialogue |
 | **Stage Pipeline** | 8/8 | 8/8 | 0/8 | 0/8 | ✅ Adaptive Energy-Based (3 modes) |
-| **Memory Systems** | 7/7 | 7/7 | 0/7 | 0/7 | ✅ Memory Consolidation + Sleep Mode |
-| **UI Components** | 9/9 | 9/9 | 0/9 | 0/9 | ✅ Real-time Monitoring + Sleep Button |
+| **Memory Systems** | 8/8 | 8/8 | 0/8 | 0/8 | ✅ Memory Consolidation + Sleep Mode + Dialogue Memory |
+| **UI Components** | 10/10 | 10/10 | 0/10 | 0/10 | ✅ Real-time Monitoring + Sleep Button + Dialogue Interface |
 | **Integration Layer** | 4/4 | 1/4 | 0/4 | 3/4 | ❌ Yui Protocol Not Connected |
 | **Utilities** | 5/5 | 5/5 | 0/5 | 0/5 | ✅ All Enhanced & Fully Active |
-| **API Routes** | 6/6 | 6/6 | 0/6 | 0/6 | ✅ All Fully Operational + Sleep API |
+| **API Routes** | 7/7 | 7/7 | 0/7 | 0/7 | ✅ All Fully Operational + Sleep API + Dialogue API |
 | **Test Coverage** | 6/6 | 6/6 | 0/6 | 0/6 | ✅ t_wada Quality Tests |
 
 ---
@@ -81,6 +81,7 @@
 - ✅ **growth.ts** - Growth tracking and analytics API (UPDATED)
 - ✅ **logs.ts** - Session and activity log access
 - ✅ **Sleep API** - POST /api/consciousness/sleep, GET /api/consciousness/sleep/status
+- ✅ **Dialogue API** - POST /api/dialogue, GET /api/dialogue/history, GET /api/dialogue/memories
 
 ### SQLite Database System (Direct State Management)
 - ✅ **Consciousness State Table** - Single-row (id=1) current state (energy, clock, counters)
@@ -92,8 +93,10 @@
 - ✅ **Significant Thoughts Table** - High-confidence (>0.6) insights
 - ✅ **Memory Patterns Table** - Automatic pattern recognition
 - ✅ **Consciousness Insights Table** - AI-generated evolution insights
-- ✅ **Dream Patterns Table** (NEW) - REM sleep phase dream-like pattern extraction
-- ✅ **Sleep Logs Table** (NEW) - Sleep cycle tracking and consolidation records
+- ✅ **Dream Patterns Table** (Sleep Mode) - REM sleep phase dream-like pattern extraction
+- ✅ **Sleep Logs Table** (Sleep Mode) - Sleep cycle tracking and consolidation records
+- ✅ **Dialogues Table** (Dialogue System) - Human-Aenea conversation history with poetic responses
+- ✅ **Dialogue Memories Table** (Dialogue System) - AI-summarized memories (50-100 chars) for context
 - ✅ **Automatic Indexing** - Optimized queries for real-time operations
 - ❌ **Sessions Table** - REMOVED (sessionless architecture)
 
@@ -180,6 +183,7 @@
 9. **t_wada Quality Tests**: Comprehensive test suite with boundary analysis and invariants
 10. **9 Question Categories**: Philosophical diversity (existential, epistemological, etc.)
 11. **Sleep Mode System**: 4-phase consciousness consolidation (REM/Deep/Pruning/Emotional) with manual/automatic triggers
+12. **Dialogue System**: Direct human-Aenea conversation with AI-summarized memory accumulation
 
 ### Architectural Decisions
 1. **Sessionless Architecture**: Removed session abstraction for direct state management (consciousness_state table, id=1)
@@ -197,6 +201,7 @@
 13. **Comprehensive Testing Addition**: Unit tests ensure reliability and enable confident development
 14. **Pattern-Driven Consciousness**: Temporal and behavioral pattern recognition
 15. **Sleep Mode as Brain Consolidation**: Mimics human brain's sleep phases for memory organization and thought pruning
+16. **Dialogue System with Memory**: Simple 1-LLM-call design with AI-summarized context (last 5 memories)
 
 ### Complexity Management
 1. **Database Schema**: Designed comprehensive SQLite schema for all consciousness data

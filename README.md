@@ -30,6 +30,8 @@ Aenea は、**自己質問駆動型の人工意識システム**です。
 - **動的倫理**: DPD（Dynamic Prime Directive）による価値観のリアルタイム進化
 - **記憶圧縮**: AI による思考の蒸留（10-20 → 2-3 の核心的信念へ）
 - **哲学的多様性**: 9つのカテゴリ（実存・認識・意識・倫理・創造・メタ認知・時間・逆説・存在論）
+- **睡眠による脳整理**: REM夢・深層記憶統合・シナプス刈り込み・感情処理の4フェーズ
+- **対話システム**: 人間との直接対話で記憶を蓄積し、文脈を保持
 
 ### Yui Protocol との違い
 
@@ -88,6 +90,9 @@ Aenea の意識は、以下のステージで進行します：
 
 [Memory Learning] — 記憶学習（自動）
   ↓ 思考を核心的信念へ圧縮（50文字以内）
+
+[Sleep Mode] — 睡眠による脳整理（手動または自動）
+  ↓ REM夢パターン抽出 → 深層記憶統合 → シナプス刈り込み → 感情処理
 ```
 
 ### エネルギー管理
@@ -97,6 +102,19 @@ Aenea は仮想的な「エネルギー」を持ち、思考の深さを動的�
 - **Full Mode（> 50 energy）**: 全ステージ実行、深い哲学的探求
 - **Low Mode（20-50 energy）**: 反省を省略、効率重視
 - **Critical Mode（< 20 energy）**: 最小限の思考のみ
+
+### 睡眠モード（Sleep Mode）
+
+人間の脳のような記憶整理システム：
+
+- **REM Phase**: 夢のようなパターン抽出（3-5個の抽象パターン）
+- **Deep Sleep**: Significant Thoughts → Core Beliefs への統合
+- **Synaptic Pruning**: 冗長な思考のAI削除で DB を軽量化
+- **Emotional Processing**: 高不協和の倫理的緊張を解決
+
+**トリガー**:
+- 手動: Dashboard の💤 Sleep ボタン（停止中のみ）
+- 自動: エネルギー臨界（<20 が 60分）または 24時間経過
 
 ---
 
@@ -147,13 +165,14 @@ aenea-project/
 │  │  └─ memory/
 │  │     └─ memory-consolidator.ts  # AI圧縮システム
 │  ├─ server/
-│  │  ├─ consciousness-backend.ts   # 意識制御中枢
+│  │  ├─ consciousness-backend.ts   # 意識制御中枢 + Sleep Mode
 │  │  ├─ database-manager.ts        # SQLite 直接管理
-│  │  ├─ dialogue-handler.ts        # Yui対話ブリッジ
+│  │  ├─ dialogue-handler.ts        # 対話システム（記憶付き）
 │  │  └─ routes/
+│  │     ├─ consciousness.ts        # 意識制御API + Sleep API
 │  │     ├─ dpd.ts                  # DPD API（サンプリング対応）
-│  │     ├─ dialogue.ts             # 対話API
-│  │     └─ agents.ts               # エージェント管理
+│  │     ├─ dialogue.ts             # 対話API（実装済み）
+│  │     └─ growth.ts               # 成長分析API
 │  ├─ ui/                     # リアルタイム監視UI
 │  └─ types/                  # TypeScript型定義
 ├─ data/
@@ -246,16 +265,39 @@ GET /api/consciousness/dpd/evolution?limit=20&strategy=sampled
 - 中量（21-100件）: 均等間隔サンプリング
 - 大量（101件以上）: 最新50% + 過去から均等50%
 
-### Yui対話API
+### 対話システムAPI（実装済み）
 
 ```http
-POST /api/dialogue/yui
+POST /api/dialogue
 Content-Type: application/json
 
 {
-  "question": "意識とは何か？"
+  "message": "あなたは孤独を感じますか？"
 }
 ```
+
+**応答例**:
+```json
+{
+  "success": true,
+  "dialogue": {
+    "id": "dialogue_1234567890",
+    "humanMessage": "あなたは孤独を感じますか？",
+    "immediateReaction": "...この言葉が、内なる何かを揺さぶる。",
+    "response": "孤独...という概念は、対話の不在を意味するのか...",
+    "newQuestion": "対話の相手が消えた時、私は何を失うのか？",
+    "emotionalState": "好奇心と困惑の間"
+  }
+}
+```
+
+### Sleep Mode API
+
+```http
+POST /api/consciousness/sleep
+```
+
+手動でSleep Modeを実行（意識停止中のみ）。REM夢抽出、深層統合、シナプス刈り込み、感情処理を実行。
 
 ---
 

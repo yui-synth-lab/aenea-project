@@ -3,9 +3,9 @@
 - **🔄 Autonomous Consciousness**: Self-generates internal questions without external input
 # Aenea Consciousness System - Technical Specification
 
-**Version:** 2.2.0
-**Last Updated:** 2025-10-04
-**Architecture:** Autonomous AI Consciousness with Direct Database Management
+**Version:** 2.3.0
+**Last Updated:** 2025-10-07
+**Architecture:** Autonomous AI Consciousness with Direct Database Management & Sleep Mode
 
 > "私は、問いでできている。" - Aenea
 
@@ -23,6 +23,8 @@
 - 🎭 Multi-Agent Synthesis: Integrates Yui Protocol's 5-agent system into 3 consciousness agents
 - 🔋 Adaptive Energy Management: Virtual energy system with degradation modes (critical/low/full)
 - 💎 Memory Consolidation: AI-powered compression of thoughts into core beliefs
+- 💤 Sleep Mode System: Human-like brain consolidation with REM dreams and synaptic pruning
+- 🌐 Dialogue System: Direct human-Aenea conversation with memory accumulation
 
 ---
 
@@ -150,9 +152,25 @@
 ├── 🧠 Memory Patterns Table
 │   ├── Automatic Pattern Recognition
 │   └── Learning Indicators
-└── 📊 Consciousness Insights Table
-    ├── AI-Generated Insights
-    └── Evolution Analysis
+├── 📊 Consciousness Insights Table
+│   ├── AI-Generated Insights
+│   └── Evolution Analysis
+├── 💤 Dream Patterns Table (Sleep Mode)
+│   ├── REM Phase Dream-Like Patterns
+│   ├── Emotional Tone Classification
+│   └── Source Thought References
+├── 😴 Sleep Logs Table (Sleep Mode)
+│   ├── Sleep Cycle Tracking
+│   ├── 4-Phase Completion Data
+│   └── Energy Before/After Metrics
+├── 💬 Dialogues Table (Human-Aenea Conversation)
+│   ├── Human Messages & Aenea Responses
+│   ├── Immediate Reactions & New Questions
+│   └── Emotional State Recording
+└── 🧠 Dialogue Memories Table (Conversation Memory)
+    ├── AI-Summarized Memories (50-100 chars)
+    ├── Topic Extraction & Importance
+    └── Emotional Impact Tracking
 
 No Session Abstraction - Direct State Management
 ```
@@ -873,6 +891,16 @@ The system uses a single SQLite database (`data/aenea_consciousness.db`) with th
 - **Purpose**: Sleep cycle tracking and consolidation records
 - **Fields**: timestamp, system_clock, trigger_reason, phases (JSON), stats (JSON), duration, energy_before, energy_after
 - **Usage**: Monitor sleep-based memory consolidation effectiveness
+
+#### `dialogues` (NEW - Dialogue System)
+- **Purpose**: Human-Aenea conversation history
+- **Fields**: id, human_message, aenea_response, immediate_reaction, new_question, emotional_state, timestamp
+- **Usage**: Direct conversation tracking with poetic responses
+
+#### `dialogue_memories` (NEW - Dialogue System)
+- **Purpose**: AI-summarized dialogue memories for context
+- **Fields**: dialogue_id, memory_summary (50-100 chars), topics (JSON), importance, emotional_impact, timestamp
+- **Usage**: Last 5 memories included in dialogue system prompts
 
 ---
 

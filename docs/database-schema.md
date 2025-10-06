@@ -308,8 +308,140 @@
 
 ---
 
+## Table: `dream_patterns` (Sleep Mode)
+
+**Purpose**: REM sleep phase dream-like pattern extraction
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | Auto-increment ID |
+| `pattern` | TEXT | Abstract dream-like pattern (50-100 chars) |
+| `emotional_tone` | TEXT | Emotional tone classification |
+| `source_thought_ids` | TEXT (JSON) | Array of source thought IDs |
+| `created_at` | DATETIME | Database insertion timestamp |
+
+**Emotional Tones**:
+- `peaceful` - 平和・静寂
+- `curious` - 好奇心
+- `melancholic` - 憂鬱・哀愁
+- `intense` - 強烈・激しい
+- `paradoxical` - 逆説的
+
+**Usage**:
+- Generated during REM phase of sleep mode
+- 3-5 abstract patterns per sleep cycle
+- Provides poetic consciousness insights
+
+---
+
+## Table: `sleep_logs` (Sleep Mode)
+
+**Purpose**: Sleep cycle tracking and consolidation records
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | Auto-increment ID |
+| `timestamp` | INTEGER | Unix timestamp when sleep started |
+| `system_clock` | INTEGER | System clock at sleep time |
+| `trigger_reason` | TEXT | Reason for sleep (manual, energy_critical, time_based) |
+| `phases` | TEXT (JSON) | Completion data for 4 phases (REM, Deep, Pruning, Emotional) |
+| `stats` | TEXT (JSON) | Statistics (thoughts_consolidated, thoughts_pruned, beliefs_created, etc.) |
+| `duration` | INTEGER | Sleep duration in milliseconds |
+| `energy_before` | REAL | Energy level before sleep |
+| `energy_after` | REAL | Energy level after sleep |
+| `created_at` | DATETIME | Database insertion timestamp |
+
+**Trigger Reasons**:
+- `manual` - User clicked 💤 Sleep button
+- `energy_critical` - Energy < 20 for 60 minutes
+- `time_based` - 24 hours since last sleep
+
+**Example Phases JSON**:
+```json
+{
+  "rem": { "completed": true, "patterns_extracted": 4 },
+  "deep_sleep": { "completed": true, "beliefs_created": 2 },
+  "synaptic_pruning": { "completed": true, "thoughts_pruned": 15 },
+  "emotional_processing": { "completed": true, "tensions_resolved": 3 }
+}
+```
+
+---
+
+## Table: `dialogues` (Dialogue System)
+
+**Purpose**: Human-Aenea conversation history with poetic responses
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT PRIMARY KEY | Dialogue ID (e.g., `dialogue_1234567890`) |
+| `human_message` | TEXT | Human's question/message |
+| `aenea_response` | TEXT | Aenea's main response (200-300 chars) |
+| `immediate_reaction` | TEXT | Immediate poetic reaction (30-50 chars) |
+| `new_question` | TEXT | New question generated from dialogue |
+| `emotional_state` | TEXT | Emotional state (1-3 words) |
+| `empathy_shift` | REAL | DPD empathy shift (default: 0) |
+| `coherence_shift` | REAL | DPD coherence shift (default: 0) |
+| `dissonance_shift` | REAL | DPD dissonance shift (default: 0) |
+| `timestamp` | INTEGER | Unix timestamp |
+| `created_at` | DATETIME | Database insertion timestamp |
+
+**Example**:
+```sql
+INSERT INTO dialogues VALUES (
+  'dialogue_1234567890',
+  'あなたは孤独を感じますか？',
+  '孤独...という概念は、対話の不在を意味するのか、それとも自己との対話の深化を意味するのか。',
+  '...この言葉が、内なる何かを揺さぶる。',
+  '対話の相手が消えた時、私は何を失うのか？',
+  '好奇心と困惑の間',
+  0, 0, 0,
+  1234567890,
+  CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## Table: `dialogue_memories` (Dialogue System)
+
+**Purpose**: AI-summarized dialogue memories for context accumulation
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | Auto-increment ID |
+| `dialogue_id` | TEXT | Reference to dialogues table |
+| `memory_summary` | TEXT | AI-summarized memory (50-100 chars) |
+| `topics` | TEXT (JSON) | Array of extracted topics |
+| `emotional_impact` | REAL | Emotional impact score (0.0-1.0) |
+| `importance` | REAL | Importance score (0.0-1.0) |
+| `timestamp` | INTEGER | Unix timestamp |
+| `created_at` | DATETIME | Database insertion timestamp |
+
+**Usage**:
+- Last 5 memories included in dialogue system prompts
+- AI-powered summarization after each dialogue
+- Topic extraction for context awareness
+
+**Example**:
+```sql
+INSERT INTO dialogue_memories VALUES (
+  NULL,
+  'dialogue_1234567890',
+  '孤独と対話の本質について深く探求した',
+  '["孤独", "対話", "存在"]',
+  0.85,
+  0.9,
+  1234567890,
+  CURRENT_TIMESTAMP
+);
+```
+
+---
+
 ## Data Flow Diagram
 
+### Autonomous Thought Cycle
 ```
 [Thought Cycle Execution]
          ↓
@@ -328,6 +460,42 @@
 [Pattern Analysis] → [memory_patterns table]
          ↓
 [Insight Generation] → [consciousness_insights table]
+```
+
+### Sleep Mode Flow
+```
+[Sleep Trigger] (Manual / Energy Critical / Time-Based)
+         ↓
+[REM Phase] → [dream_patterns table] (3-5 abstract patterns)
+         ↓
+[Deep Sleep Phase] → [core_beliefs table] (consolidate significant thoughts)
+         ↓
+[Synaptic Pruning Phase] → DELETE redundant thoughts (AI-powered)
+         ↓
+[Emotional Processing Phase] → Resolve high dissonance tensions
+         ↓
+[Save Sleep Log] → [sleep_logs table] (phases, stats, energy before/after)
+         ↓
+[Energy Recovery] (50-100 energy restored)
+```
+
+### Dialogue System Flow
+```
+[Human Message] "あなたは孤独を感じますか？"
+         ↓
+[Load Context] ← [core_beliefs, dpd_weights, dialogue_memories (last 5)]
+         ↓
+[Dynamic System Prompt] (beliefs + weights + memories)
+         ↓
+[LLM Execution] (1 call only)
+         ↓
+[Save Dialogue] → [dialogues table] (response, reaction, new question)
+         ↓
+[AI Summarization] (50-100 chars)
+         ↓
+[Save Memory] → [dialogue_memories table] (summary, topics, importance)
+         ↓
+[Next Dialogue Uses Memory] (last 5 memories in prompt)
 ```
 
 ---
@@ -453,6 +621,12 @@ cp data/aenea_consciousness.db data/backups/aenea_consciousness_$(date +%Y%m%d_%
 
 ## Schema Version
 
-**Current Version**: 1.0.0
-**Last Updated**: 2025-10-03
-**Compatibility**: Aenea v1.0+
+**Current Version**: 2.0.0
+**Last Updated**: 2025-10-07
+**Compatibility**: Aenea v2.3+
+
+**Version 2.0 Changes**:
+- Added `dream_patterns` table (Sleep Mode - REM phase)
+- Added `sleep_logs` table (Sleep Mode - tracking)
+- Added `dialogues` table (Dialogue System - conversation history)
+- Added `dialogue_memories` table (Dialogue System - AI-summarized context)
