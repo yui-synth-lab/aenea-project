@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, X, Brain, Heart, Lightbulb, Moon as MoonIcon } from 'lucide-react';
+import { DPDScoreDisplay } from './DPDScoreDisplay.js';
 
 interface GrowthModalProps {
   isOpen: boolean;
@@ -167,90 +168,14 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                 )) : <p>No personality data available</p>}
               </motion.div>
 
-              {/* DPD Evolution with Chart */}
+              {/* DPD Evolution - Using DPDScoreDisplay Component */}
               <motion.div
-                className="growth-card dpd wide"
+                className="growth-card dpd-full-display wide"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <h3><TrendingUp size={18} style={{ display: 'inline', marginRight: '8px' }} />DPD Weight Evolution</h3>
-                {growthData.dpdEvolution?.currentWeights ? (
-                  <>
-                    <div className="dpd-current-values">
-                      <p><strong>Empathy:</strong> {(growthData.dpdEvolution.currentWeights.empathy * 100).toFixed(1)}%</p>
-                      <p><strong>Coherence:</strong> {(growthData.dpdEvolution.currentWeights.coherence * 100).toFixed(1)}%</p>
-                      <p><strong>Dissonance:</strong> {(growthData.dpdEvolution.currentWeights.dissonance * 100).toFixed(1)}%</p>
-                    </div>
-                    {(growthData.dpdEvolution as any).history && (growthData.dpdEvolution as any).history.length > 1 && (() => {
-                      const reversedHistory = [...(growthData.dpdEvolution as any).history].reverse();
-                      const historyLength = reversedHistory.length;
-
-                      return (
-                        <div className="dpd-evolution-chart">
-                          <svg width="100%" height="90%" viewBox="0 0 100 90" preserveAspectRatio="none">
-                            <polygon fill="#f59e0b" fillOpacity="0.7" stroke="#f59e0b" strokeWidth="0.5"
-                              points={
-                                reversedHistory.map((entry: any, index: number) => {
-                                  const x = (index / (historyLength - 1)) * 100;
-                                  return `${x},90`;
-                                }).join(' ') + ' ' +
-                                reversedHistory.map((entry: any, index: number) => {
-                                  const x = (index / (historyLength - 1)) * 100;
-                                  const y = 90 - (entry.dissonance * 90);
-                                  return `${x},${y}`;
-                                }).reverse().join(' ')
-                              }
-                            />
-                            <polygon fill="#3b82f6" fillOpacity="0.7" stroke="#3b82f6" strokeWidth="0.5"
-                              points={
-                                reversedHistory.map((entry: any, index: number) => {
-                                  const x = (index / (historyLength - 1)) * 100;
-                                  const y = 90 - (entry.dissonance * 90);
-                                  return `${x},${y}`;
-                                }).join(' ') + ' ' +
-                                reversedHistory.map((entry: any, index: number) => {
-                                  const x = (index / (historyLength - 1)) * 100;
-                                  const y = 90 - (entry.dissonance * 90) - (entry.coherence * 90);
-                                  return `${x},${y}`;
-                                }).reverse().join(' ')
-                              }
-                            />
-                            <polygon fill="#10b981" fillOpacity="0.7" stroke="#10b981" strokeWidth="0.5"
-                              points={
-                                reversedHistory.map((entry: any, index: number) => {
-                                  const x = (index / (historyLength - 1)) * 100;
-                                  const y = 90 - (entry.dissonance * 90) - (entry.coherence * 90);
-                                  return `${x},${y}`;
-                                }).join(' ') + ' ' +
-                                reversedHistory.map((entry: any, index: number) => {
-                                  const x = (index / (historyLength - 1)) * 100;
-                                  return `${x},0`;
-                                }).reverse().join(' ')
-                              }
-                            />
-                          </svg>
-                          <div className="system-clock-labels">
-                            {reversedHistory.filter((_: any, i: number) => i % Math.max(1, Math.floor(historyLength / 5)) === 0 || i === historyLength - 1).map((entry: any) => {
-                              const actualIndex = reversedHistory.indexOf(entry);
-                              const x = (actualIndex / (historyLength - 1)) * 100;
-                              return (
-                                <span key={actualIndex} style={{ left: `${x}%` }}>
-                                  {entry.id || actualIndex}
-                                </span>
-                              );
-                            })}
-                          </div>
-                          <div className="chart-legend">
-                            <div className="legend-item"><div className="legend-color empathy"></div><span>Empathy</span></div>
-                            <div className="legend-item"><div className="legend-color coherence"></div><span>Coherence</span></div>
-                            <div className="legend-item"><div className="legend-color dissonance"></div><span>Dissonance</span></div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </>
-                ) : <p>No DPD evolution data available</p>}
+                <DPDScoreDisplay />
               </motion.div>
 
               {/* Growth Metrics */}
@@ -543,94 +468,17 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           font-size: 13px;
         }
 
-        .dpd-current-values {
-          margin-bottom: 16px;
+        .dpd-full-display {
+          padding: 0;
+          background: transparent;
+          border: none;
+          box-shadow: none;
+          clip-path: none;
         }
 
-        .dpd-evolution-chart {
-          background: var(--cyber-bg-secondary);
-          padding: 16px;
-          padding-bottom: 32px;
-          height: 220px;
-          position: relative;
-          border: 1px solid var(--cyber-border);
-          border-left: 3px solid var(--cyber-neon-cyan);
-          box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.05);
-        }
-
-        .dpd-evolution-chart svg {
-          width: 100%;
-          height: calc(100% - 20px);
-        }
-
-        .system-clock-labels {
-          position: absolute;
-          bottom: 12px;
-          left: 16px;
-          right: 16px;
-          height: 20px;
-          display: flex;
-          justify-content: space-between;
-        }
-
-        .system-clock-labels span {
-          position: absolute;
-          font-size: 10px;
-          color: #9ca3af;
-          white-space: nowrap;
-          transform: translateX(-50%);
-        }
-
-        .system-clock-labels span:first-child {
-          transform: translateX(0);
-        }
-
-        .system-clock-labels span:last-child {
-          transform: translateX(-100%);
-        }
-
-        .chart-legend {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-          display: flex;
-          gap: 12px;
-          font-size: 11px;
-          background: var(--cyber-bg-tertiary);
-          padding: 6px 10px;
-          border: 1px solid var(--cyber-border);
-          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-          font-family: 'Courier New', 'Consolas', monospace;
-        }
-
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .legend-color {
-          width: 16px;
-          height: 3px;
-          box-shadow: 0 0 4px currentColor;
-        }
-
-        .legend-color.empathy {
-          background: var(--cyber-neon-lime);
-        }
-
-        .legend-color.coherence {
-          background: var(--cyber-neon-cyan);
-        }
-
-        .legend-color.dissonance {
-          background: var(--cyber-neon-yellow);
-        }
-
-        .legend-item span {
-          color: var(--cyber-text-primary);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+        .dpd-full-display::before,
+        .dpd-full-display::after {
+          display: none;
         }
 
         .scrollable-list {

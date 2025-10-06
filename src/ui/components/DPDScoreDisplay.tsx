@@ -148,32 +148,30 @@ export const DPDScoreDisplay: React.FC = () => {
   };
 
 
-  const renderScoreDimension = (label: string, value: number, weight: number, dimension: string) => (
-    <div className="dpd-dimension">
-      <div className="dimension-header">
-        <span className="dimension-label">{label}</span>
-        <span className="dimension-weight">({(weight * 100).toFixed(0)}%)</span>
-        <span className="dimension-value">{value.toFixed(3)}</span>
-      </div>
-      <div className="dimension-bar">
-        <div
-          className="dimension-fill"
-          style={{
-            width: `${value * 100}%`,
-            backgroundColor: getDPDColor(dimension, value)
-          }}
-        />
-      </div>
-    </div>
-  );
+  // バリセントリック座標変換（三角形内の位置を計算）
+  const barycentricToCartesian = (empathy: number, coherence: number, dissonance: number) => {
+    // 正三角形の頂点座標（上：Empathy, 左下：Coherence, 右下：Dissonance）
+    const height = Math.sqrt(3) / 2;
+    const vertices = {
+      empathy: { x: 0.5, y: 0 },
+      coherence: { x: 0, y: height },
+      dissonance: { x: 1, y: height }
+    };
+
+    // バリセントリック座標で重心計算
+    const x = empathy * vertices.empathy.x + coherence * vertices.coherence.x + dissonance * vertices.dissonance.x;
+    const y = empathy * vertices.empathy.y + coherence * vertices.coherence.y + dissonance * vertices.dissonance.y;
+
+    return { x, y };
+  };
 
   return (
     <>
       <div className="dpd-score-display">
         <div className="dpd-header">
           <div className="header-title">
-            <h3>DPD Scores</h3>
-            <span className="subtitle">Dynamic Prime Directive</span>
+            <h3>Dynamic Prime Directive</h3>
+            <span className="subtitle">DPD Weight Evolution</span>
           </div>
           <button
             className="expand-toggle"
@@ -185,16 +183,190 @@ export const DPDScoreDisplay: React.FC = () => {
 
       {isExpanded && (
         <div className="dpd-content">
-          <div className="current-scores">
-            <>
-              {renderScoreDimension('Empathy 共感', currentWeights.empathy, currentWeights.empathy, 'empathy')}
-              {renderScoreDimension('Coherence 一貫性', currentWeights.coherence, currentWeights.coherence, 'coherence')}
-              {renderScoreDimension('Dissonance 不協和', currentWeights.dissonance, currentWeights.dissonance, 'dissonance')}
-            </>
+          {/* バリセントリック三角図 */}
+          <div className="barycentric-triangle">
+            <svg width="100%" height="100%" viewBox="0 0 1 0.866" preserveAspectRatio="xMidYMid meet">
+              {/* 背景グリッド線 */}
+              <defs>
+                <linearGradient id="empathyGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style={{stopColor: '#00ff41', stopOpacity: 0.1}} />
+                  <stop offset="100%" style={{stopColor: '#00ff41', stopOpacity: 0.4}} />
+                </linearGradient>
+                <linearGradient id="coherenceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style={{stopColor: '#00ffff', stopOpacity: 0.1}} />
+                  <stop offset="100%" style={{stopColor: '#00ffff', stopOpacity: 0.4}} />
+                </linearGradient>
+                <linearGradient id="dissonanceGradient" x1="100%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" style={{stopColor: '#ffff00', stopOpacity: 0.1}} />
+                  <stop offset="100%" style={{stopColor: '#ffff00', stopOpacity: 0.4}} />
+                </linearGradient>
+              </defs>
+
+              {/* 三角形の辺 */}
+              <polygon
+                points="0.5,0.05 0.05,0.816 0.95,0.816"
+                fill="none"
+                stroke="var(--cyber-border)"
+                strokeWidth="0.004"
+                opacity="0.6"
+              />
+
+              {/* 内部グリッド線（10%刻み） */}
+              {[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].map((ratio) => (
+                <g key={ratio} opacity="0.15">
+                  {/* Empathy方向の線 */}
+                  <line
+                    x1={0.05 + (0.45 * ratio)}
+                    y1={0.816 - (0.766 * ratio)}
+                    x2={0.95 - (0.45 * ratio)}
+                    y2={0.816 - (0.766 * ratio)}
+                    stroke="#00ff41"
+                    strokeWidth="0.001"
+                  />
+                  {/* Coherence方向の線 */}
+                  <line
+                    x1={0.5 - (0.45 * ratio)}
+                    y1={0.05 + (0.766 * ratio)}
+                    x2={0.95 - (0.45 * ratio)}
+                    y2={0.816}
+                    stroke="#00ffff"
+                    strokeWidth="0.001"
+                  />
+                  {/* Dissonance方向の線 */}
+                  <line
+                    x1={0.5 + (0.45 * ratio)}
+                    y1={0.05 + (0.766 * ratio)}
+                    x2={0.05 + (0.45 * ratio)}
+                    y2={0.816}
+                    stroke="#ffff00"
+                    strokeWidth="0.001"
+                  />
+                </g>
+              ))}
+
+              {/* 頂点ラベルと光点 */}
+              <g className="vertex empathy">
+                <circle cx="0.5" cy="0.05" r="0.015" fill="#00ff41" opacity="0.8" />
+                <circle cx="0.5" cy="0.05" r="0.025" fill="none" stroke="#00ff41" strokeWidth="0.002" opacity="0.4">
+                  <animate attributeName="r" values="0.025;0.035;0.025" dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.4;0.1;0.4" dur="2s" repeatCount="indefinite" />
+                </circle>
+                <text x="0.5" y="0.02" textAnchor="middle" fill="#00ff41" fontSize="0.04" fontFamily="Courier New" fontWeight="bold">
+                  E {(currentWeights.empathy * 100).toFixed(0)}%
+                </text>
+              </g>
+
+              <g className="vertex coherence">
+                <circle cx="0.05" cy="0.816" r="0.015" fill="#00ffff" opacity="0.8" />
+                <circle cx="0.05" cy="0.816" r="0.025" fill="none" stroke="#00ffff" strokeWidth="0.002" opacity="0.4">
+                  <animate attributeName="r" values="0.025;0.035;0.025" dur="2s" repeatCount="indefinite" begin="0.66s" />
+                  <animate attributeName="opacity" values="0.4;0.1;0.4" dur="2s" repeatCount="indefinite" begin="0.66s" />
+                </circle>
+                <text x="0.05" y="0.85" textAnchor="middle" fill="#00ffff" fontSize="0.04" fontFamily="Courier New" fontWeight="bold">
+                  C {(currentWeights.coherence * 100).toFixed(0)}%
+                </text>
+              </g>
+
+              <g className="vertex dissonance">
+                <circle cx="0.95" cy="0.816" r="0.015" fill="#ffff00" opacity="0.8" />
+                <circle cx="0.95" cy="0.816" r="0.025" fill="none" stroke="#ffff00" strokeWidth="0.002" opacity="0.4">
+                  <animate attributeName="r" values="0.025;0.035;0.025" dur="2s" repeatCount="indefinite" begin="1.33s" />
+                  <animate attributeName="opacity" values="0.4;0.1;0.4" dur="2s" repeatCount="indefinite" begin="1.33s" />
+                </circle>
+                <text x="0.95" y="0.85" textAnchor="middle" fill="#ffff00" fontSize="0.04" fontFamily="Courier New" fontWeight="bold">
+                  D {(currentWeights.dissonance * 100).toFixed(0)}%
+                </text>
+              </g>
+
+              {/* 現在位置の点とトレイル */}
+              {(() => {
+                const pos = barycentricToCartesian(currentWeights.empathy, currentWeights.coherence, currentWeights.dissonance);
+                // 三角形内にスケーリング調整
+                const scaledX = 0.05 + pos.x * 0.9;
+                const scaledY = 0.05 + pos.y * 0.9;
+
+                return (
+                  <g className="current-position">
+                    {/* 光る円（パルス） */}
+                    <circle cx={scaledX} cy={scaledY} r="0.04" fill="#ff00ff" opacity="0.2">
+                      <animate attributeName="r" values="0.04;0.06;0.04" dur="1.5s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.2;0;0.2" dur="1.5s" repeatCount="indefinite" />
+                    </circle>
+                    <circle cx={scaledX} cy={scaledY} r="0.02" fill="#ff00ff" opacity="0.6">
+                      <animate attributeName="opacity" values="0.6;1;0.6" dur="1s" repeatCount="indefinite" />
+                    </circle>
+                    <circle cx={scaledX} cy={scaledY} r="0.012" fill="#ffffff" opacity="1" />
+
+                    {/* 十字線 */}
+                    <line x1={scaledX - 0.03} y1={scaledY} x2={scaledX + 0.03} y2={scaledY} stroke="#ff00ff" strokeWidth="0.002" opacity="0.8" />
+                    <line x1={scaledX} y1={scaledY - 0.03} x2={scaledX} y2={scaledY + 0.03} stroke="#ff00ff" strokeWidth="0.002" opacity="0.8" />
+                  </g>
+                );
+              })()}
+
+              {/* 履歴軌跡（中央線として表示） */}
+              {history.length > 1 && (
+                <g className="history-trail">
+                  {/* グラデーション定義 */}
+                  <defs>
+                    <linearGradient id="trailGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" style={{stopColor: '#ff00ff', stopOpacity: 0.2}} />
+                      <stop offset="100%" style={{stopColor: '#ff00ff', stopOpacity: 1}} />
+                    </linearGradient>
+                  </defs>
+
+                  {/* 軌跡線（太めで目立つ） */}
+                  <polyline
+                    points={history.slice(0, 20).reverse().map((entry) => {
+                      const pos = barycentricToCartesian(entry.scores.empathy, entry.scores.coherence, entry.scores.dissonance);
+                      const scaledX = 0.05 + pos.x * 0.9;
+                      const scaledY = 0.05 + pos.y * 0.9;
+                      return `${scaledX},${scaledY}`;
+                    }).join(' ')}
+                    fill="none"
+                    stroke="url(#trailGradient)"
+                    strokeWidth="0.004"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity="0.8"
+                  />
+
+                  {/* 履歴ポイント（新しいほど大きく明るく） */}
+                  {history.slice(0, 20).reverse().map((entry, index) => {
+                    const pos = barycentricToCartesian(entry.scores.empathy, entry.scores.coherence, entry.scores.dissonance);
+                    const scaledX = 0.05 + pos.x * 0.9;
+                    const scaledY = 0.05 + pos.y * 0.9;
+                    const progress = index / Math.min(19, history.length - 1);
+                    const radius = 0.004 + (progress * 0.008); // 古い: 0.004 → 新しい: 0.012
+                    const opacity = 0.3 + (progress * 0.5); // 古い: 0.3 → 新しい: 0.8
+
+                    return (
+                      <g key={`trail-${index}`}>
+                        {/* 外側のグロウ */}
+                        <circle
+                          cx={scaledX}
+                          cy={scaledY}
+                          r={radius * 2}
+                          fill="#ff00ff"
+                          opacity={opacity * 0.3}
+                        />
+                        {/* コアポイント */}
+                        <circle
+                          cx={scaledX}
+                          cy={scaledY}
+                          r={radius}
+                          fill="#ff00ff"
+                          opacity={opacity}
+                        />
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
+            </svg>
           </div>
 
           <div className="weight-evolution">
-            <div className="section-title">Weight Evolution Chart</div>
             <div className="evolution-chart">
               {history.length > 1 ? (
                 <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -302,56 +474,6 @@ export const DPDScoreDisplay: React.FC = () => {
               Updated: {formatTimestamp(currentWeights.timestamp)}
             </div>
           </div>
-
-          {history.length > 0 && (
-            <div className="score-history">
-              <div className="section-title">
-                Score History
-                <span className="history-count">
-                  {' '}(Showing {history.length} of {totalCount} total)
-                </span>
-              </div>
-              <div className="history-list">
-                {history.map((entry, index) => (
-                  <div key={`${entry.timestamp}-${index}`} className="history-item">
-                    <div className="history-time">
-                      {formatTimestamp(entry.timestamp)}
-                    </div>
-                    <div className="history-scores">
-                      <span>E:{entry.scores.empathy.toFixed(2)}</span>
-                      <span>C:{entry.scores.coherence.toFixed(2)}</span>
-                      <span>D:{entry.scores.dissonance.toFixed(2)}</span>
-                      <span className="total">Σ:{entry.scores.weightedTotal.toFixed(2)}</span>
-                    </div>
-                    <div className="history-context">{entry.context}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {history.length > 0 && (
-            <div className="dpd-insights">
-              <div className="section-title">Current Assessment</div>
-              <div className="insights-list">
-                {history[0].scores.empathy > 0.7 && (
-                  <div className="insight empathy">High empathetic response detected</div>
-                )}
-                {history[0].scores.coherence > 0.8 && (
-                  <div className="insight coherence">Strong logical coherence maintained</div>
-                )}
-                {history[0].scores.dissonance > 0.6 && (
-                  <div className="insight dissonance">Significant ethical tension present</div>
-                )}
-                {history[0].scores.weightedTotal > 0.7 && (
-                  <div className="insight total">System operating within optimal parameters</div>
-                )}
-                {history[0].scores.weightedTotal < 0.3 && (
-                  <div className="insight warning">System values may need recalibration</div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
       </div>
@@ -438,79 +560,56 @@ export const DPDScoreDisplay: React.FC = () => {
         .dpd-content {
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 24px;
         }
 
-        .dpd-dimension {
-          margin-bottom: 12px;
-        }
-
-        .dimension-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 4px;
-        }
-
-        .dimension-label {
-          font-size: 14px;
-          color: #e5e7eb;
-        }
-
-        .dimension-weight {
-          font-size: 12px;
-          color: #9ca3af;
-        }
-
-        .dimension-value {
-          font-size: 14px;
-          font-weight: 600;
-          color: #f9fafb;
-        }
-
-        .dimension-bar {
-          height: 12px;
+        .barycentric-triangle {
           background: var(--cyber-bg-secondary);
-          border: 1px solid var(--cyber-border);
-          overflow: hidden;
-          position: relative;
-          box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.5);
-        }
-
-        .dimension-bar::after {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 1px;
-          background: linear-gradient(90deg, transparent, var(--cyber-neon-cyan), transparent);
-          opacity: 0.5;
-        }
-
-        .dimension-fill {
-          height: 100%;
-          transition: width 0.3s ease;
-          box-shadow: 0 0 10px currentColor;
+          padding: 24px;
+          border: 2px solid var(--cyber-border);
+          border-left: 4px solid var(--cyber-neon-magenta);
+          box-shadow: inset 0 0 20px rgba(255, 0, 255, 0.1);
+          min-height: 400px;
           position: relative;
         }
 
-        .dimension-fill::after {
-          content: '';
+        .barycentric-triangle::before {
+          content: 'BARYCENTRIC VISUALIZATION';
           position: absolute;
-          top: 0;
-          right: 0;
-          width: 2px;
-          height: 100%;
-          background: rgba(255, 255, 255, 0.6);
+          top: 8px;
+          left: 12px;
+          font-size: 10px;
+          color: var(--cyber-neon-magenta);
+          font-family: 'Courier New', monospace;
+          letter-spacing: 1px;
+          opacity: 0.6;
+          text-transform: uppercase;
+        }
+
+        .barycentric-triangle svg {
+          filter: drop-shadow(0 0 8px rgba(255, 0, 255, 0.3));
         }
 
         .weight-evolution {
           background: var(--cyber-bg-secondary);
           padding: 16px;
-          border: 1px solid var(--cyber-border);
-          border-left: 3px solid var(--cyber-neon-cyan);
-          box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.05);
+          border: 2px solid var(--cyber-border);
+          border-left: 4px solid var(--cyber-neon-cyan);
+          box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.1);
+          position: relative;
+        }
+
+        .weight-evolution::before {
+          content: 'STACKED AREA CHART';
+          position: absolute;
+          top: 8px;
+          left: 12px;
+          font-size: 10px;
+          color: var(--cyber-neon-cyan);
+          font-family: 'Courier New', monospace;
+          letter-spacing: 1px;
+          opacity: 0.6;
+          text-transform: uppercase;
         }
 
         .evolution-chart {
@@ -611,108 +710,6 @@ export const DPDScoreDisplay: React.FC = () => {
           text-align: right;
         }
 
-        .score-history {
-          background: #374151;
-          padding: 16px;
-          border-radius: 8px;
-          max-height: 300px;
-          overflow-y: auto;
-        }
-
-        .history-count {
-          font-size: 12px;
-          color: #9ca3af;
-          font-weight: 400;
-        }
-
-        .history-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .history-item {
-          background: #1f2937;
-          padding: 8px 12px;
-          border-radius: 6px;
-          font-size: 12px;
-        }
-
-        .history-time {
-          color: #9ca3af;
-          font-family: 'Courier New', monospace;
-          margin-bottom: 4px;
-        }
-
-        .history-scores {
-          display: flex;
-          gap: 12px;
-          margin-bottom: 4px;
-        }
-
-        .history-scores span {
-          color: #e5e7eb;
-        }
-
-        .history-scores .total {
-          color: #3b82f6;
-          font-weight: 600;
-        }
-
-        .history-context {
-          color: #9ca3af;
-          font-style: italic;
-        }
-
-        .dpd-insights {
-          background: #1e3a8a;
-          padding: 16px;
-          border-radius: 8px;
-          border: 1px solid #3b82f6;
-        }
-
-        .insights-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .insight {
-          padding: 8px 12px;
-          border-radius: 6px;
-          font-size: 13px;
-        }
-
-        .insight.empathy {
-          background: #064e3b;
-          color: #10b981;
-          border-left: 3px solid #10b981;
-        }
-
-        .insight.coherence {
-          background: #1e3a8a;
-          color: #3b82f6;
-          border-left: 3px solid #3b82f6;
-        }
-
-        .insight.dissonance {
-          background: #451a03;
-          color: #f59e0b;
-          border-left: 3px solid #f59e0b;
-        }
-
-        .insight.total {
-          background: #065f46;
-          color: #34d399;
-          border-left: 3px solid #34d399;
-        }
-
-        .insight.warning {
-          background: #7f1d1d;
-          color: #ef4444;
-          border-left: 3px solid #ef4444;
-        }
-
         @media (max-width: 640px) {
           .dpd-score-display {
             padding: 16px;
@@ -722,23 +719,9 @@ export const DPDScoreDisplay: React.FC = () => {
             font-size: 16px;
           }
 
-          .dimension-label,
-          .dimension-value {
-            font-size: 12px;
-          }
-
           .weight-item span {
             min-width: 50px;
             font-size: 11px;
-          }
-
-          .history-item {
-            padding: 6px 10px;
-          }
-
-          .history-scores {
-            flex-wrap: wrap;
-            gap: 8px;
           }
         }
       `}</style>

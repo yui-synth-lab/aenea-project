@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { DialogueModal } from '../components/DialogueModal.js';
 import { GrowthModal } from '../components/GrowthModal.js';
-import { DPDScoreDisplay } from '../components/DPDScoreDisplay.js';
 import ParticleBackground from '../components/ParticleBackground.js';
 
 interface DashboardProps {
@@ -588,16 +587,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             <MessageCircle size={16} />
             Dialogue
           </motion.button>
-          <div className={`status-indicator ${consciousnessState.status}`}>
+          <div className={`status-badge consciousness ${consciousnessState.status}`}>
             <span className="status-dot"></span>
             <span className="status-text">
               {consciousnessState.isPaused ? 'Paused' :
                 consciousnessState.isRunning ? 'Running' : 'Stopped'}
             </span>
           </div>
-          <div className="system-status" style={{ color: getStatusColor(systemStatus) }}>
-            <span className="status-dot" style={{ backgroundColor: getStatusColor(systemStatus) }} />
-            System {systemStatus}
+          <div className={`status-badge system ${systemStatus}`}>
+            <span className="status-dot"></span>
+            <span className="status-text">System {systemStatus}</span>
           </div>
         </div>
       </motion.div>
@@ -779,9 +778,67 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           </div>
         </div>
 
-        {/* DPD Scores - Simple Display */}
+        {/* DPD Scores - Barycentric Display */}
         <div className="dashboard-card dpd-scores">
           <h3>Dynamic Prime Directive</h3>
+
+          {/* Barycentric Triangle Visualization */}
+          <div className="dpd-barycentric-mini">
+            <svg width="100%" height="100%" viewBox="0 0 1 0.866" preserveAspectRatio="xMidYMid meet">
+              {/* Triangle Border */}
+              <polygon
+                points="0.5,0.05 0.05,0.816 0.95,0.816"
+                fill="none"
+                stroke="var(--cyber-border)"
+                strokeWidth="0.006"
+                opacity="0.8"
+              />
+
+              {/* Vertices */}
+              <circle cx="0.5" cy="0.05" r="0.02" fill="#00ff41" opacity="0.9" />
+              <circle cx="0.05" cy="0.816" r="0.02" fill="#00ffff" opacity="0.9" />
+              <circle cx="0.95" cy="0.816" r="0.02" fill="#ffff00" opacity="0.9" />
+
+              {/* Labels */}
+              <text x="0.5" y="0.02" textAnchor="middle" fill="#00ff41" fontSize="0.05" fontFamily="Courier New" fontWeight="bold">
+                E
+              </text>
+              <text x="0.02" y="0.85" textAnchor="start" fill="#00ffff" fontSize="0.05" fontFamily="Courier New" fontWeight="bold">
+                C
+              </text>
+              <text x="0.98" y="0.85" textAnchor="end" fill="#ffff00" fontSize="0.05" fontFamily="Courier New" fontWeight="bold">
+                D
+              </text>
+
+              {/* Current Position */}
+              {(() => {
+                const height = Math.sqrt(3) / 2;
+                const vertices = {
+                  empathy: { x: 0.5, y: 0 },
+                  coherence: { x: 0, y: height },
+                  dissonance: { x: 1, y: height }
+                };
+                const x = dpdScores.empathy * vertices.empathy.x + dpdScores.coherence * vertices.coherence.x + dpdScores.dissonance * vertices.dissonance.x;
+                const y = dpdScores.empathy * vertices.empathy.y + dpdScores.coherence * vertices.coherence.y + dpdScores.dissonance * vertices.dissonance.y;
+                const scaledX = 0.05 + x * 0.9;
+                const scaledY = 0.05 + y * 0.9;
+
+                return (
+                  <g>
+                    <circle cx={scaledX} cy={scaledY} r="0.05" fill="#ff00ff" opacity="0.3">
+                      <animate attributeName="r" values="0.05;0.07;0.05" dur="1.5s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.3;0.1;0.3" dur="1.5s" repeatCount="indefinite" />
+                    </circle>
+                    <circle cx={scaledX} cy={scaledY} r="0.025" fill="#ff00ff" opacity="0.8">
+                      <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" repeatCount="indefinite" />
+                    </circle>
+                    <circle cx={scaledX} cy={scaledY} r="0.015" fill="#ffffff" />
+                  </g>
+                );
+              })()}
+            </svg>
+          </div>
+
           <div className="dpd-display">
             <div className="dpd-item">
               <span className="dpd-label">Empathy</span>
@@ -831,17 +888,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         >
           <h3><Sparkles size={18} style={{ display: 'inline', marginRight: '8px' }} />Current Thought</h3>
           <motion.div
-            className="thought-content"
+            className={`thought-content ${currentThought ? 'pulsing' : ''}`}
             animate={{
-              scale: currentThought && consciousnessState.isRunning ? [1, 1.02, 1] : 1,
               opacity: currentThought ? 1 : 0.5
             }}
             transition={{
-              scale: {
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }
+              duration: 2,
+              repeat: currentThought ? Infinity : 0,
+              ease: "easeInOut"
             }}
           >
             <p>"{currentThought || 'Waiting for consciousness to awaken...'}"</p>
@@ -892,29 +946,43 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
                 <span className="activity-text">Waiting for consciousness activity...</span>
               </div>
             ) : (
-              activityLog.map((item) => (
-                <div key={item.id} className="activity-item">
-                  <span className="activity-time">{formatActivityTime(item.timestamp)}</span>
-                  {item.agent ? (
-                    <span className={`activity-agent ${getAgentCssClass(item.agent)}`}>
-                      {getAgentIcon(item.agent)}
-                      {item.agent}
-                    </span>
-                  ) : (
-                    <span className="activity-system">
-                      <Target size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                      System
-                    </span>
-                  )}
+              activityLog.map((item, index) => (
+                <motion.div
+                  key={item.id}
+                  className="activity-item"
+                  initial={{ opacity: 0, x: -30, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  transition={{
+                    duration: 0.4,
+                    ease: [0.25, 0.46, 0.45, 0.94],
+                    delay: index === 0 ? 0 : 0
+                  }}
+                >
+                  <div className="activity-header">
+                    {item.agent ? (
+                      <span className={`activity-agent ${getAgentCssClass(item.agent)}`}>
+                        {getAgentIcon(item.agent)}
+                        {item.agent}
+                      </span>
+                    ) : (
+                      <span className="activity-system">
+                        <Target size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                        System
+                      </span>
+                    )}
+                    <div className="activity-meta-row">
+                      <span className="activity-time">{formatActivityTime(item.timestamp)}</span>
+                      {item.details?.confidence && (
+                        <span className="activity-confidence">
+                          {Math.round(item.details.confidence * 100)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <div className="activity-text">
                     {item.message}
                   </div>
-                  {item.details?.confidence && (
-                    <span className="activity-confidence">
-                      {Math.round(item.details.confidence * 100)}%
-                    </span>
-                  )}
-                </div>
+                </motion.div>
               ))
             )}
           </div>
@@ -1059,18 +1127,70 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           box-shadow: 0 0 20px var(--cyber-glow-magenta);
         }
 
-        .system-status {
+        /* Unified Status Badge Styles */
+        .status-badge {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-size: 14px;
-          font-weight: 600;
+          padding: 6px 12px;
+          font-weight: 700;
+          font-size: 13px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          border: 2px solid;
+          background: var(--cyber-bg-secondary);
+          clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+          transition: all 0.2s;
         }
 
-        .status-dot {
-          width: 12px;
-          height: 12px;
+        .status-badge .status-dot {
+          width: 10px;
+          height: 10px;
           border-radius: 50%;
+          background-color: currentColor;
+          box-shadow: 0 0 8px currentColor;
+        }
+
+        /* Consciousness Status Colors */
+        .status-badge.consciousness.stopped {
+          color: var(--cyber-text-secondary);
+          border-color: var(--cyber-border);
+        }
+
+        .status-badge.consciousness.active {
+          color: var(--cyber-neon-lime);
+          border-color: var(--cyber-neon-lime);
+          box-shadow: 0 0 10px var(--cyber-glow-lime);
+        }
+
+        .status-badge.consciousness.paused {
+          color: var(--cyber-neon-yellow);
+          border-color: var(--cyber-neon-yellow);
+          box-shadow: 0 0 10px rgba(255, 255, 0, 0.3);
+        }
+
+        /* System Status Colors */
+        .status-badge.system.active {
+          color: var(--cyber-neon-lime);
+          border-color: var(--cyber-neon-lime);
+          box-shadow: 0 0 10px var(--cyber-glow-lime);
+        }
+
+        .status-badge.system.awakening {
+          color: var(--cyber-neon-yellow);
+          border-color: var(--cyber-neon-yellow);
+          box-shadow: 0 0 10px rgba(255, 255, 0, 0.3);
+        }
+
+        .status-badge.system.resting {
+          color: var(--cyber-text-secondary);
+          border-color: var(--cyber-border);
+        }
+
+        .status-badge.system.error {
+          color: var(--cyber-neon-pink);
+          border-color: var(--cyber-neon-pink);
+          box-shadow: 0 0 10px rgba(255, 20, 147, 0.3);
         }
 
         /* CSS Grid Layout - Mobile (single column) */
@@ -1112,8 +1232,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             font-size: 32px;
           }
 
-          .system-status {
-            font-size: 16px;
+          .status-badge {
+            font-size: 14px;
           }
 
           .dashboard-layout {
@@ -1215,40 +1335,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           flex: 0 0 auto;
         }
 
-        .status-display {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        .status-indicator {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          border-radius: 6px;
-          font-weight: 600;
-          font-size: 16px;
-        }
-
-        .status-indicator.stopped {
-          color: #9ca3af;
-        }
-
-        .status-indicator.active {
-          color: #10b981;
-        }
-
-        .status-indicator.paused {
-          color: #f59e0b;
-        }
-
-        .status-indicator .status-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background-color: currentColor;
-        }
 
         .control-buttons {
           display: flex;
@@ -1574,16 +1660,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .activity-item {
-          display: grid;
-          grid-template-rows: auto auto 1fr auto;
-          gap: 6px;
-          align-items: center;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
           padding: 8px 12px;
           background: var(--cyber-bg-tertiary);
           border-left: 2px solid var(--cyber-neon-cyan);
           font-size: 14px;
           flex-shrink: 0;
           box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.05);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .activity-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .activity-meta-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .activity-item::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.2), transparent);
+          animation: activity-slide 0.6s ease-out forwards;
+        }
+
+        @keyframes activity-slide {
+          0% { left: -100%; }
+          100% { left: 100%; }
         }
 
         .activity-time {
@@ -1697,7 +1813,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         }
 
         .activity-text {
-          color: #e5e7eb;
+          color: var(--cyber-text-primary);
           line-height: 1.4;
           /* Ensure long/continuous text wraps and doesn't overflow the activity card */
           overflow-wrap: anywhere;
@@ -1715,6 +1831,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           border: 1px solid var(--cyber-neon-cyan);
           clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
           box-shadow: 0 0 6px var(--cyber-glow-cyan);
+          white-space: nowrap;
         }
 
         .thought-content {
@@ -1749,6 +1866,50 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           word-break: break-word;
           white-space: pre-wrap;
           hyphens: auto;
+        }
+
+        /* Pulsing glow for active thought */
+        .thought-content.pulsing {
+          box-shadow:
+            0 0 24px rgba(16, 185, 129, 0.08),
+            0 0 48px rgba(16, 185, 129, 0.06),
+            inset 0 0 18px rgba(16, 185, 129, 0.04);
+          border-left-color: var(--cyber-neon-lime);
+          transform-origin: center;
+          transition: box-shadow 0.35s ease, transform 0.35s ease, border-left-color 0.35s ease;
+          overflow: visible;
+        }
+
+        .thought-content.pulsing::after {
+          content: '';
+          position: absolute;
+          top: -6px;
+          left: -6px;
+          right: -6px;
+          bottom: -6px;
+          border-radius: 6px;
+          background: radial-gradient(circle at center, rgba(16,185,129,0.12), rgba(16,185,129,0) 40%);
+          pointer-events: none;
+          animation: neonPulse 2s ease-in-out infinite;
+          z-index: 0;
+        }
+
+        @keyframes neonPulse {
+          0% {
+            opacity: 0.9;
+            transform: scale(1);
+            filter: blur(0px);
+          }
+          50% {
+            opacity: 0.45;
+            transform: scale(1.04);
+            filter: blur(6px);
+          }
+          100% {
+            opacity: 0.9;
+            transform: scale(1);
+            filter: blur(0px);
+          }
         }
 
         .stat-grid {
@@ -1876,6 +2037,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
         .energy-button.rest:hover {
           background: #1e40af;
           border-color: #60a5fa;
+        }
+
+        .dpd-barycentric-mini {
+          background: var(--cyber-bg-secondary);
+          padding: 16px;
+          margin-bottom: 16px;
+          border: 1px solid var(--cyber-border);
+          border-left: 3px solid var(--cyber-neon-magenta);
+          box-shadow: inset 0 0 15px rgba(255, 0, 255, 0.08);
+          min-height: 180px;
+          position: relative;
+        }
+
+        .dpd-barycentric-mini svg {
+          filter: drop-shadow(0 0 6px rgba(255, 0, 255, 0.3));
+        }
+
+        .dpd-barycentric-mini::before {
+          content: 'BARYCENTRIC';
+          position: absolute;
+          top: 4px;
+          left: 8px;
+          font-size: 9px;
+          color: var(--cyber-neon-magenta);
+          font-family: 'Courier New', monospace;
+          letter-spacing: 1px;
+          opacity: 0.5;
         }
 
         .dpd-display {
@@ -2144,26 +2332,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             padding: 6px 12px;
           }
 
-          .system-status {
-            font-size: 12px;
+          .status-badge {
+            font-size: 11px;
+            padding: 4px 8px;
           }
 
           .stat-grid {
             grid-template-columns: 1fr;
           }
 
-          .activity-item {
-            grid-template-rows: auto 1fr;
-            gap: 8px;
+          .activity-header {
+            flex-direction: column;
+            align-items: flex-start;
           }
 
-          .activity-time {
-            grid-row: 1 / 2;
-          }
-
-          .activity-confidence {
-            grid-row: 2 / 3;
-            justify-self: start;
+          .activity-meta-row {
+            width: 100%;
+            justify-content: flex-end;
           }
 
           .dpd-item {
