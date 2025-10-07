@@ -56,7 +56,7 @@ export const DPDScoreDisplay: React.FC = () => {
           }
 
           // 履歴を完全に置き換え（サンプリングされたデータセット）
-          const historyData = (data.history || []).map((item: any) => ({
+          const historyData = (data.history || []).sort((a: any, b: any) => a.version - b.version).map((item: any) => ({
             timestamp: item.timestamp,
             scores: {
               empathy: item.empathy,
@@ -66,7 +66,6 @@ export const DPDScoreDisplay: React.FC = () => {
             },
             context: item.context || item.trigger_type || 'System update'
           }));
-
           setHistory(historyData);
           setTotalCount(data.totalCount || historyData.length);
         }
@@ -332,7 +331,7 @@ export const DPDScoreDisplay: React.FC = () => {
                   />
 
                   {/* 履歴ポイント（新しいほど大きく明るく） */}
-                  {history.slice(0, 20).reverse().map((entry, index) => {
+                  {history.slice(0, 20).map((entry, index) => {
                     const pos = barycentricToCartesian(entry.scores.empathy, entry.scores.coherence, entry.scores.dissonance);
                     const scaledX = 0.05 + pos.x * 0.9;
                     const scaledY = 0.05 + pos.y * 0.9;
