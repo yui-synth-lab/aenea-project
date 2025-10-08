@@ -46,4 +46,5 @@ sessions/
 CLAUDE.md
 .github/copilot-instructions.md
 data/*
+test-data/
 .env

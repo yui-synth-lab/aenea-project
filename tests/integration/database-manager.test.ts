@@ -13,7 +13,7 @@ describe('Database Manager Integration', () => {
 
   beforeEach(async () => {
     // Create a test database in memory for isolation
-    testDbPath = path.join(process.cwd(), 'test-data', 'test_aenea.db');
+    testDbPath = path.join(process.cwd(), 'test-data', `test_aenea_${Date.now()}.db`);
 
     // Ensure test directory exists
     const testDir = path.dirname(testDbPath);
@@ -26,7 +26,7 @@ describe('Database Manager Integration', () => {
       fs.unlinkSync(testDbPath);
     }
 
-    databaseManager = new DatabaseManager();
+    databaseManager = new DatabaseManager(testDbPath);
 
     // Wait for database initialization
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -54,11 +54,17 @@ describe('Database Manager Integration', () => {
     });
 
     test('should handle multiple initialization calls gracefully', async () => {
-      const databaseManager2 = new DatabaseManager();
+      const testDbPath2 = path.join(process.cwd(), 'test-data', `test_aenea_${Date.now()}_2.db`);
+      const databaseManager2 = new DatabaseManager(testDbPath2);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(() => databaseManager2.getConsciousnessState()).not.toThrow();
       databaseManager2.cleanup();
+
+      // Cleanup test database
+      if (fs.existsSync(testDbPath2)) {
+        fs.unlinkSync(testDbPath2);
+      }
     });
   });
 
