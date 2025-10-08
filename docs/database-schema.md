@@ -77,19 +77,12 @@
 | `id` | TEXT PRIMARY KEY | Cycle ID (e.g., `cycle_1759328100921`) |
 | `timestamp` | INTEGER | Unix timestamp when cycle started |
 | `trigger_id` | TEXT | ID of the question that triggered this cycle |
-| `trigger_question` | TEXT | The trigger question text |
-| `trigger_category` | TEXT | Category of trigger question |
-| `status` | TEXT | `processing`, `completed`, or `failed` |
-| `thoughts` | TEXT (JSON) | Array of StructuredThought objects from S1 |
-| `mutual_reflection` | TEXT (JSON) | MutualReflection data from S2 |
-| `auditor_result` | TEXT (JSON) | AuditorResult data from S3 |
-| `dpd_scores` | TEXT (JSON) | DPDScores from S4 |
-| `synthesis` | TEXT (JSON) | SynthesisResult from S5 |
-| `documentation` | TEXT (JSON) | DocumentationResult from S6 |
-| `dpd_weights` | TEXT (JSON) | Updated DPDWeights from U stage |
+| `thoughts_data` | TEXT (JSON) | Array of StructuredThought objects from S1 |
+| `synthesis_data` | TEXT (JSON) | SynthesisResult from S5 |
+| `empathy_score` | REAL | Empathy score from S4 DPD Assessment (0.0-1.0) |
+| `coherence_score` | REAL | Coherence score from S4 DPD Assessment (0.0-1.0) |
+| `dissonance_score` | REAL | Dissonance score from S4 DPD Assessment (0.0-1.0) |
 | `duration` | INTEGER | Cycle duration in milliseconds |
-| `total_energy` | REAL | Total energy consumed in cycle |
-| `total_stages` | INTEGER | Number of stages executed |
 | `created_at` | DATETIME | Database insertion timestamp |
 
 **Stage Pipeline**:
@@ -129,10 +122,20 @@
 - Version: Incremented on each update
 
 **Weight Update Algorithm**:
-- Multiplicative Weights (implemented in `weight-update.ts`)
-- Learning rate: 0.1
+- Multiplicative Weights (implemented in `src/aenea/core/multiplicative-weights.ts`)
+- Learning rate: 0.05 (default)
+- Performance target: 0.75 (adjustable)
+- Min weight: 0.10, Max weight: 0.75 (prevents extreme imbalance)
+- Decay factor: 0.99 (gradual normalization)
 - NaN safety protection
-- Automatic normalization
+- Automatic normalization (sum to 1.0)
+
+**Weight Update Process**:
+1. S4 (DPD Assessment) calculates scores (empathy, coherence, dissonance)
+2. Scores saved to `thought_cycles` table (empathy_score, coherence_score, dissonance_score)
+3. U stage (Weight Update) uses scores to update weights via Multiplicative Weights algorithm
+4. Updated weights saved to `dpd_weights` table with incremented version
+5. Weights used in next thought cycle for DPD-weighted evaluation
 
 ---
 
@@ -621,11 +624,19 @@ cp data/aenea_consciousness.db data/backups/aenea_consciousness_$(date +%Y%m%d_%
 
 ## Schema Version
 
-**Current Version**: 2.0.0
+**Current Version**: 2.1.0
 **Last Updated**: 2025-10-07
 **Compatibility**: Aenea v2.3+
 
-**Version 2.0 Changes**:
+**Version 2.1 Changes** (2025-10-07):
+- **BREAKING**: Modified `thought_cycles` table structure:
+  - Removed: `trigger_question`, `trigger_category`, `status`, `mutual_reflection`, `auditor_result`, `dpd_scores` (JSON), `documentation`, `dpd_weights`, `total_energy`, `total_stages`
+  - Simplified to: `id`, `trigger_id`, `timestamp`, `thoughts_data`, `synthesis_data`, `duration`, `created_at`
+  - **Added**: `empathy_score`, `coherence_score`, `dissonance_score` (REAL columns for direct DPD score storage)
+- Migration: `ALTER TABLE thought_cycles ADD COLUMN empathy_score REAL; ALTER TABLE thought_cycles ADD COLUMN coherence_score REAL; ALTER TABLE thought_cycles ADD COLUMN dissonance_score REAL;`
+- Impact: DPD Weight Evolution now functional (scores are saved and used by Multiplicative Weights algorithm)
+
+**Version 2.0 Changes** (2025-01):
 - Added `dream_patterns` table (Sleep Mode - REM phase)
 - Added `sleep_logs` table (Sleep Mode - tracking)
 - Added `dialogues` table (Dialogue System - conversation history)
