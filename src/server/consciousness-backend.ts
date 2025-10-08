@@ -366,14 +366,17 @@ class ConsciousnessBackend extends EventEmitter {
   getState(): ConsciousnessState {
     const energyState = this.energyManager.getEnergyState();
 
+    // Get actual counts from database
+    const dbStats = this.databaseManager.getStats();
+
     return {
       systemClock: this.systemClock,
       energy: energyState.available,
       isRunning: this.isRunning,
       isPaused: this.isPaused,
       isProcessingCycle: this.isProcessingCycle,
-      totalQuestions: this.questionHistory.length,
-      totalThoughts: this.thoughtHistory.length,
+      totalQuestions: dbStats.questions || 0,
+      totalThoughts: dbStats.thought_cycles || 0,
       lastActivity: new Date().toISOString(),
       dpdWeights: this.dpdWeights
     };
@@ -386,15 +389,19 @@ class ConsciousnessBackend extends EventEmitter {
   private saveConsciousnessState(): void {
     try {
       const currentEnergy = this.energyManager.getEnergyState().available;
+
+      // Get actual counts from database instead of in-memory arrays
+      const dbStats = this.databaseManager.getStats();
+
       const state = {
         systemClock: this.systemClock,
         energy: currentEnergy,
-        totalQuestions: this.questionHistory.length,
-        totalThoughts: this.thoughtHistory.length,
+        totalQuestions: dbStats.questions || 0,
+        totalThoughts: dbStats.thought_cycles || 0,
         lastActivity: new Date().toISOString()
       };
 
-      console.log(`[DB] Saving consciousness state: clock=${this.systemClock}, energy=${currentEnergy.toFixed(1)}`);
+      console.log(`[DB] Saving consciousness state: clock=${this.systemClock}, energy=${currentEnergy.toFixed(1)}, questions=${state.totalQuestions}, thoughts=${state.totalThoughts}`);
       this.databaseManager.saveConsciousnessState(state);
     } catch (error) {
       log.error('Consciousness', 'Failed to save consciousness state', error);
@@ -666,7 +673,8 @@ class ConsciousnessBackend extends EventEmitter {
       // Save completed thought cycle to database
       this.databaseManager.saveThoughtCycle(thoughtCycle);
 
-      // Perform memory consolidation periodically (every 5 thought cycles)
+      // Periodic memory consolidation (every 5 cycles)
+      // Sleep Mode provides deeper consolidation and belief merging
       await this.performPeriodicConsolidation();
 
       // Emit completion event with minimal essential data (not full thoughtCycle)
@@ -1086,13 +1094,16 @@ class ConsciousnessBackend extends EventEmitter {
         // Clean the content before saving
         const cleanedContent = await this.contentCleanup.cleanThought(thought.content);
 
+        // Use the original question category from the trigger
+        const category = thoughtCycle.trigger?.category || 'philosophical';
+
         this.databaseManager.recordSignificantThought({
           id: thought.id,
           content: cleanedContent,
           confidence: thought.confidence,
           significanceScore: thought.confidence,
           agentId: thought.agentId,
-          category: 'philosophical',
+          category: category,
           timestamp: thought.timestamp
         });
 
@@ -2303,6 +2314,21 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
       sleepLog.push(`Emotional processing skipped: ${(error as Error).message}`);
     }
 
+    // Full energy recovery after sleep
+    const energyBefore = this.energyManager.getEnergyState().available;
+    this.energyManager.resetEnergy(); // Full reset to maximum
+    const energyAfter = this.energyManager.getEnergyState().available;
+
+    sleepLog.push(`Energy recovered: ${energyBefore.toFixed(1)} → ${energyAfter.toFixed(1)}`);
+    log.info('Consciousness', `⚡ Energy fully restored after sleep: ${energyBefore.toFixed(1)} → ${energyAfter.toFixed(1)}`);
+
+    // Emit energy update event
+    this.emit('energyUpdated', {
+      available: energyAfter,
+      level: this.energyManager.getEnergyLevel(),
+      timestamp: Date.now()
+    });
+
     // Save sleep log to database
     const duration = Date.now() - startTime;
     await this.databaseManager.saveSleepLog({
@@ -2312,8 +2338,8 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
       phases: sleepLog,
       stats,
       duration,
-      energyBefore: this.energyManager.getEnergyState().available,
-      energyAfter: this.energyManager.getEnergyState().available
+      energyBefore,
+      energyAfter
     });
 
     log.info('Consciousness', `💤 Sleep consolidation complete: ${JSON.stringify(stats)}`);

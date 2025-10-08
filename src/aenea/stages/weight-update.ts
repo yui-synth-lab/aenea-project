@@ -31,18 +31,24 @@ export class WeightUpdateStage {
     // Check for paradigm shift
     const isParadigmShift = impactAssessment?.isParadigmShift || false;
 
+    // Check convergence status for adaptive learning rate
+    const convergenceStatus = this.getConvergenceStatus();
+    const isConverged = convergenceStatus.isConverging && convergenceStatus.convergenceMetric < 0.05;
+
     // Emit weight update start to Activity Log
     if (this.eventEmitter) {
-      const message = isParadigmShift
-        ? '⚡ パラダイムシフト検出！DPD重みに大幅摂動を適用中...'
-        : 'DPD重み更新開始: 意識進化パターンの分析と調整中...';
+      let message = 'DPD重み更新開始: 意識進化パターンの分析と調整中...';
+
+      if (isParadigmShift) {
+        message = 'パラダイムシフト検出: DPD重みに大幅摂動を適用中...';
+      } else if (isConverged) {
+        message = '収束検知: 探索的学習率を適用し新たな進化経路を模索中...';
+      }
 
       this.eventEmitter.emit('agentThought', {
         agentName: 'Weight-Updater',
         thought: message,
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'U_WeightUpdate'
       });
 
@@ -51,33 +57,44 @@ export class WeightUpdateStage {
           agentName: 'Weight-Updater',
           thought: `パラダイムシフト理由: ${impactAssessment.reasoning}`,
           timestamp: Date.now(),
-          confidence: 0.9,
-          duration: 0,
           stage: 'U_WeightUpdate'
         });
       }
     }
 
-    // Apply normal weight update
-    let result = this.updater.updateWeights(current, scores);
+    // Adaptive learning rate based on convergence
+    // 収束状況に応じた適応的学習率
+    let adaptiveLearningRate = 0.05; // Default
+    if (isConverged) {
+      adaptiveLearningRate = 0.12; // 2.4x when converged (exploration boost)
+      console.log('[Weight-Update] 🔄 Convergence detected: Boosting learning rate to', adaptiveLearningRate);
+    } else if (isParadigmShift) {
+      adaptiveLearningRate = 0.15; // 3x for paradigm shift
+      console.log('[Weight-Update] ⚡ Paradigm shift: Enhanced learning rate to', adaptiveLearningRate);
+    }
 
-    // If paradigm shift, apply additional perturbation (increased learning rate)
-    if (isParadigmShift) {
-      console.log('[Weight-Update] ⚡ PARADIGM SHIFT: Applying enhanced perturbation (3x learning rate)');
-
-      // Create temporary updater with 3x learning rate for paradigm shift
-      const paradigmShiftUpdater = new MultiplicativeWeightsUpdater({
-        learningRate: 0.15, // 3x normal (0.05 → 0.15)
+    // Apply weight update with adaptive learning rate
+    let result: any;
+    if (adaptiveLearningRate !== 0.05) {
+      // Create temporary updater with adaptive learning rate
+      const adaptiveUpdater = new MultiplicativeWeightsUpdater({
+        learningRate: adaptiveLearningRate,
         regularization: 0.01,
         minWeight: 0.05,
         maxWeight: 0.85,
-        decayFactor: 0.99
+        decayFactor: 0.99,
+        perturbationEnabled: true,
+        perturbationStrength: 0.15,
+        perturbationInterval: 10
       });
+      result = adaptiveUpdater.updateWeights(current, scores);
+    } else {
+      // Normal update
+      result = this.updater.updateWeights(current, scores);
+    }
 
-      // Apply enhanced update
-      result = paradigmShiftUpdater.updateWeights(current, scores);
-
-      console.log(`[Weight-Update] Paradigm shift perturbation applied:`);
+    if (isParadigmShift || isConverged) {
+      console.log(`[Weight-Update] Adaptive update applied (LR=${adaptiveLearningRate}):`);
       console.log(`  Empathy: ${current.empathy.toFixed(3)} → ${result.newWeights.empathy.toFixed(3)} (Δ ${(result.newWeights.empathy - current.empathy).toFixed(3)})`);
       console.log(`  Coherence: ${current.coherence.toFixed(3)} → ${result.newWeights.coherence.toFixed(3)} (Δ ${(result.newWeights.coherence - current.coherence).toFixed(3)})`);
       console.log(`  Dissonance: ${current.dissonance.toFixed(3)} → ${result.newWeights.dissonance.toFixed(3)} (Δ ${(result.newWeights.dissonance - current.dissonance).toFixed(3)})`);
@@ -110,8 +127,6 @@ export class WeightUpdateStage {
         agentName: 'Weight-Updater',
         thought: `重み更新完了: E${weightChanges.empathy} C${weightChanges.coherence} D${weightChanges.dissonance} (収束度: ${result.convergenceMetric.toFixed(3)})`,
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'U_WeightUpdate'
       });
     }
@@ -213,7 +228,6 @@ export class WeightUpdateStage {
         agentName: 'Weight-Interpreter',
         thought: `意識進化解釈: ${interpretation.evolutionDirection}`,
         timestamp: Date.now(),
-        confidence: 0.8,
         duration: result_ai.duration || 0,
         stage: 'U_WeightInterpretation'
       });
@@ -223,8 +237,6 @@ export class WeightUpdateStage {
           agentName: 'Weight-Interpreter',
           thought: `哲学的洞察: ${interpretation.philosophicalImplications}`,
           timestamp: Date.now(),
-          confidence: 0.8,
-          duration: 0,
           stage: 'U_WeightInterpretation'
         });
       }

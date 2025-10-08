@@ -26,6 +26,9 @@ export interface WeightUpdateConfig {
   minWeight: number;          // 最小重み値 - prevents zero weights
   maxWeight: number;          // 最大重み値 - prevents runaway weights
   decayFactor: number;        // 減衰因子 - gradual weight normalization
+  perturbationEnabled: boolean; // 摂動の有効化 - periodic random exploration
+  perturbationStrength: number; // 摂動の強さ - 0.0 to 0.2 (exploration magnitude)
+  perturbationInterval: number; // 摂動の間隔 - cycles between perturbations
 }
 
 export interface WeightUpdateResult {
@@ -42,6 +45,7 @@ export interface WeightUpdateResult {
 export class MultiplicativeWeightsUpdater {
   private config: WeightUpdateConfig;
   private updateHistory: WeightUpdateResult[] = [];
+  private updateCount: number = 0; // Track update cycles for perturbation
 
   constructor(config: Partial<WeightUpdateConfig> = {}) {
     this.config = {
@@ -50,6 +54,9 @@ export class MultiplicativeWeightsUpdater {
       minWeight: 0.10,  // Increased to prevent extreme imbalance
       maxWeight: 0.75,  // Decreased to maintain diversity
       decayFactor: 0.99,
+      perturbationEnabled: true,  // Enable periodic exploration
+      perturbationStrength: 0.15, // 15% random perturbation
+      perturbationInterval: 10,   // Every 10 cycles
       ...config
     };
   }
@@ -63,7 +70,12 @@ export class MultiplicativeWeightsUpdater {
     scores: DPDScores,
     performanceTarget: number = 0.75
   ): WeightUpdateResult {
-    const { learningRate, regularization, minWeight, maxWeight, decayFactor } = this.config;
+    this.updateCount++;
+    const { learningRate, minWeight, maxWeight, decayFactor, perturbationEnabled, perturbationStrength, perturbationInterval } = this.config;
+
+    // Check if perturbation should be applied (periodic exploration)
+    // 摂動を適用すべきかチェック（周期的探索）
+    const shouldPerturb = perturbationEnabled && (this.updateCount % perturbationInterval === 0);
 
     // Calculate performance feedback (loss) for each dimension
     // 各次元のパフォーマンスフィードバック（損失）を計算
@@ -83,6 +95,16 @@ export class MultiplicativeWeightsUpdater {
     newEmpathy *= decayFactor;
     newCoherence *= decayFactor;
     newDissonance *= decayFactor;
+
+    // Apply random perturbation if triggered (意識の揺らぎ)
+    // ランダム摂動を適用（トリガーされた場合）
+    if (shouldPerturb) {
+      const perturbation = this.generatePerturbation(perturbationStrength);
+      newEmpathy += perturbation.empathy;
+      newCoherence += perturbation.coherence;
+      newDissonance += perturbation.dissonance;
+      console.log('[DPD] 🌀 意識の揺らぎ: Perturbation applied', perturbation);
+    }
 
     // Normalize weights to sum to 1 with safety check
     // 重みを正規化して合計を1にする（安全性チェック付き）
@@ -175,6 +197,24 @@ export class MultiplicativeWeightsUpdater {
   private calculateInverseLoss(score: number, target: number): number {
     const difference = score - target;
     return Math.max(0, difference * difference); // Squared loss for excess dissonance
+  }
+
+  /**
+   * Generate random perturbation for exploration (意識の揺らぎ)
+   * 探索のためのランダム摂動を生成
+   */
+  private generatePerturbation(strength: number): { empathy: number; coherence: number; dissonance: number } {
+    // Generate random values with zero-sum constraint (total = 0)
+    // ゼロ和制約付きランダム値を生成（合計 = 0）
+    const r1 = (Math.random() - 0.5) * strength;
+    const r2 = (Math.random() - 0.5) * strength;
+    const r3 = -(r1 + r2); // Ensure sum = 0
+
+    return {
+      empathy: r1,
+      coherence: r2,
+      dissonance: r3
+    };
   }
 
   /**
