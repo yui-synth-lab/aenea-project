@@ -277,7 +277,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           agent: data.agentName,
           message: data.thought || '', // Full content, no truncation
           details: {
-            confidence: data.confidence || 0.8,
+            confidence: data.confidence,
             position: data.position,
             fullThought: data.thought,
             // Include Yui-specific metadata if present
@@ -525,11 +525,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     if (agentName.toLowerCase().includes('pathia')) return 'pathia';
     if (agentName.toLowerCase().includes('kinesis')) return 'kinesis';
 
-    // System messages
-    if (agentName.toLowerCase().includes('system')) return 'system';
-    if (agentName.toLowerCase().includes('compiler')) return 'compiler';
+    // Stage agents (S2, S3, S4, S5, S6, U)
+    if (agentName.toLowerCase().includes('compiler') || agentName.toLowerCase().includes('synthesizer')) return 'compiler';
     if (agentName.toLowerCase().includes('scribe')) return 'scribe';
     if (agentName.toLowerCase().includes('auditor')) return 'auditor';
+    if (agentName.toLowerCase().includes('dpd-evaluator') || agentName.toLowerCase().includes('dpd-assessor')) return 'dpd-evaluator';
+    if (agentName.toLowerCase().includes('weight-updater') || agentName.toLowerCase().includes('weight updater')) return 'weight-updater';
+
+    // System messages
+    if (agentName.toLowerCase().includes('system')) return 'system';
 
     // Default fallback
     return 'system';
@@ -594,6 +598,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
               {consciousnessState.isPaused ? 'Paused' :
                 consciousnessState.isRunning ? 'Running' : 'Stopped'}
             </span>
+            <span className="status-cycles">{stats.thoughtCycles} cycles</span>
           </div>
           <div className={`status-badge system ${systemStatus}`}>
             <span className="status-dot"></span>
@@ -741,27 +746,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           </div>
         </div>
 
-        {/* Note: Stage Progression moved below Current Thought for better visual flow */}
-
-        {/* System Statistics */}
-        <div className="dashboard-card stats">
-          <h3>System Statistics</h3>
-          <div className="stat-grid">
-            <div className="stat-item">
-              <span className="stat-value">{stats.thoughtCycles}</span>
-              <span className="stat-label">Thought Cycles</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-value">{stats.questionsGenerated}</span>
-              <span className="stat-label">Questions Generated</span>
-            </div>
-            {/* Avg Confidence removed per request */}
-            <div className="stat-item">
-              {/* Uptime removed per design */}
-            </div>
-          </div>
-        </div>
-
         {/* Energy Level */}
         <div className="dashboard-card energy">
           <h3>Energy Level</h3>
@@ -891,12 +875,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           <motion.div
             className={`thought-content ${currentThought ? 'pulsing' : ''}`}
             animate={{
-              opacity: currentThought ? 1 : 0.5
+              opacity: currentThought ? [1, 0.7, 1] : 0.5
             }}
             transition={{
-              duration: 2,
+              duration: stats.energyLevel < 20 ? 5.0 : stats.energyLevel < 50 ? 4.0 : 3.0,
               repeat: currentThought ? Infinity : 0,
-              ease: "easeInOut"
+              ease: [0.4, 0.0, 0.6, 1.0]
             }}
           >
             <p>"{currentThought || 'Waiting for consciousness to awaken...'}"</p>

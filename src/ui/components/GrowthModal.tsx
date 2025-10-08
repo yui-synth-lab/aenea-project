@@ -168,22 +168,12 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                 )) : <p>No personality data available</p>}
               </motion.div>
 
-              {/* DPD Evolution - Using DPDScoreDisplay Component */}
-              <motion.div
-                className="growth-card dpd-full-display wide"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <DPDScoreDisplay />
-              </motion.div>
-
               {/* Growth Metrics */}
               <motion.div
                 className="growth-card metrics"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 }}
+                transition={{ delay: 0.2 }}
               >
                 <h3><Lightbulb size={18} style={{ display: 'inline', marginRight: '8px' }} />Growth Metrics</h3>
                 {growthData.growthMetrics ? Object.entries(growthData.growthMetrics).map(([metric, value]) => (
@@ -191,6 +181,16 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
                     <strong>{metric.replace(/([A-Z])/g, ' $1').trim()}:</strong> {formatValue(value)}
                   </p>
                 )) : <p>No growth metrics available</p>}
+              </motion.div>
+
+              {/* DPD Evolution - Using DPDScoreDisplay Component */}
+              <motion.div
+                className="growth-card dpd-full-display wide"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+              >
+                <DPDScoreDisplay />
               </motion.div>
 
               {/* Significant Thoughts */}
@@ -320,7 +320,7 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
 
         .growth-modal-container {
           background: var(--cyber-bg-secondary);
-          padding: 32px;
+          padding: 0;
           max-width: 90vw;
           max-height: 90vh;
           overflow: auto;
@@ -329,6 +329,8 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
           box-shadow: 0 0 30px var(--cyber-glow-magenta), 0 25px 50px -12px rgba(0, 0, 0, 0.8);
           position: relative;
+          display: flex;
+          flex-direction: column;
         }
 
         .growth-modal-container::before,
@@ -352,12 +354,17 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         }
 
         .growth-modal-header {
+          position: sticky;
+          top: 0;
+          z-index: 10;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 24px;
-          padding-bottom: 16px;
+          padding: 24px 32px 16px;
+          margin-bottom: 0;
           border-bottom: 2px solid var(--cyber-border);
+          background: var(--cyber-bg-secondary);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
         .growth-modal-header h2 {
@@ -403,6 +410,7 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
           gap: 24px;
+          padding: 24px 32px 32px;
         }
 
         .growth-card {
