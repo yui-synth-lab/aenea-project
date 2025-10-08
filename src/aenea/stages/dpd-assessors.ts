@@ -21,8 +21,6 @@ export class DPDAssessmentStage {
         agentName: 'DPD-Evaluator',
         thought: 'DPD動的評価開始: 共感・一貫性・不協和の分析中...',
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'S4_DPDAssessment'
       });
     }
@@ -37,8 +35,6 @@ export class DPDAssessmentStage {
         agentName: 'DPD-Evaluator',
         thought: `DPD評価完了: 共感=${scores.empathy.toFixed(2)}, 一貫性=${scores.coherence.toFixed(2)}, 不協和=${scores.dissonance.toFixed(2)} (総合=${scores.weightedTotal.toFixed(2)})`,
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'S4_DPDAssessment'
       });
     }

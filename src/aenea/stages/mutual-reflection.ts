@@ -40,13 +40,24 @@ export class MutualReflectionStage {
       `${thought.agentId}: "${thought.content}"`
     ).join('\n\n');
 
-    const reflectionPrompt = `${reflectingThought.agentId}として他エージェントに対する反映を300文字以内で行ってください。
+    const reflectionPrompt = `あなたは${reflectingThought.agentId}です。他のエージェントの思考を読んで、あなたの視点から応答してください（300文字以内）。
 
-質問: "${reflectingThought.trigger}"
-あなた: "${reflectingThought.content}"
-他者: ${otherAgentsDialogue}
+【共通の問い】
+"${reflectingThought.trigger}"
 
-要求:
+【あなた（${reflectingThought.agentId}）の思考】
+"${reflectingThought.content}"
+
+【他のエージェントの思考】
+${otherAgentsDialogue}
+
+【重要】
+- 他のエージェントに「直接話しかける」形式で応答してください
+- 「〇〇さんの指摘について」「〇〇の視点に共感します」のように、エージェント名を使って対話してください
+- 「Aenea」という名前は使わないでください（あなたは対等なエージェントです）
+- 上位存在への報告ではなく、対等な対話を行ってください
+
+【要求】
 - 他の視点を真剣に吟味し、同意できない点があれば率直に指摘する
 - 論理的な弱点や見落としている視点があれば建設的に指摘する
 - 対立する場合も相手の良い点を認めつつ、自分の異なる見解を明確に述べる

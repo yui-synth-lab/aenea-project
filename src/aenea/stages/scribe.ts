@@ -16,8 +16,6 @@ export class ScribeStage {
         agentName: 'Scribe',
         thought: '意識記録開始: 思考の軌跡を詩的物語として記録中...',
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'S6_Documentation'
       });
     }
@@ -74,7 +72,6 @@ export class ScribeStage {
           agentName: 'Scribe',
           thought: `詩的記録生成: ${result.content}`,
           timestamp: Date.now(),
-          confidence: 0.85,
           duration: result.duration || 0,
           stage: 'S6_Documentation'
         });

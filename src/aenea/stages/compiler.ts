@@ -17,8 +17,6 @@ export class CompilerStage {
         agentName: 'Synthesizer',
         thought: '統合合成開始: 多様な思考を統一された洞察へ編纂中...',
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'S5_Synthesis'
       });
     }
@@ -93,7 +91,6 @@ ${reflectionsText}
           agentName: 'Synthesizer',
           thought: `AI統合合成: ${result.content}`,
           timestamp: Date.now(),
-          confidence: 0.85,
           duration: result.duration || 0,
           stage: 'S5_Synthesis'
         });

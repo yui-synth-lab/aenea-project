@@ -417,11 +417,62 @@ ${thoughtsSummary}
   }
 
   /**
-   * Find similar existing belief
+   * Find similar existing belief using semantic similarity (cross-category)
    */
   private findSimilarBelief(newBelief: Partial<CoreBelief>, existingBeliefs: CoreBelief[]): CoreBelief | null {
-    // Simple similarity check by category
-    return existingBeliefs.find(b => b.category === newBelief.category) || null;
+    if (!newBelief.belief_content) return null;
+
+    // Calculate text similarity across ALL existing beliefs (not just same category)
+    const newWords = this.tokenize(newBelief.belief_content);
+    let bestMatch: CoreBelief | null = null;
+    let bestSimilarity = 0;
+
+    for (const existing of existingBeliefs) {
+      const existingWords = this.tokenize(existing.belief_content);
+      const similarity = this.jaccardSimilarity(newWords, existingWords);
+
+      // Track the best match
+      if (similarity > bestSimilarity) {
+        bestSimilarity = similarity;
+        bestMatch = existing;
+      }
+    }
+
+    // If similarity > 0.6, consider it the same belief (even if category differs)
+    if (bestSimilarity > 0.6 && bestMatch) {
+      log.info('MemoryConsolidator', `🔍 Similar belief found: "${bestMatch.belief_content}" (similarity: ${bestSimilarity.toFixed(2)}, category: ${bestMatch.category} vs ${newBelief.category})`);
+      return bestMatch;
+    }
+
+    return null; // No similar belief found
+  }
+
+  /**
+   * Tokenize text into words (handles Japanese and English)
+   */
+  private tokenize(text: string): Set<string> {
+    const words = new Set<string>();
+
+    // Split by common delimiters
+    const tokens = text.split(/[、。！？\s・「」『』（）\(\)]+/);
+
+    tokens.forEach(token => {
+      if (token.length > 0) {
+        words.add(token.toLowerCase());
+      }
+    });
+
+    return words;
+  }
+
+  /**
+   * Calculate Jaccard similarity between two word sets
+   */
+  private jaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
+    const intersection = new Set([...setA].filter(x => setB.has(x)));
+    const union = new Set([...setA, ...setB]);
+
+    return union.size === 0 ? 0 : intersection.size / union.size;
   }
 
   /**

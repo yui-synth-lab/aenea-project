@@ -48,8 +48,6 @@ export class ResponseSynthesisStage {
         agentName: 'ResponseSynthesizer',
         thought: '観測可能な応答を合成中...',
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'S7_ResponseSynthesis'
       });
     }

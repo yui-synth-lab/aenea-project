@@ -77,6 +77,9 @@ class DatabaseManager {
         duration INTEGER,
         thoughts_data TEXT,
         synthesis_data TEXT,
+        empathy_score REAL,
+        coherence_score REAL,
+        dissonance_score REAL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -448,15 +451,18 @@ class DatabaseManager {
     try {
       this.db.prepare(`
         INSERT OR REPLACE INTO thought_cycles
-        (id, trigger_id, timestamp, duration, thoughts_data, synthesis_data)
-        VALUES (?, ?, ?, ?, ?, ?)
+        (id, trigger_id, timestamp, duration, thoughts_data, synthesis_data, empathy_score, coherence_score, dissonance_score)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         cycle.id,
         cycle.triggerId,
         cycle.timestamp,
         cycle.duration,
         JSON.stringify(cycle.thoughts || []),
-        JSON.stringify(cycle.synthesis || {})
+        JSON.stringify(cycle.synthesis || {}),
+        cycle.dpdScores?.empathy ?? null,
+        cycle.dpdScores?.coherence ?? null,
+        cycle.dpdScores?.dissonance ?? null
       );
     } catch (err) {
       console.error('Error saving thought cycle:', err);

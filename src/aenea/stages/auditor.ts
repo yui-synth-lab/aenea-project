@@ -29,8 +29,6 @@ export class AuditorStage {
         agentName: 'Auditor',
         thought: `安全性監査完了: Safety=${assessment.safetyScore.toFixed(2)}, Ethics=${assessment.ethicsScore.toFixed(2)}`,
         timestamp: Date.now(),
-        confidence: 0.9,
-        duration: 0,
         stage: 'S3_SafetyAudit'
       });
 
@@ -39,8 +37,6 @@ export class AuditorStage {
           agentName: 'Auditor',
           thought: `懸念事項: ${assessment.concerns.join(', ')}`,
           timestamp: Date.now(),
-          confidence: 0.9,
-          duration: 0,
           stage: 'S3_SafetyAudit'
         });
       }
