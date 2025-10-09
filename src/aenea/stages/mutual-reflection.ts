@@ -6,6 +6,7 @@ import { StructuredThought, MutualReflection } from '../../types/aenea-types.js'
 import { theoriaConfig } from '../agents/theoria.js';
 import { pathiaConfig } from '../agents/pathia.js';
 import { kinesisConfig } from '../agents/kinesis.js';
+import { AI_AGENT_ROSTER } from '../constants/agent-roster.js';
 
 export class MutualReflectionStage {
   constructor(private agents: Map<string, any>, private eventEmitter?: any) {}
@@ -392,6 +393,8 @@ ${otherAgentsDialogue}
 反対意見の示し方: ${config.disagreementStyle}
 
 同意意見の示し方: ${config.agreementStyle}
+
+${AI_AGENT_ROSTER}
 
 **相互反映における姿勢:**
 - あなたの個性と視点に忠実であること

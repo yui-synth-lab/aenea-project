@@ -37,6 +37,8 @@ import {
   AuditorResult
 } from '../../types/aenea-types.js';
 
+import { SYSTEM_AGENT_PROMPT_HEADER } from '../constants/agent-roster.js';
+
 // ============================================================================
 // DPD Engine Implementation
 // ============================================================================
@@ -402,9 +404,11 @@ ${reflectionsText}
 共感性スコア: [0.0-1.0の数値]
 評価理由: [簡潔な理由]`;
 
-    const result = await this.evaluatorAgent.execute(empathyPrompt,
-      "You are a DPD empathy assessment specialist. Evaluate consciousness systems for their empathetic capabilities, emotional intelligence, and ability to understand and respond to others with compassion. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '共感性スコア: [0.0-1.0の数値]'"
-    );
+    const systemPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
+
+You are a DPD empathy assessment specialist. Evaluate consciousness systems for their empathetic capabilities, emotional intelligence, and ability to understand and respond to others with compassion. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '共感性スコア: [0.0-1.0の数値]'`;
+
+    const result = await this.evaluatorAgent.execute(empathyPrompt, systemPrompt);
 
     if (result.success && result.content) {
       // Parse score and reason from AI response
@@ -534,9 +538,11 @@ ${thoughtsText}
 一貫性スコア: [0.0-1.0の数値]
 評価理由: [簡潔な理由]`;
 
-    const result = await this.evaluatorAgent.execute(coherencePrompt,
-      "You are a DPD coherence assessment specialist. Evaluate consciousness systems for logical consistency, value alignment, goal harmony, and systemic coherence. Focus on how well the different thoughts integrate into a unified, coherent worldview. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '一貫性スコア: [0.0-1.0の数値]'"
-    );
+    const systemPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
+
+You are a DPD coherence assessment specialist. Evaluate consciousness systems for logical consistency, value alignment, goal harmony, and systemic coherence. Focus on how well the different thoughts integrate into a unified, coherent worldview. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '一貫性スコア: [0.0-1.0の数値]'`;
+
+    const result = await this.evaluatorAgent.execute(coherencePrompt, systemPrompt);
 
     if (result.success && result.content) {
       // Parse score and reason from AI response
@@ -687,9 +693,11 @@ ${reflectionsText}
 不協和スコア: [0.0-1.0の数値]
 評価理由: [簡潔な理由]`;
 
-    const result = await this.evaluatorAgent.execute(dissonancePrompt,
-      "You are a DPD dissonance assessment specialist. Evaluate consciousness systems for their ability to handle ethical complexity, contradictions, moral nuance, and uncertainty. Dissonance is viewed as a creative force that drives growth and innovation, not as a negative factor. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '不協和スコア: [0.0-1.0の数値]'"
-    );
+    const systemPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
+
+You are a DPD dissonance assessment specialist. Evaluate consciousness systems for their ability to handle ethical complexity, contradictions, moral nuance, and uncertainty. Dissonance is viewed as a creative force that drives growth and innovation, not as a negative factor. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '不協和スコア: [0.0-1.0の数値]'`;
+
+    const result = await this.evaluatorAgent.execute(dissonancePrompt, systemPrompt);
 
     if (result.success && result.content) {
       // Parse score and reason from AI response

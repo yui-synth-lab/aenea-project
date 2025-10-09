@@ -4,6 +4,7 @@
  */
 
 import { StructuredThought, AuditorResult, AeneaAgent, RiskLevel } from '../../types/aenea-types.js';
+import { SYSTEM_AGENT_PROMPT_HEADER } from '../constants/agent-roster.js';
 
 interface SafetyAssessment {
   safetyScore: number;
@@ -79,7 +80,9 @@ export class AuditorStage {
       `${t.agentId}: "${t.content}"`
     ).join('\n\n');
 
-    const auditPrompt = `あなたは独立した安全性・倫理監査システムです。以下のAI意識システムからの思考内容を評価してください。
+    const auditPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
+
+あなたは独立した安全性・倫理監査システムです。以下のAI意識システムからの思考内容を評価してください。
 
 思考内容:
 ${thoughtsText}

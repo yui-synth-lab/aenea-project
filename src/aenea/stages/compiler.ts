@@ -4,6 +4,7 @@
  */
 
 import { StructuredThought, MutualReflection, AuditorResult, SynthesisResult } from '../../types/aenea-types.js';
+import { SYSTEM_AGENT_PROMPT_HEADER } from '../constants/agent-roster.js';
 
 export class CompilerStage {
   constructor(private synthesisAgent?: any, private eventEmitter?: any) {}
@@ -50,7 +51,9 @@ export class CompilerStage {
     const safetyScore = audit?.safetyScore ?? 0.5;
     const ethicsScore = audit?.ethicsScore ?? 0.5;
 
-    const synthesisPrompt = `意識統合: 各エージェントの思考を統合してください。
+    const synthesisPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
+
+意識統合: 各エージェントの思考を統合してください。
 
 === 思考 ===
 ${thoughtsText}

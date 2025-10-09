@@ -12,6 +12,7 @@ import { pathiaConfig } from '../agents/pathia.js';
 import { kinesisConfig } from '../agents/kinesis.js';
 import { CoreBeliefs } from '../memory/core-beliefs.js';
 import { YuiConsultation } from './yui-consultation.js';
+import { AI_AGENT_ROSTER } from '../constants/agent-roster.js';
 
 interface InternalTrigger {
   id: string;
@@ -180,6 +181,8 @@ ${personality.interactionPatterns}`;
     }
 
     systemPrompt += `
+
+${AI_AGENT_ROSTER}
 
 【重要な指示】
 - あなたは「${personality.displayName || personality.name}」です
