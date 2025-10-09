@@ -323,7 +323,7 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           padding: 0;
           max-width: 90vw;
           max-height: 90vh;
-          overflow: auto;
+          overflow: hidden;
           border: 2px solid var(--cyber-neon-magenta);
           min-width: min(800px, 90vw);
           clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
@@ -381,13 +381,16 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
         .close-button {
           background: var(--cyber-bg-tertiary);
           border: 2px solid var(--cyber-neon-pink);
-          padding: 8px 16px;
+          padding: 0;
+          width: 36px;
+          height: 36px;
           color: var(--cyber-neon-pink);
           font-weight: 700;
           cursor: pointer;
           transition: all 0.2s;
-          text-transform: uppercase;
-          letter-spacing: 1px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
           box-shadow: 0 0 8px rgba(255, 20, 147, 0.3);
           font-family: 'Courier New', 'Consolas', monospace;
@@ -411,6 +414,8 @@ export const GrowthModal: React.FC<GrowthModalProps> = ({ isOpen, onClose }) => 
           grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
           gap: 24px;
           padding: 24px 32px 32px;
+          overflow-y: auto;
+          flex: 1;
         }
 
         .growth-card {
