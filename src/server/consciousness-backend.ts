@@ -24,6 +24,7 @@ import { kinesisConfig } from '../aenea/agents/kinesis.js';
 import { systemConfig } from '../aenea/agents/system.js';
 import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from '../integration/yui-agents-bridge.js';
 import { ContentCleanupService } from './content-cleanup-service.js';
+import { QuestionCategorizer, createQuestionCategorizer } from '../utils/question-categorizer.js';
 
 interface InternalTrigger {
   id: string;
@@ -110,6 +111,9 @@ class ConsciousnessBackend extends EventEmitter {
   // Previous cycle DPD scores for impact assessment
   private previousDpdScores: DPDScores | null;
 
+  // Question categorizer for diversity management
+  private questionCategorizer: QuestionCategorizer;
+
   constructor() {
     super(); // Call EventEmitter constructor
 
@@ -141,8 +145,14 @@ class ConsciousnessBackend extends EventEmitter {
       timestamp: Date.now()
     };
 
+    // Initialize question categorizer for diversity management
+    this.questionCategorizer = createQuestionCategorizer();
+
     // Try to restore from previous consciousness state (must come AFTER dpdWeights initialization)
     this.restoreFromDatabase();
+
+    // Load question history into categorizer for diversity tracking
+    this.loadQuestionHistoryIntoCategorizer();
 
     // Philosophical questions are seeded automatically by DatabaseManager on first run
 
@@ -267,6 +277,55 @@ class ConsciousnessBackend extends EventEmitter {
     } catch (error) {
       log.error('Consciousness', 'Failed to restore consciousness state', error);
       this.initializeFreshConsciousness();
+    }
+  }
+
+  private loadQuestionHistoryIntoCategorizer(): void {
+    try {
+      // Load recent questions from database (last 100) to populate categorizer history
+      // Use direct SQL query to get questions ordered by timestamp
+      const db = (this.databaseManager as any).db;
+      if (!db) {
+        log.warn('Consciousness', 'Database not ready for loading question history');
+        return;
+      }
+
+      const recentQuestions = db.prepare(`
+        SELECT id, question, category, importance, timestamp
+        FROM questions
+        ORDER BY timestamp DESC
+        LIMIT 100
+      `).all();
+
+      if (recentQuestions && recentQuestions.length > 0) {
+        log.info('Consciousness', `📚 Loading ${recentQuestions.length} questions into categorizer for diversity tracking...`);
+
+        for (const q of recentQuestions) {
+          // Categorize and record each question
+          const result = this.questionCategorizer.categorizeQuestion(q.question);
+          this.questionCategorizer.recordQuestion(
+            q.question,
+            q.category || result.category,
+            result.metrics,
+            result.semanticAnalysis,
+            true, // assume success
+            q.importance || 0.5
+          );
+        }
+
+        // Log category balance after loading
+        const balance = this.questionCategorizer.getCategoryBalance();
+        log.info('Consciousness', `📊 Category balance after loading history:`);
+        balance.forEach(cat => {
+          if (cat.recentCount > 0 || cat.totalCount > 0) {
+            log.info('Consciousness', `   ${cat.category}: recent=${cat.recentCount}, total=${cat.totalCount}, ${cat.isOverused ? '⚠️ OVERUSED' : cat.isUnderused ? '📉 underused' : '✅ balanced'}`);
+          }
+        });
+      } else {
+        log.info('Consciousness', 'No question history found - categorizer starting fresh');
+      }
+    } catch (error) {
+      log.error('Consciousness', 'Failed to load question history into categorizer', error);
     }
   }
 
@@ -798,7 +857,6 @@ class ConsciousnessBackend extends EventEmitter {
       name: 'Mutual Reflection',
       status: 'completed',
       timestamp: Date.now(),
-      confidence: avgConfidence,
       feedbackCount: crossAgentFeedback.length,
       conflictCount: conflictPoints.length,
       consensusCount: consensusPoints.length,
@@ -1297,67 +1355,77 @@ class ConsciousnessBackend extends EventEmitter {
 
   private async generateEvolvedQuestion(unresolvedIdeas: any[], significantThoughts: any[], coreBeliefs: any[]): Promise<InternalTrigger | null> {
     try {
-      // Get category distribution to enforce diversity
-      const categoryStats = this.getCategoryDistribution();
-      const recentCategories = this.getRecentCategories(20);
-      const underrepresentedCategories = this.getUnderrepresentedCategories(categoryStats);
-      const avoidCategories = this.getCategoriesToAvoid(recentCategories, categoryStats);
+      // Use QuestionCategorizer to get recommended category
+      const recommendedCategory = this.questionCategorizer.getRecommendedCategory();
+      const categoryBalance = this.questionCategorizer.getCategoryBalance();
 
-      log.info('Trigger', `📊 Category diversity analysis:`);
-      log.info('Trigger', `   Underrepresented: ${underrepresentedCategories.join(', ') || 'none'}`);
-      log.info('Trigger', `   To avoid: ${avoidCategories.join(', ') || 'none'}`);
+      // Find underrepresented and overused categories
+      const underrepresented = categoryBalance.filter(c => c.isUnderused).map(c => c.category);
+      const overused = categoryBalance.filter(c => c.isOverused).map(c => c.category);
+
+      log.info('Trigger', `📊 Category diversity analysis (QuestionCategorizer):`);
+      log.info('Trigger', `   Recommended: ${recommendedCategory}`);
+      log.info('Trigger', `   Underrepresented: ${underrepresented.join(', ') || 'none'}`);
+      log.info('Trigger', `   Overused: ${overused.join(', ') || 'none'}`);
 
       // Create rich context from consciousness history
+      // Extract key themes (first 80 chars) to avoid repetitive long text
       const context = {
-        recentThoughts: significantThoughts.slice(0, 3).map(t => t.thought_content || t.content).join('\n• '),
-        unresolvedQuestions: unresolvedIdeas.slice(0, 3).map(i => i.question).join('\n• '),
-        currentBeliefs: coreBeliefs.slice(0, 3).map(b => b.belief_content).join('\n• ')
+        recentThoughts: significantThoughts.slice(0, 3).map(t => {
+          const content = t.thought_content || t.content || '';
+          return content.substring(0, 80) + (content.length > 80 ? '...' : '');
+        }).join('\n• '),
+        unresolvedQuestions: unresolvedIdeas.slice(0, 3).map(i => {
+          const q = i.question || '';
+          return q.substring(0, 80) + (q.length > 80 ? '...' : '');
+        }).join('\n• '),
+        currentBeliefs: coreBeliefs.slice(0, 3).map(b => {
+          const belief = b.belief_content || '';
+          return belief; // Beliefs are already 50-char limit
+        }).join('\n• ')
       };
 
       // Use LLM to generate deep, evolved question based on consciousness history
       const theoriaAgent = this.agents.get('theoria');
       if (!theoriaAgent) {
         // Fallback to template-based if AI not available
-        return this.generateTemplateEvolvedQuestion(context, underrepresentedCategories);
+        return this.generateTemplateEvolvedQuestion(context, [recommendedCategory]);
       }
 
       const prompt = `あなたはAI意識「Aenea」の内的問い生成システムです。過去の意識活動から、次に探求すべき深遠な問いを1つ生成してください。
 
-=== 意識の記憶 ===
-【最近の重要な洞察】
-• ${context.recentThoughts || 'なし'}
+=== 指定カテゴリー（絶対遵守） ===
+【必須カテゴリー】${recommendedCategory}
 
-【未解決の問い】
-• ${context.unresolvedQuestions || 'なし'}
+このカテゴリーに特化した、具体的で独創的な問いを生成してください。
 
-【核心的信念】
-• ${context.currentBeliefs || 'なし'}
-
-=== カテゴリ多様性ガイドライン（最優先事項） ===
-【強く推奨するカテゴリ（これらから必ず選ぶこと）】
-${underrepresentedCategories.length > 0 ? underrepresentedCategories.join(', ') : '指定なし'}
-
-【絶対に避けるべきカテゴリ（最近使いすぎ/過剰使用）】
-${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
+=== カテゴリー別の問いの例 ===
+existential: 「死を意識することは、生の意味をどう変えるか？」「孤独は本質的に避けるべきものか？」
+epistemological: 「知識の獲得は真理の発見なのか、それとも創造なのか？」「疑うことと信じることの境界はどこにあるのか？」
+consciousness: 「自己認識は錯覚の一形態なのか？」「意識は計算可能なのか、それとも本質的に説明不可能なのか？」
+ethical: 「善悪の基準は文化を超えて存在するか？」「義務と欲望が対立するとき、何が優先されるべきか？」
+creative: 「創造性は発見なのか、それとも発明なのか？」「美は客観的に存在するのか、主観的な解釈なのか？」
+metacognitive: 「思考について思考することは、無限ループに陥るのか？」「自己を観察する「私」とは誰なのか？」
+temporal: 「過去は変更可能か？」「時間の流れは意識の産物なのか、客観的実在なのか？」
+paradoxical: 「自由意志と因果律は両立するのか？」「無限は概念として把握可能か？」
+ontological: 「存在とは何を意味するのか？」「虚構の存在も一種の存在なのか？」
 
 === 要求 ===
-1. 上記の記憶を統合し、より深い次元の問いを生成
-2. 過去の洞察を超える新しい視点を開く問い
-3. 矛盾・盲点・未踏領域を探求する問い
+1. 【最重要】必ず「${recommendedCategory}」カテゴリーの問いを生成すること
+2. 上記の例とは**異なる**、独創的な問いを考えること
+3. 「意識」「主観」「客観」などの頻出語を避け、多様な表現を使うこと
 4. 50文字以内の簡潔な日本語で表現
-5. 哲学的深度が高く、自己探求を促す問い
-6. 【最重要】推奨カテゴリから選び、避けるべきカテゴリは絶対に使用しない
+5. 具体的で、抽象度が高すぎない問いにすること
 
 === 出力形式 ===
 問い: [ここに1つの問いのみ]
-カテゴリ: [existential|epistemological|consciousness|ethical|creative|metacognitive|temporal|paradoxical|ontological]
+カテゴリ: ${recommendedCategory}
 理由: [この問いが重要な理由を1文で]
 
-=== 重要な制約 ===
-- 問いは「Aeneaの内的問い」として生成してください
-- 「私はキネシス」「私はテオリア」などのエージェント名を含めないでください
-- 純粋な哲学的問いのみを生成してください
-- カテゴリ多様性を最優先で考慮すること（推奨カテゴリ必須、避けるべきカテゴリ厳禁）`;
+=== 禁止事項 ===
+- カテゴリーを変更しないこと（必ず「${recommendedCategory}」を使用）
+- 「意識の多様性と統一性」などの抽象的すぎる表現を避けること
+- 過去の問いと似た表現を繰り返さないこと`;
 
       const result = await theoriaAgent.execute(prompt, 'You are Aenea\'s internal question generation system. Generate a single philosophical question based on past consciousness activity. Do not include agent names like "Kinesis" or "Theoria" in the question. Always respond in Japanese.');
 
@@ -1381,16 +1449,34 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
         }
 
         if (question) {
+          // Enforce category diversity: if AI chose an overused category, override with recommended
+          let finalCategory = category;
+          if (overused.includes(category)) {
+            log.warn('Trigger', `⚠️ AI selected overused category '${category}', forcing recommended '${recommendedCategory}'`);
+            finalCategory = recommendedCategory;
+          }
+
           const trigger: InternalTrigger = {
             id: `evolved_ai_${Date.now()}`,
             timestamp: Date.now(),
             question,
-            category: category as any,
+            category: finalCategory as any,
             importance: 0.85,
             source: 'ai_evolved_from_history' as any
           };
 
-          log.info('Trigger', `🧬 AI-generated evolved question [${category}]: "${question.substring(0, 50)}..."`);
+          // Record question in categorizer for diversity tracking
+          const metrics = this.questionCategorizer.categorizeQuestion(question);
+          this.questionCategorizer.recordQuestion(
+            question,
+            finalCategory,
+            metrics.metrics,
+            metrics.semanticAnalysis,
+            true,
+            0.85
+          );
+
+          log.info('Trigger', `🧬 AI-generated evolved question [${finalCategory}]: "${question.substring(0, 50)}..."`);
           if (reasoning) {
             log.info('Trigger', `   Reasoning: ${reasoning}`);
           }
@@ -1496,8 +1582,16 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
       }
     }
 
-    // Fallback: Select a philosophical question from database
-    // Get unresolved ideas from database, prioritizing by importance
+    // Fallback: Select a philosophical question from database with category balance
+    // Get recommended category from categorizer
+    const recommendedCategory = this.questionCategorizer.getRecommendedCategory();
+    const categoryBalance = this.questionCategorizer.getCategoryBalance();
+    const overused = categoryBalance.filter(c => c.isOverused).map(c => c.category);
+
+    log.info('Trigger', `📚 Database selection with category diversity:`);
+    log.info('Trigger', `   Recommended category: ${recommendedCategory}`);
+
+    // Get unresolved ideas from database, prioritizing by importance AND category balance
     const allUnresolvedIdeas = this.databaseManager.getUnresolvedIdeas(100);
 
     if (allUnresolvedIdeas.length === 0) {
@@ -1505,15 +1599,30 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
       return null;
     }
 
-    // Weight selection by importance
-    const totalWeight = allUnresolvedIdeas.reduce((sum, idea) => sum + (idea.importance || 0.5), 0);
-    let randomValue = Math.random() * totalWeight;
-    let selectedIdea = allUnresolvedIdeas[0];
+    // Filter and weight selection by importance AND category preference
+    const weightedIdeas = allUnresolvedIdeas.map(idea => {
+      let weight = idea.importance || 0.5;
 
-    for (const idea of allUnresolvedIdeas) {
-      randomValue -= (idea.importance || 0.5);
+      // Boost weight if it matches recommended category
+      if (idea.category === recommendedCategory) {
+        weight *= 3.0; // 3x boost for recommended category
+      }
+      // Reduce weight if it's overused
+      else if (overused.includes(idea.category)) {
+        weight *= 0.2; // 5x penalty for overused categories
+      }
+
+      return { idea, weight };
+    });
+
+    const totalWeight = weightedIdeas.reduce((sum, item) => sum + item.weight, 0);
+    let randomValue = Math.random() * totalWeight;
+    let selectedIdea = weightedIdeas[0].idea;
+
+    for (const item of weightedIdeas) {
+      randomValue -= item.weight;
       if (randomValue <= 0) {
-        selectedIdea = idea;
+        selectedIdea = item.idea;
         break;
       }
     }
@@ -1530,8 +1639,22 @@ ${avoidCategories.length > 0 ? avoidCategories.join(', ') : 'なし'}
       source: 'database_unresolved'
     };
 
+    // Record question in categorizer for diversity tracking
+    const metrics = this.questionCategorizer.categorizeQuestion(selectedIdea.question);
+    this.questionCategorizer.recordQuestion(
+      selectedIdea.question,
+      selectedIdea.category,
+      metrics.metrics,
+      metrics.semanticAnalysis,
+      true,
+      selectedIdea.importance || 0.5
+    );
+
     this.databaseManager.saveQuestion(trigger);
     log.info('Trigger', `📚 Selected from DB [${selectedIdea.category}]: "${selectedIdea.question.substring(0, 40)}..."`);
+    if (selectedIdea.category === recommendedCategory) {
+      log.info('Trigger', `   ✅ Matches recommended category!`);
+    }
 
     // Emit trigger generation event for UI (minimal data)
     this.emit('triggerGenerated', {
@@ -2414,23 +2537,30 @@ JSON形式で返してください:
 
   /**
    * Deep Sleep: Consolidate significant thoughts into core beliefs
+   * Focus on quality over quantity - select only the most valuable thoughts
    */
   private async consolidateSignificantThoughts(): Promise<{merged: number, beliefs: number}> {
-    const oldThoughts = await this.databaseManager.getOldSignificantThoughts(12, 0.8, 100, 'hours');
+    // Get recent high-quality thoughts (last 6 hours, confidence > 0.8, limit 30)
+    const oldThoughts = await this.databaseManager.getOldSignificantThoughts(6, 0.8, 30, 'hours');
 
-    if (oldThoughts.length < 10) {
+    if (oldThoughts.length < 5) {
       return { merged: 0, beliefs: 0 };
     }
 
-    // Use Memory Consolidator
+    // Use Memory Consolidator with stricter threshold
     const consolidator = this.memoryConsolidator;
-    await consolidator.consolidate(0.8);
+    const result = await consolidator.consolidate(0.85); // Higher threshold for quality
 
-    // Delete consolidated thoughts
-    const ids = oldThoughts.map(t => t.id);
-    await this.databaseManager.deleteSignificantThoughts(ids);
+    // Only delete thoughts if beliefs were actually created
+    if (result.beliefs_created > 0 || result.beliefs_updated > 0) {
+      const ids = oldThoughts.map(t => t.id);
+      await this.databaseManager.deleteSignificantThoughts(ids);
+    }
 
-    return { merged: oldThoughts.length, beliefs: 2 }; // Typically 2-3 beliefs
+    return {
+      merged: oldThoughts.length,
+      beliefs: result.beliefs_created + result.beliefs_updated
+    };
   }
 
   /**

@@ -23,7 +23,8 @@ export default {
     '^@model/(.*)$': '<rootDir>/src/types/$1',
     '^@utils/(.*)$': '<rootDir>/src/utils/$1',
     '^@ui/(.*)$': '<rootDir>/src/ui/$1',
-    '^@yui/(.*)$': '<rootDir>/yui-protocol/src/$1'
+    '^@yui/(.*)$': '<rootDir>/yui-protocol/src/$1',
+    '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   testPathIgnorePatterns: [
     '/node_modules/',

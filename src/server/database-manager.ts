@@ -22,8 +22,8 @@ class DatabaseManager {
   private isReady: boolean = false;
   private dbPath: string;
 
-  constructor() {
-    this.dbPath = path.join(process.cwd(), 'data', 'aenea_consciousness.db');
+  constructor(customDbPath?: string) {
+    this.dbPath = customDbPath || path.join(process.cwd(), 'data', 'aenea_consciousness.db');
     this.ensureDataDirectory();
 
     try {
@@ -37,7 +37,7 @@ class DatabaseManager {
   }
 
   private ensureDataDirectory(): void {
-    const dataDir = path.join(process.cwd(), 'data');
+    const dataDir = path.dirname(this.dbPath);
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
