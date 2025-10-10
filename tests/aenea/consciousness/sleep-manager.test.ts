@@ -84,6 +84,7 @@ describe('SleepManager - t_wada Quality Tests', () => {
     // Initialize dependencies
     databaseManager = new DatabaseManager(testDbPath);
     energyManager = getEnergyManager();
+    energyManager.resetEnergy(); // Reset energy to 100 for each test
 
     mockAIExecutor = new MockAIExecutor();
     eventEmitter = new EventEmitter();
@@ -104,6 +105,11 @@ describe('SleepManager - t_wada Quality Tests', () => {
   });
 
   afterEach(() => {
+    // Close database connection before cleanup
+    if (databaseManager) {
+      databaseManager.cleanup();
+    }
+
     // Clean up test database
     if (fs.existsSync(testDbPath)) {
       fs.unlinkSync(testDbPath);
@@ -141,7 +147,7 @@ describe('SleepManager - t_wada Quality Tests', () => {
       // Arrange: Deplete energy
       energyManager.consumeEnergy(50, 'test');
       const energyBefore = energyManager.getEnergyState().available;
-      expect(energyBefore).toBeLessThan(50);
+      expect(energyBefore).toBeLessThan(51); // Allow for tiny auto-recovery (< 0.5%)
 
       // Act: Perform sleep cycle
       const result = await sleepManager.performSleepCycle('energy_critical');
@@ -209,10 +215,10 @@ describe('SleepManager - t_wada Quality Tests', () => {
       for (let i = 0; i < 5; i++) {
         databaseManager.recordSignificantThought({
           id: `thought_${i}`,
-          thought_content: `Test thought ${i}`,
+          content: `Test thought ${i}`,
           confidence: 0.8,
-          significance_score: 0.7,
-          agent_id: 'theoria',
+          significanceScore: 0.7,
+          agentId: 'theoria',
           category: 'consciousness',
           timestamp: Date.now()
         });
@@ -233,10 +239,10 @@ describe('SleepManager - t_wada Quality Tests', () => {
       for (let i = 0; i < 15; i++) {
         databaseManager.recordSignificantThought({
           id: `thought_${i}`,
-          thought_content: `Test thought ${i} with meaningful content`,
+          content: `Test thought ${i} with meaningful content`,
           confidence: 0.8,
-          significance_score: 0.7,
-          agent_id: 'theoria',
+          significanceScore: 0.7,
+          agentId: 'theoria',
           category: 'consciousness',
           timestamp: Date.now()
         });
@@ -259,10 +265,10 @@ describe('SleepManager - t_wada Quality Tests', () => {
       for (let i = 0; i < 3; i++) {
         databaseManager.recordSignificantThought({
           id: `thought_${i}`,
-          thought_content: `Test thought ${i}`,
+          content: `Test thought ${i}`,
           confidence: 0.9,
-          significance_score: 0.8,
-          agent_id: 'theoria',
+          significanceScore: 0.8,
+          agentId: 'theoria',
           category: 'consciousness',
           timestamp: Date.now()
         });
@@ -283,10 +289,10 @@ describe('SleepManager - t_wada Quality Tests', () => {
       for (let i = 0; i < 10; i++) {
         databaseManager.recordSignificantThought({
           id: `thought_${i}`,
-          thought_content: `Test thought ${i} about consciousness and existence`,
+          content: `Test thought ${i} about consciousness and existence`,
           confidence: 0.9,
-          significance_score: 0.85,
-          agent_id: 'theoria',
+          significanceScore: 0.85,
+          agentId: 'theoria',
           category: 'consciousness',
           timestamp: Date.now()
         });
@@ -309,10 +315,10 @@ describe('SleepManager - t_wada Quality Tests', () => {
       for (let i = 0; i < 5; i++) {
         databaseManager.recordSignificantThought({
           id: `thought_${i}`,
-          thought_content: `Old thought ${i}`,
+          content: `Old thought ${i}`,
           confidence: 0.5,
-          significance_score: 0.3,
-          agent_id: 'theoria',
+          significanceScore: 0.3,
+          agentId: 'theoria',
           category: 'consciousness',
           timestamp: Date.now()
         });
@@ -343,17 +349,30 @@ describe('SleepManager - t_wada Quality Tests', () => {
         agent_affinity: {}
       });
 
-      // Add 15 old thoughts
+      // Add 15 old thoughts (25 hours ago to trigger pruning)
+      // Use direct SQL to set created_at to past date
+      const db = (databaseManager as any).db;
+      // SQLite expects 'YYYY-MM-DD HH:MM:SS' format for datetime comparison
+      const twentyFiveHoursAgo = new Date(Date.now() - (25 * 60 * 60 * 1000))
+        .toISOString()
+        .replace('T', ' ')
+        .replace(/\.\d+Z$/, '');
+
       for (let i = 0; i < 15; i++) {
-        databaseManager.recordSignificantThought({
-          id: `thought_${i}`,
-          thought_content: `Old thought ${i} about consciousness`,
-          confidence: 0.6,
-          significance_score: 0.5,
-          agent_id: 'theoria',
-          category: 'consciousness',
-          timestamp: Date.now()
-        });
+        db.prepare(`
+          INSERT INTO significant_thoughts
+          (id, thought_content, confidence, significance_score, agent_id, category, timestamp, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          `thought_${i}`,
+          `Old thought ${i} about consciousness`,
+          0.6,
+          0.5,
+          'theoria',
+          'consciousness',
+          Date.now(),
+          twentyFiveHoursAgo
+        );
       }
 
       // Act
@@ -382,10 +401,12 @@ describe('SleepManager - t_wada Quality Tests', () => {
      * Test: Emotional processing should resolve tensions
      */
     it('should resolve tensions when high dissonance cycles exist', async () => {
-      // Arrange: Add high-dissonance thought cycles
+      // Arrange: Add high-dissonance thought cycles with DPD weights
+      const db = (databaseManager as any).db;
       for (let i = 0; i < 3; i++) {
+        const cycleId = `cycle_${i}`;
         databaseManager.saveThoughtCycle({
-          id: `cycle_${i}`,
+          id: cycleId,
           trigger_id: `trigger_${i}`,
           timestamp: Date.now(),
           duration: 1000,
@@ -395,6 +416,12 @@ describe('SleepManager - t_wada Quality Tests', () => {
           coherence_score: 0.6,
           dissonance_score: 0.8 // High dissonance
         });
+
+        // Also insert into dpd_weights table for the query to work
+        db.prepare(`
+          INSERT INTO dpd_weights (timestamp, empathy, coherence, dissonance, context, version)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(Date.now(), 0.5, 0.6, 0.8, cycleId, 1);
       }
 
       // Act
@@ -521,10 +548,10 @@ describe('SleepManager - t_wada Quality Tests', () => {
       for (let i = 0; i < 10; i++) {
         databaseManager.recordSignificantThought({
           id: `thought_${i}`,
-          thought_content: `Boundary thought ${i}`,
+          content: `Boundary thought ${i}`,
           confidence: 0.8,
-          significance_score: 0.7,
-          agent_id: 'theoria',
+          significanceScore: 0.7,
+          agentId: 'theoria',
           category: 'consciousness',
           timestamp: Date.now()
         });
@@ -545,10 +572,10 @@ describe('SleepManager - t_wada Quality Tests', () => {
       for (let i = 0; i < 5; i++) {
         databaseManager.recordSignificantThought({
           id: `thought_${i}`,
-          thought_content: `Boundary thought ${i}`,
+          content: `Boundary thought ${i}`,
           confidence: 0.9,
-          significance_score: 0.8,
-          agent_id: 'theoria',
+          significanceScore: 0.8,
+          agentId: 'theoria',
           category: 'consciousness',
           timestamp: Date.now()
         });
@@ -571,19 +598,23 @@ function seedTestData(db: DatabaseManager): void {
   for (let i = 0; i < 20; i++) {
     db.recordSignificantThought({
       id: `thought_${i}`,
-      thought_content: `Test thought ${i} about consciousness and meaning`,
+      content: `Test thought ${i} about consciousness and meaning`,  // Use 'content' instead of 'thought_content'
       confidence: 0.8,
-      significance_score: 0.7,
-      agent_id: 'theoria',
+      significanceScore: 0.7,  // Use camelCase to match expected property
+      agentId: 'theoria',      // Use camelCase to match expected property
       category: 'consciousness',
       timestamp: Date.now()
     });
   }
 
   // Add thought cycles with varying dissonance
+  const dbInstance = (db as any).db;
   for (let i = 0; i < 5; i++) {
+    const cycleId = `cycle_${i}`;
+    const dissonance = i < 2 ? 0.8 : 0.3; // 2 high-dissonance cycles
+
     db.saveThoughtCycle({
-      id: `cycle_${i}`,
+      id: cycleId,
       trigger_id: `trigger_${i}`,
       timestamp: Date.now(),
       duration: 1000,
@@ -591,8 +622,14 @@ function seedTestData(db: DatabaseManager): void {
       synthesis_data: JSON.stringify({ content: "Test synthesis" }),
       empathy_score: 0.5,
       coherence_score: 0.6,
-      dissonance_score: i < 2 ? 0.8 : 0.3 // 2 high-dissonance cycles
+      dissonance_score: dissonance
     });
+
+    // Insert DPD weights for high-dissonance queries to work
+    dbInstance.prepare(`
+      INSERT INTO dpd_weights (timestamp, empathy, coherence, dissonance, context, version)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(Date.now(), 0.5, 0.6, dissonance, cycleId, 1);
   }
 
   // Add core beliefs

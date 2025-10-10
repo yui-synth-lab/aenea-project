@@ -41,8 +41,11 @@ import { EmotionalState, SystemState } from './aenea-types';
 import { ConsciousnessState } from './consciousness-types';
 
 export interface DPDContext {
-  thoughtId: string;
-  agentId: string;
+  thoughtId?: string;
+  agentId?: string;
+  trigger?: string;           // Internal question that triggered the thought cycle
+  thoughtCount?: number;      // Number of thoughts in the cycle
+  energyMode?: 'critical' | 'low' | 'full'; // Energy mode during assessment
   previousScores?: DPDScores[];
   emotionalState?: EmotionalState;
   systemState?: SystemState;

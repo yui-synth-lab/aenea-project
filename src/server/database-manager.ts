@@ -503,6 +503,12 @@ class DatabaseManager {
     try {
       const content = thought.content || thought.thought;
 
+      // Skip if content is empty or invalid
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        console.warn('Skipping significant thought with empty content');
+        return;
+      }
+
       this.db.prepare(`
         INSERT OR REPLACE INTO significant_thoughts
         (id, thought_content, confidence, significance_score, agent_id, category, timestamp)
@@ -949,6 +955,110 @@ class DatabaseManager {
       `).run(Date.now(), ideaId);
     } catch (error) {
       console.error('Error updating unresolved idea consideration:', error);
+    }
+  }
+
+  /**
+   * Cleanup unresolved ideas using hybrid strategy:
+   * 1. Remove ideas already in significant_thoughts (resolved)
+   * 2. Capacity-based: Keep total under max_capacity
+   * 3. Age-based: Remove old, never-revisited ideas
+   * 4. Saturation-based: Remove heavily-revisited but abandoned ideas
+   */
+  cleanupUnresolvedIdeas(maxCapacity: number = 1000): { deleted: number; kept: number; strategy: string } {
+    if (!this.isReady || !this.db) {
+      return { deleted: 0, kept: 0, strategy: 'database_not_ready' };
+    }
+
+    try {
+      const now = Date.now();
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+      let totalDeleted = 0;
+
+      // Strategy 1: Remove ideas already resolved as significant thoughts
+      const resolvedResult = this.db.prepare(`
+        DELETE FROM unresolved_ideas
+        WHERE LOWER(TRIM(question)) IN (
+          SELECT LOWER(TRIM(thought_content)) FROM significant_thoughts
+        )
+      `).run();
+      const resolvedDeleted = resolvedResult.changes;
+      totalDeleted += resolvedDeleted;
+      log.info('DatabaseManager', `🧹 Deleted ${resolvedDeleted} unresolved ideas already in significant_thoughts`);
+
+      // Strategy 2: Remove old, never-revisited ideas (30+ days, revisit_count = 0)
+      const neverRevisitedResult = this.db.prepare(`
+        DELETE FROM unresolved_ideas
+        WHERE revisit_count = 0
+          AND (? - first_encountered) > ?
+      `).run(now, thirtyDaysMs);
+      const neverRevisitedDeleted = neverRevisitedResult.changes;
+      totalDeleted += neverRevisitedDeleted;
+      log.info('DatabaseManager', `🧹 Deleted ${neverRevisitedDeleted} old, never-revisited ideas (30+ days)`);
+
+      // Strategy 3: Remove heavily-revisited but recently abandoned ideas (10+ revisits, 14+ days idle)
+      const abandonedResult = this.db.prepare(`
+        DELETE FROM unresolved_ideas
+        WHERE revisit_count >= 10
+          AND (? - last_revisited) > ?
+      `).run(now, fourteenDaysMs);
+      const abandonedDeleted = abandonedResult.changes;
+      totalDeleted += abandonedDeleted;
+      log.info('DatabaseManager', `🧹 Deleted ${abandonedDeleted} abandoned ideas (10+ revisits, 14+ days idle)`);
+
+      // Strategy 4: Capacity-based cleanup if still over limit
+      const currentCount = this.db.prepare('SELECT COUNT(*) as count FROM unresolved_ideas').get() as { count: number };
+      let capacityDeleted = 0;
+
+      if (currentCount.count > maxCapacity) {
+        // Calculate priority score and delete lowest-scoring ideas
+        // Score = importance * 0.4 + (revisit_count / 50) * 0.3 + recency * 0.3
+        // Recency = 1.0 if last_revisited is today, 0.0 if 60+ days ago
+        const excessCount = currentCount.count - maxCapacity;
+
+        const scoredIdeas = this.db.prepare(`
+          SELECT
+            id,
+            importance,
+            revisit_count,
+            last_revisited,
+            (
+              importance * 0.4 +
+              (CAST(revisit_count AS REAL) / 50.0) * 0.3 +
+              (1.0 - MIN(1.0, (CAST(? - last_revisited AS REAL) / ?))) * 0.3
+            ) as priority_score
+          FROM unresolved_ideas
+          ORDER BY priority_score ASC
+          LIMIT ?
+        `).all(now, 60 * 24 * 60 * 60 * 1000, excessCount) as Array<{ id: string; priority_score: number }>;
+
+        if (scoredIdeas.length > 0) {
+          const idsToDelete = scoredIdeas.map(idea => idea.id);
+          const placeholders = idsToDelete.map(() => '?').join(',');
+          const capacityResult = this.db.prepare(`
+            DELETE FROM unresolved_ideas WHERE id IN (${placeholders})
+          `).run(...idsToDelete);
+          capacityDeleted = capacityResult.changes;
+          totalDeleted += capacityDeleted;
+          log.info('DatabaseManager', `🧹 Deleted ${capacityDeleted} low-priority ideas to reach capacity limit (${maxCapacity})`);
+        }
+      }
+
+      const finalCount = this.db.prepare('SELECT COUNT(*) as count FROM unresolved_ideas').get() as { count: number };
+
+      const summary = {
+        deleted: totalDeleted,
+        kept: finalCount.count,
+        strategy: `hybrid: resolved=${resolvedDeleted}, never_revisited=${neverRevisitedDeleted}, abandoned=${abandonedDeleted}, capacity=${capacityDeleted}`
+      };
+
+      log.info('DatabaseManager', `✅ Unresolved ideas cleanup complete: ${totalDeleted} deleted, ${finalCount.count} kept`);
+      return summary;
+
+    } catch (error) {
+      log.error('DatabaseManager', 'Error cleaning up unresolved ideas', error);
+      return { deleted: 0, kept: 0, strategy: 'error' };
     }
   }
 

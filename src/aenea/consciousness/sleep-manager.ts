@@ -86,8 +86,8 @@ export class SleepManager {
       stats.beliefsMerged = consolidated.merged;
       sleepLog.push(`Consolidated ${consolidated.merged} thoughts into ${consolidated.beliefs} beliefs`);
 
-      // Merge similar core beliefs
-      const mergeResult = await this.memoryConsolidator.mergeSimilarBeliefs(0.75);
+      // Merge similar core beliefs (strict threshold to preserve diversity)
+      const mergeResult = await this.memoryConsolidator.mergeSimilarBeliefs(0.90);
       sleepLog.push(`Merged ${mergeResult.merged} similar beliefs, ${mergeResult.kept} beliefs remain`);
     } catch (error) {
       sleepLog.push(`Deep sleep phase skipped: ${(error as Error).message}`);
@@ -211,8 +211,8 @@ JSON形式で返してください:
    * Phase 2: Deep Sleep - Consolidate significant thoughts into core beliefs
    */
   private async consolidateSignificantThoughts(): Promise<{ merged: number; beliefs: number }> {
-    // Get recent high-quality thoughts (last 6 hours, confidence > 0.8, limit 30)
-    const oldThoughts = this.databaseManager.getOldSignificantThoughts(6, 0.8, 30, 'hours');
+    // Get recent high-quality thoughts (last 6 hours, confidence > 0.85, limit 30)
+    const oldThoughts = this.databaseManager.getOldSignificantThoughts(6, 0.85, 30, 'hours');
 
     if (oldThoughts.length < 5) {
       return { merged: 0, beliefs: 0 };

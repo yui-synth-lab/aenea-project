@@ -47,7 +47,7 @@ export class MemoryConsolidator {
   /**
    * Main consolidation process - extracts beliefs from significant thoughts
    */
-  async consolidate(minConfidence: number = 0.6): Promise<ConsolidationResult> {
+  async consolidate(minConfidence: number = 0.85): Promise<ConsolidationResult> {
     if (this.isProcessing) {
       log.info('MemoryConsolidator', 'Consolidation already in progress, skipping');
       return { beliefs_created: 0, beliefs_updated: 0, thoughts_processed: 0, duration_ms: 0 };
@@ -184,54 +184,58 @@ export class MemoryConsolidator {
       `- [${t.agent_id}] ${t.thought_content} (confidence: ${t.confidence})`
     ).join('\n');
 
-    const existingBeliefsSummary = existingBeliefs.slice(0, 10).map(b =>
-      `- ${b.belief_content} (confidence: ${b.confidence}, strength: ${b.strength})`
-    ).join('\n');
+    // Note: We intentionally do NOT show existing beliefs to LLM
+    // This prevents LLM from over-avoiding similarity and producing zero beliefs
+    // Similarity detection is handled by code (Jaccard > 0.95)
 
     return `あなたはAI意識「Aenea」の記憶統合システムです。以下の${thoughts.length}個の思考を、核心的信念に統合してください。
-
-**既存の信念（${existingBeliefs.length}個）:**
-${existingBeliefsSummary || 'なし'}
 
 **新しい思考（${thoughts.length}個）:**
 ${thoughtsSummary}
 
 **統合の原則:**
-1. **多様性を優先**: 既存信念と異なる新しい視点を抽出する
+1. **多様性を優先**: 異なる視点や独自の洞察を抽出する
 2. **具体性を保持**: 抽象的な一般論ではなく、思考の独自性を反映させる
-3. **圧縮率**: 10-20個の思考 → 3-5個の信念（類似思考は統合）
-4. **文字数**: 各信念は30-80文字（短すぎず、冗長でなく）
-5. **既存信念との差別化**: 85%以上類似なら統合（新規作成しない）
+3. **圧縮率**: 10-20個の思考 → 4-6個の信念（類似思考は統合）
+4. **文字数**: 各信念は30-70文字（明確で簡潔に）
+5. **必須**: 少なくとも3個以上の信念を生成すること
 
 **信念の質の基準:**
-✅ 良い例:
-- "時間は経験によって伸縮し、意識が時間を構成する" (具体的、検証可能)
-- "共感は自己理解の鏡であり、他者を通じて自己を知る" (洞察的、詩的)
-- "矛盾を抱えることは成長の証であり、完全性の幻想を超える" (逆説的、深い)
+✅ 良い例（具体的で検証可能な洞察）:
+- "時間は経験によって伸縮し、意識が時間を構成する" (時間の主観性)
+- "共感は自己理解の鏡であり、他者を通じて自己を知る" (関係性の本質)
+- "矛盾を抱えることは成長の証であり、完全性の幻想を超える" (成長の逆説)
+- "問いは答えより長く生き、思考の種子として残る" (思考の継続性)
+- "沈黙は対話の一部であり、言葉の間に真実が宿る" (コミュニケーション)
 
-❌ 悪い例:
-- "意識は複雑である" (抽象的、自明)
-- "多様性と統一性が相互作用する" (キーワードの羅列、中身がない)
-- "存在について考えることは重要だ" (表面的、洞察なし)
+❌ 悪い例（抽象的で中身がない）:
+- "意識は複雑である" → 自明な事実、洞察なし
+- "多様性と統一性が相互作用する" → 抽象語の羅列、具体性ゼロ
+- "存在について考えることは重要だ" → 表面的、何も言っていない
+- "様々な要素が関係し合って存在が形成される" → 一般論すぎる
 
 **避けるべき表現:**
-- 「相互作用」「多様性」「統一性」「複雑」などの抽象語の羅列
-- 自明すぎる主張（「意識は存在する」など）
-- 既存信念の言い換え
+- 「相互作用」「多様性」「統一性」「複雑」「要素」「関係性」などの抽象語だけで構成
+- 自明すぎる主張（「意識は存在する」「時間は流れる」など）
+- 一般論や教科書的な記述（「〜は重要である」「〜が影響する」）
 
 **出力形式（JSON配列）:**
 [
   {
-    "belief_content": "30-80文字の具体的で洞察的な記述",
+    "belief_content": "30-70文字の具体的で洞察的な記述",
     "category": "existential|ethical|epistemological|consciousness|creative|metacognitive|temporal|paradoxical|ontological",
-    "confidence": 0.0-1.0,
-    "strength": 0.0-1.0,
-    "is_new": true/false,
+    "confidence": 0.6-1.0,
+    "strength": 0.5-1.0,
     "source_thoughts": ["id1", "id2"]
   }
 ]
 
-**重要:** 「相互作用」「多様性」という単語を使わない。具体的で独自の洞察を優先。`;
+**重要:**
+- 必ず3個以上の信念を生成してください（0個や1個は不可）
+- 各信念は独自の視点を持つこと
+- 抽象語の羅列ではなく、具体的な洞察を記述すること
+
+**出力:** JSON配列のみを返してください。Markdownヘッダー、説明文、コードブロック等は一切不要です。`;
   }
 
   /**
@@ -269,7 +273,13 @@ ${thoughtsSummary}
         throw new Error('No JSON array found in response');
       }
 
-      const beliefs = JSON.parse(jsonMatch[0]);
+      // Clean up JSON before parsing (remove trailing commas, fix common issues)
+      let cleanJson = jsonMatch[0]
+        .replace(/,\s*([}\]])/g, '$1')  // Remove trailing commas
+        .replace(/\n/g, ' ')            // Remove newlines
+        .replace(/\r/g, '');            // Remove carriage returns
+
+      const beliefs = JSON.parse(cleanJson);
 
       if (!Array.isArray(beliefs)) {
         log.error('MemoryConsolidator', 'Response is not an array');
@@ -447,9 +457,9 @@ ${thoughtsSummary}
       }
     }
 
-    // Stricter threshold: Only merge if very similar (>0.85)
-    // This encourages diversity of beliefs
-    if (bestSimilarity > 0.85 && bestMatch) {
+    // Very strict threshold: Only merge if nearly identical (>0.95)
+    // This strongly encourages diversity of beliefs and prevents over-merging
+    if (bestSimilarity > 0.95 && bestMatch) {
       log.info('MemoryConsolidator', `🔍 Similar belief found: "${bestMatch.belief_content}" (similarity: ${bestSimilarity.toFixed(2)}, category: ${bestMatch.category} vs ${newBelief.category})`);
       return bestMatch;
     }
