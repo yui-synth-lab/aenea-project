@@ -1220,7 +1220,7 @@ class DatabaseManager {
     try {
       const result = this.db.prepare(`
         SELECT * FROM core_beliefs
-        ORDER BY strength DESC, confidence DESC, last_reinforced DESC
+        ORDER BY reinforcement_count DESC, strength DESC, confidence DESC
         LIMIT ?
       `).all(limit);
 
@@ -1244,7 +1244,7 @@ class DatabaseManager {
       const result = this.db.prepare(`
         SELECT * FROM core_beliefs
         WHERE category = ?
-        ORDER BY strength DESC, confidence DESC
+        ORDER BY reinforcement_count DESC, strength DESC, confidence DESC
         LIMIT ?
       `).all(category, limit);
 
@@ -1295,6 +1295,43 @@ class DatabaseManager {
       `).run(JSON.stringify(agentAffinity), beliefId);
     } catch (err) {
       console.error('Error updating belief agent affinity:', err);
+    }
+  }
+
+  /**
+   * Increment contradiction count for a belief (data layer only)
+   */
+  incrementBeliefContradiction(beliefId: number, newConfidence: number, triggerThoughtId?: string): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      const current = this.db.prepare('SELECT * FROM core_beliefs WHERE id = ?').get(beliefId);
+      if (!current) return;
+
+      const oldConfidence = current.confidence;
+
+      // Update belief
+      this.db.prepare(`
+        UPDATE core_beliefs
+        SET contradiction_count = contradiction_count + 1,
+            confidence = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(newConfidence, beliefId);
+
+      // Record challenge event
+      this.recordBeliefEvolution(
+        beliefId,
+        'challenged',
+        oldConfidence,
+        newConfidence,
+        triggerThoughtId || null,
+        `Belief challenged (contradictions: ${current.contradiction_count + 1})`
+      );
+    } catch (err) {
+      console.error('Error incrementing belief contradiction:', err);
     }
   }
 

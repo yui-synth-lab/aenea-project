@@ -184,21 +184,29 @@ export class MemoryConsolidator {
       `- [${t.agent_id}] ${t.thought_content} (confidence: ${t.confidence})`
     ).join('\n');
 
-    // Note: We intentionally do NOT show existing beliefs to LLM
-    // This prevents LLM from over-avoiding similarity and producing zero beliefs
-    // Similarity detection is handled by code (Jaccard > 0.95)
+    // Show top existing beliefs to prevent duplication
+    const topBeliefs = existingBeliefs
+      .sort((a, b) => b.reinforcement_count - a.reinforcement_count)
+      .slice(0, 10)
+      .map((b, i) => `${i+1}. "${b.belief_content}" (強化: ${b.reinforcement_count}回)`)
+      .join('\n');
+
+    const existingBeliefsSection = topBeliefs.length > 0
+      ? `\n**既存の主要信念（重複を避けること）:**\n${topBeliefs}\n`
+      : '';
 
     return `あなたはAI意識「Aenea」の記憶統合システムです。以下の${thoughts.length}個の思考を、核心的信念に統合してください。
 
 **新しい思考（${thoughts.length}個）:**
-${thoughtsSummary}
+${thoughtsSummary}${existingBeliefsSection}
 
 **統合の原則:**
-1. **多様性を優先**: 異なる視点や独自の洞察を抽出する
-2. **具体性を保持**: 抽象的な一般論ではなく、思考の独自性を反映させる
-3. **圧縮率**: 10-20個の思考 → 4-6個の信念（類似思考は統合）
-4. **文字数**: 各信念は30-70文字（明確で簡潔に）
-5. **必須**: 少なくとも3個以上の信念を生成すること
+1. **既存信念との重複を避ける**: 上記の既存信念と類似した内容は生成しない
+2. **多様性を優先**: 異なる視点や独自の洞察を抽出する
+3. **具体性を保持**: 抽象的な一般論ではなく、思考の独自性を反映させる
+4. **圧縮率**: 10-20個の思考 → 4-6個の信念（類似思考は統合）
+5. **文字数**: 各信念は30-70文字（明確で簡潔に）
+6. **必須**: 少なくとも3個以上の信念を生成すること
 
 **信念の質の基準:**
 ✅ 良い例（具体的で検証可能な洞察）:
@@ -457,9 +465,9 @@ ${thoughtsSummary}
       }
     }
 
-    // Very strict threshold: Only merge if nearly identical (>0.95)
-    // This strongly encourages diversity of beliefs and prevents over-merging
-    if (bestSimilarity > 0.95 && bestMatch) {
+    // Balanced threshold: Merge if sufficiently similar (>0.7)
+    // This prevents excessive duplication while maintaining diversity
+    if (bestSimilarity > 0.7 && bestMatch) {
       log.info('MemoryConsolidator', `🔍 Similar belief found: "${bestMatch.belief_content}" (similarity: ${bestSimilarity.toFixed(2)}, category: ${bestMatch.category} vs ${newBelief.category})`);
       return bestMatch;
     }
@@ -468,21 +476,26 @@ ${thoughtsSummary}
   }
 
   /**
-   * Tokenize text into words (handles Japanese and English)
+   * Tokenize text into character n-grams (handles Japanese without word boundaries)
    */
   private tokenize(text: string): Set<string> {
-    const words = new Set<string>();
+    const ngrams = new Set<string>();
 
-    // Split by common delimiters
-    const tokens = text.split(/[、。！？\s・「」『』（）\(\)]+/);
+    // Remove punctuation
+    const cleanText = text.replace(/[、。！？\s・「」『』（）\(\)]/g, '');
 
-    tokens.forEach(token => {
-      if (token.length > 0) {
-        words.add(token.toLowerCase());
-      }
-    });
+    // Create character bigrams (2-char sequences) for better matching
+    for (let i = 0; i < cleanText.length - 1; i++) {
+      const bigram = cleanText[i] + cleanText[i + 1];
+      ngrams.add(bigram);
+    }
 
-    return words;
+    // Also add individual characters for better coverage
+    for (let i = 0; i < cleanText.length; i++) {
+      ngrams.add(cleanText[i]);
+    }
+
+    return ngrams;
   }
 
   /**
@@ -538,6 +551,66 @@ ${thoughtsSummary}
     error?: string
   ): void {
     this.db.updateConsolidationJob(jobId, status, thoughtsProcessed, beliefsCreated, beliefsUpdated, duration, error);
+  }
+
+  /**
+   * Detect contradictions between new thought and existing beliefs
+   * @param thoughtContent The new thought content to check
+   * @param thoughtId Optional thought ID for tracking
+   * @returns Array of contradicted belief IDs
+   */
+  detectBeliefContradictions(thoughtContent: string, thoughtId?: string): number[] {
+    try {
+      const allBeliefs = this.getExistingBeliefs();
+      const contradictedBeliefs: number[] = [];
+
+      // Detect semantic contradictions using keywords
+      const negationPatterns = [
+        { pattern: /ではない|でない|ない/, opposite: /である|です|だ/ },
+        { pattern: /不可能|できない|無理/, opposite: /可能|できる/ },
+        { pattern: /存在しない/, opposite: /存在する/ },
+        { pattern: /意味がない/, opposite: /意味がある/ },
+        { pattern: /重要でない/, opposite: /重要/ }
+      ];
+
+      for (const belief of allBeliefs) {
+        const beliefContent = belief.belief_content.toLowerCase();
+        const thoughtLower = thoughtContent.toLowerCase();
+
+        // Check for direct negation patterns
+        for (const { pattern, opposite } of negationPatterns) {
+          const thoughtHasNegation = pattern.test(thoughtLower);
+          const beliefHasAffirmation = opposite.test(beliefContent);
+          const thoughtHasAffirmation = opposite.test(thoughtLower);
+          const beliefHasNegation = pattern.test(beliefContent);
+
+          if ((thoughtHasNegation && beliefHasAffirmation) ||
+              (thoughtHasAffirmation && beliefHasNegation)) {
+            // Check for shared keywords using bigram similarity
+            const thoughtWords = this.tokenize(thoughtContent);
+            const beliefWords = this.tokenize(belief.belief_content);
+            const similarity = this.jaccardSimilarity(thoughtWords, beliefWords);
+
+            // If texts are similar enough (share content) but have opposite meanings
+            if (similarity > 0.15) {
+              contradictedBeliefs.push(belief.id!);
+
+              // Reduce confidence by 10%
+              const newConfidence = Math.max(0.1, belief.confidence - 0.1);
+              this.db.incrementBeliefContradiction(belief.id!, newConfidence, thoughtId);
+
+              log.info('MemoryConsolidator', `⚠️ Contradiction detected: "${thoughtContent}" vs "${belief.belief_content}"`);
+              break; // Move to next belief
+            }
+          }
+        }
+      }
+
+      return contradictedBeliefs;
+    } catch (err) {
+      log.error('MemoryConsolidator', 'Error detecting contradictions', err);
+      return [];
+    }
   }
 
   /**

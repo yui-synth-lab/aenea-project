@@ -97,9 +97,15 @@ export class SleepManager {
     this.emitPhaseChange('Synaptic Pruning', 75);
     sleepLog.push('--- Synaptic Pruning Phase ---');
     try {
+      // First: AI-based intelligent pruning
       const pruned = await this.synapticPruning();
-      stats.thoughtsPruned = pruned.deleted;
-      sleepLog.push(`Pruned ${pruned.deleted} redundant thoughts`);
+      stats.thoughtsPruned += pruned.deleted;
+      sleepLog.push(`AI Pruned ${pruned.deleted} redundant thoughts`);
+
+      // Second: Age-based automatic pruning (failsafe)
+      const agePruned = await this.pruneOldThoughts();
+      stats.thoughtsPruned += agePruned.deleted;
+      sleepLog.push(`Age Pruned ${agePruned.deleted} very old thoughts (>48h)`);
     } catch (error) {
       sleepLog.push(`Pruning phase skipped: ${(error as Error).message}`);
     }
@@ -211,20 +217,22 @@ JSON形式で返してください:
    * Phase 2: Deep Sleep - Consolidate significant thoughts into core beliefs
    */
   private async consolidateSignificantThoughts(): Promise<{ merged: number; beliefs: number }> {
-    // Get recent high-quality thoughts (last 6 hours, confidence > 0.85, limit 30)
-    const oldThoughts = this.databaseManager.getOldSignificantThoughts(6, 0.85, 30, 'hours');
+    // Get thoughts older than 1 hour (confidence > 0.75, limit 100)
+    // Increased from 6 hours/30 thoughts to process backlog faster
+    const oldThoughts = this.databaseManager.getOldSignificantThoughts(1, 0.75, 100, 'hours');
 
     if (oldThoughts.length < 5) {
       return { merged: 0, beliefs: 0 };
     }
 
-    // Use Memory Consolidator with stricter threshold
-    const result = await this.memoryConsolidator.consolidate(0.85);
+    // Use Memory Consolidator with moderate threshold
+    const result = await this.memoryConsolidator.consolidate(0.75);
 
     // Only delete thoughts if beliefs were actually created
     if (result.beliefs_created > 0 || result.beliefs_updated > 0) {
       const ids = oldThoughts.map(t => t.id);
       this.databaseManager.deleteSignificantThoughts(ids);
+      log.info('SleepManager', `🗑️ Deleted ${ids.length} thoughts consolidated into beliefs`);
     }
 
     return {
@@ -237,8 +245,10 @@ JSON形式で返してください:
    * Phase 3: Synaptic Pruning - Remove redundant thoughts
    */
   private async synapticPruning(): Promise<{ deleted: number }> {
-    const currentBeliefs = this.databaseManager.getTopCoreBeliefs(30);
-    const oldThoughts = this.databaseManager.getOldSignificantThoughts(24, 0.0, 200, 'hours');
+    const currentBeliefs = this.databaseManager.getTopCoreBeliefs(50);
+    // Process thoughts older than 3 hours (reduced from 24h to catch more)
+    // Increased limit to 500 to process backlog
+    const oldThoughts = this.databaseManager.getOldSignificantThoughts(3, 0.0, 500, 'hours');
 
     if (oldThoughts.length < 10) {
       return { deleted: 0 };
@@ -253,13 +263,16 @@ JSON形式で返してください:
 現在のコア信念（すでに確立された知識）:
 ${currentBeliefs.map(b => `- ${b.belief_content}`).join('\n')}
 
-古い思考リスト:
-${oldThoughts.map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})`).join('\n')}
+古い思考リスト（最大50個を処理）:
+${oldThoughts.slice(0, 50).map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})`).join('\n')}
 
-以下の基準で不要な思考を特定してください:
-1. すでにコア信念に含まれている（重複）
-2. 現在の信念体系と矛盾し、価値がない
+以下の基準で不要な思考を**積極的に**特定してください（目安: 30-60%程度を削除）:
+1. すでにコア信念に含まれている（重複） ← 最優先
+2. 信念と類似性が高く、独自性が低い
 3. 一時的な探求で、もう発展性がない
+4. 他の思考と内容が重複している
+
+**重要**: 睡眠は不要な記憶を削除する重要な役割です。保守的にならず、積極的に刈り込んでください。
 
 JSON形式で返してください:
 {
@@ -288,6 +301,26 @@ JSON形式で返してください:
       log.error('SleepManager', 'Failed to parse pruning results', error);
       return { deleted: 0 };
     }
+  }
+
+  /**
+   * Phase 3b: Age-based automatic pruning (failsafe)
+   * Delete thoughts older than 48 hours regardless of AI judgment
+   */
+  private async pruneOldThoughts(): Promise<{ deleted: number }> {
+    // Get all thoughts older than 48 hours
+    const veryOldThoughts = this.databaseManager.getOldSignificantThoughts(48, 0.0, 1000, 'hours');
+
+    if (veryOldThoughts.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const ids = veryOldThoughts.map(t => t.id);
+    this.databaseManager.deleteSignificantThoughts(ids);
+
+    log.info('SleepManager', `🗑️ Auto-deleted ${ids.length} thoughts older than 48 hours`);
+
+    return { deleted: ids.length };
   }
 
   /**

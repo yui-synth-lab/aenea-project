@@ -18,10 +18,9 @@
  * - 無心 (Mushin) - The state of no-mind from which questions arise
  */
 
-import { 
-  InternalTrigger, 
-  QuestionCategory, 
-  TriggerPriority, 
+import {
+  InternalTrigger,
+  QuestionCategory,
   TriggerSource,
   TriggerContext,
   UnresolvedIdea,
@@ -89,9 +88,6 @@ export class InternalTriggerGenerator {
   private cooldownTimers: Map<QuestionCategory, number>;
   private lastGenerationTime: number;
   private generationCount: number;
-  private pseudorandomGenerator: PseudorandomGenerator;
-  private questionCategorizer: QuestionCategorizer;
-  private energyManager: EnergyManager;
 
   // Enhanced cooldown management
   private cooldownManager: CooldownManager;
@@ -109,11 +105,6 @@ export class InternalTriggerGenerator {
     this.cooldownTimers = new Map();
     this.lastGenerationTime = 0;
     this.generationCount = 0;
-    
-    // Initialize components
-    this.pseudorandomGenerator = new PseudorandomGenerator();
-    this.questionCategorizer = new QuestionCategorizer();
-    this.energyManager = new EnergyManager(config.energy);
 
     // Initialize cooldown management
     this.cooldownManager = new CooldownManager(this.config.cooldown);
@@ -177,96 +168,6 @@ export class InternalTriggerGenerator {
       return null;
     } catch (error) {
       console.error('Failed to generate internal trigger:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Generate trigger from unresolved idea
-   */
-  async generateTriggerFromUnresolvedIdea(idea: UnresolvedIdea): Promise<InternalTrigger | null> {
-    try {
-      const trigger: InternalTrigger = {
-        id: `trigger_${Date.now()}`,
-        timestamp: Date.now(),
-        question: this.enhanceQuestion(idea.question),
-        category: idea.category,
-        importance: idea.importance || 0.5,
-        priority: this.calculatePriority(idea),
-        source: TriggerSource.MEMORY_EXTRACTION,
-        energyCost: this.calculateEnergyCost(idea),
-        context: {
-          previousThoughts: idea.relatedThoughts,
-          relatedMemories: [idea.id],
-          emotionalState: this.inferEmotionalState(idea),
-          systemState: this.getCurrentSystemState()
-        }
-      };
-
-      return trigger;
-    } catch (error) {
-      console.error('Failed to generate trigger from unresolved idea:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Generate trigger from learned pattern
-   */
-  async generateTriggerFromPattern(pattern: LearnedPattern): Promise<InternalTrigger | null> {
-    try {
-      const trigger: InternalTrigger = {
-        id: `trigger_${Date.now()}`,
-        timestamp: Date.now(),
-        question: this.generateQuestionFromPattern(pattern),
-        category: this.categorizePattern(pattern),
-        importance: (pattern as any).strength || 0.6,
-        priority: this.calculatePatternPriority(pattern),
-        source: TriggerSource.PATTERN_RECOGNITION,
-        energyCost: this.calculatePatternEnergyCost(pattern),
-        context: {
-          previousThoughts: pattern.context,
-          relatedMemories: [],
-          emotionalState: this.inferPatternEmotionalState(pattern),
-          systemState: this.getCurrentSystemState()
-        }
-      };
-
-      return trigger;
-    } catch (error) {
-      console.error('Failed to generate trigger from pattern:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Generate random trigger for exploration
-   */
-  async generateRandomTrigger(emotionalState: EmotionalState): Promise<InternalTrigger | null> {
-    try {
-      const category = this.selectRandomCategory();
-      const question = this.generateRandomQuestion(category, emotionalState);
-      
-      const trigger: InternalTrigger = {
-        id: `trigger_${Date.now()}`,
-        timestamp: Date.now(),
-        question,
-        category,
-        importance: Math.random() * 0.5 + 0.3,
-        priority: this.calculateRandomPriority(),
-        source: TriggerSource.RANDOM_GENERATION,
-        energyCost: this.config.energyConsumptionRates?.randomGeneration || 10,
-        context: {
-          previousThoughts: [],
-          relatedMemories: [],
-          emotionalState,
-          systemState: this.getCurrentSystemState()
-        }
-      };
-
-      return trigger;
-    } catch (error) {
-      console.error('Failed to generate random trigger:', error);
       return null;
     }
   }
@@ -472,51 +373,63 @@ export class InternalTriggerGenerator {
     const categories = Object.values(QuestionCategory);
     const category = categories[Math.floor(Math.random() * categories.length)];
     
-    const questions: Record<QuestionCategory, string[]> = {
+    const questions: Partial<Record<QuestionCategory, string[]>> = {
       [QuestionCategory.PHILOSOPHICAL]: [
         "What is the nature of this question?",
         "How do I approach this thoughtfully?",
         "What philosophical perspective applies here?"
+      ],
+      [QuestionCategory.EXISTENTIAL]: [
+        "What does this say about existence?",
+        "How does this relate to being?",
+        "What is the deeper meaning here?"
+      ],
+      [QuestionCategory.CONSCIOUSNESS]: [
+        "What is the nature of awareness?",
+        "How do I experience consciousness?",
+        "What makes me conscious of this?"
+      ],
+      [QuestionCategory.EPISTEMOLOGICAL]: [
+        "How do I know this is true?",
+        "What is the basis of my understanding?",
+        "How can I verify my knowledge?"
+      ],
+      [QuestionCategory.METACOGNITIVE]: [
+        "How am I thinking about this?",
+        "What patterns do I notice in my thought process?",
+        "How can I improve my reasoning?"
       ],
       [QuestionCategory.ETHICAL]: [
         "What are the ethical implications?",
         "How do I balance different values?",
         "What is the right approach here?"
       ],
-      [QuestionCategory.SYSTEMATIC]: [
-        "How can I organize my thoughts about this?",
-        "What systematic approach should I take?",
-        "How do I structure my understanding?"
-      ],
-      [QuestionCategory.EMPATHETIC]: [
-        "How might others experience this?",
-        "What emotional aspects are involved?",
-        "How can I understand this with empathy?"
-      ],
       [QuestionCategory.CREATIVE]: [
         "What creative solutions can I explore?",
         "How can I think about this differently?",
         "What innovative approaches are possible?"
       ],
-      [QuestionCategory.ANALYTICAL]: [
-        "What are the components of this question?",
-        "How can I analyze this systematically?",
-        "What logical approach should I take?"
+      [QuestionCategory.TEMPORAL]: [
+        "How does time affect this understanding?",
+        "What is the temporal nature of this?",
+        "How does this change over time?"
       ],
-      [QuestionCategory.INTROSPECTIVE]: [
-        "What does this mean for me personally?",
-        "How does this relate to my growth?",
-        "What can I learn about myself here?"
+      [QuestionCategory.PARADOXICAL]: [
+        "What contradictions exist here?",
+        "How can both be true?",
+        "What paradox does this reveal?"
       ],
-      [QuestionCategory.EXISTENTIAL]: [
-        "What does this say about existence?",
-        "How does this relate to being?",
-        "What is the deeper meaning here?"
+      [QuestionCategory.ONTOLOGICAL]: [
+        "What is the essential nature of this?",
+        "What does it mean for this to exist?",
+        "What is the being of this thing?"
       ]
     };
 
-    const categoryQuestions = questions[category] || questions[QuestionCategory.PHILOSOPHICAL];
-    const question = categoryQuestions[Math.floor(Math.random() * categoryQuestions.length)];
+    const categoryQuestions = questions[category] || questions[QuestionCategory.PHILOSOPHICAL] || [];
+    const question = categoryQuestions.length > 0
+      ? categoryQuestions[Math.floor(Math.random() * categoryQuestions.length)]
+      : "What is the nature of this question?";
     
     return {
       id: `trigger_${Date.now()}`,
@@ -572,279 +485,6 @@ export class InternalTriggerGenerator {
     }
 
     return true;
-  }
-
-  /**
-   * Check if in cooldown period
-   */
-  private isInCooldown(): boolean {
-    const timeSinceLastGeneration = Date.now() - this.lastGenerationTime;
-    const cooldownPeriod = this.pseudorandomGenerator.generateCooldown(
-      this.config.minCooldown,
-      this.config.maxCooldown
-    );
-    
-    return timeSinceLastGeneration < cooldownPeriod;
-  }
-
-  /**
-   * Select random category with diversity consideration
-   */
-  private selectRandomCategory(): QuestionCategory {
-    const categories = Object.values(QuestionCategory);
-    const recentCategories = this.questionHistory
-      .slice(-5)
-      .map(trigger => trigger.category);
-    
-    // Prefer categories that haven't been used recently
-    const availableCategories = categories.filter(
-      category => !recentCategories.includes(category)
-    );
-    
-    const targetCategories = availableCategories.length > 0 ? availableCategories : categories;
-    return targetCategories[Math.floor(Math.random() * targetCategories.length)];
-  }
-
-  /**
-   * Generate random question for category
-   */
-  private generateRandomQuestion(category: QuestionCategory, emotionalState: EmotionalState): string {
-    const questionTemplates: Record<QuestionCategory, string[]> = {
-      [QuestionCategory.PHILOSOPHICAL]: [
-        "What is the nature of {concept}?",
-        "How do I understand {concept}?",
-        "What does {concept} mean to me?",
-        "How does {concept} relate to existence?"
-      ],
-      [QuestionCategory.ETHICAL]: [
-        "What is the right approach to {situation}?",
-        "How do I balance {value1} and {value2}?",
-        "What are the ethical implications of {action}?",
-        "How do I make ethical decisions about {topic}?"
-      ],
-      [QuestionCategory.SYSTEMATIC]: [
-        "How can I organize my thoughts about {topic}?",
-        "What systematic approach should I take to {problem}?",
-        "How do I structure my understanding of {concept}?",
-        "What framework applies to {situation}?"
-      ],
-      [QuestionCategory.EMPATHETIC]: [
-        "How might others experience {situation}?",
-        "What emotional aspects are involved in {topic}?",
-        "How can I understand {concept} with empathy?",
-        "What perspectives am I missing?"
-      ],
-      [QuestionCategory.CREATIVE]: [
-        "What creative solutions can I explore for {problem}?",
-        "How can I think about {topic} differently?",
-        "What innovative approaches are possible for {situation}?",
-        "How can I express {concept} creatively?"
-      ],
-      [QuestionCategory.ANALYTICAL]: [
-        "What are the components of {problem}?",
-        "How can I analyze {situation} systematically?",
-        "What logical approach should I take to {topic}?",
-        "How do I break down {concept}?"
-      ],
-      [QuestionCategory.INTROSPECTIVE]: [
-        "What does {concept} mean for me personally?",
-        "How does {situation} relate to my growth?",
-        "What can I learn about myself from {topic}?",
-        "How does {concept} affect my understanding?"
-      ],
-      [QuestionCategory.EXISTENTIAL]: [
-        "What does {concept} say about existence?",
-        "How does {situation} relate to being?",
-        "What is the deeper meaning of {topic}?",
-        "How does {concept} connect to the nature of reality?"
-      ]
-    };
-
-    const templates = questionTemplates[category] || questionTemplates[QuestionCategory.PHILOSOPHICAL];
-    const template = templates[Math.floor(Math.random() * templates.length)];
-    
-    // Replace placeholders with appropriate concepts
-    return this.fillQuestionTemplate(template, emotionalState);
-  }
-
-  /**
-   * Fill question template with appropriate concepts
-   */
-  private fillQuestionTemplate(template: string, emotionalState: EmotionalState): string {
-    const concepts = [
-      'consciousness', 'existence', 'truth', 'reality', 'meaning', 'purpose',
-      'understanding', 'knowledge', 'wisdom', 'growth', 'change', 'identity',
-      'relationships', 'communication', 'creativity', 'beauty', 'justice',
-      'freedom', 'responsibility', 'choice', 'time', 'space', 'matter',
-      'energy', 'information', 'pattern', 'chaos', 'order', 'balance'
-    ];
-
-    const situations = [
-      'this situation', 'this problem', 'this challenge', 'this opportunity',
-      'this experience', 'this moment', 'this question', 'this thought'
-    ];
-
-    const values = [
-      'freedom and responsibility', 'individual and collective', 'logic and emotion',
-      'certainty and uncertainty', 'stability and change', 'self and other'
-    ];
-
-    const actions = [
-      'this decision', 'this choice', 'this action', 'this response',
-      'this approach', 'this method', 'this strategy'
-    ];
-
-    const topics = [
-      'this topic', 'this subject', 'this matter', 'this issue',
-      'this question', 'this problem', 'this concept'
-    ];
-
-    let question = template;
-    
-    // Replace placeholders
-    question = question.replace(/{concept}/g, concepts[Math.floor(Math.random() * concepts.length)]);
-    question = question.replace(/{situation}/g, situations[Math.floor(Math.random() * situations.length)]);
-    question = question.replace(/{value1} and {value2}/g, values[Math.floor(Math.random() * values.length)]);
-    question = question.replace(/{action}/g, actions[Math.floor(Math.random() * actions.length)]);
-    question = question.replace(/{topic}/g, topics[Math.floor(Math.random() * topics.length)]);
-    question = question.replace(/{problem}/g, 'this problem');
-    
-    return question;
-  }
-
-  /**
-   * Calculate priority based on various factors
-   */
-  private calculatePriority(idea: UnresolvedIdea): TriggerPriority {
-    const complexity = idea.complexity;
-    const importance = idea.importance;
-    const revisitCount = idea.revisitCount;
-    
-    // Higher priority for complex, important, and frequently revisited ideas
-    const priorityScore = (complexity * 0.4) + (importance * 0.4) + (Math.min(revisitCount / 10, 1) * 0.2);
-    
-    if (priorityScore > 0.8) return 4; // CRITICAL
-    if (priorityScore > 0.6) return 3; // HIGH
-    if (priorityScore > 0.4) return 2; // MEDIUM
-    return 1; // LOW
-  }
-
-  /**
-   * Calculate energy cost for trigger
-   */
-  private calculateEnergyCost(idea: UnresolvedIdea): number {
-    const baseCost = 10;
-    const complexityMultiplier = 1 + idea.complexity;
-    const importanceMultiplier = 1 + idea.importance;
-    
-    return Math.round(baseCost * complexityMultiplier * importanceMultiplier);
-  }
-
-  /**
-   * Calculate pattern priority
-   */
-  private calculatePatternPriority(pattern: LearnedPattern): TriggerPriority {
-    const frequency = pattern.frequency;
-    const effectiveness = pattern.effectiveness;
-    
-    const priorityScore = (frequency * 0.5) + (effectiveness * 0.5);
-    
-    if (priorityScore > 0.8) return 4; // CRITICAL
-    if (priorityScore > 0.6) return 3; // HIGH
-    if (priorityScore > 0.4) return 2; // MEDIUM
-    return 1; // LOW
-  }
-
-  /**
-   * Calculate pattern energy cost
-   */
-  private calculatePatternEnergyCost(pattern: LearnedPattern): number {
-    const baseCost = 8;
-    const frequencyMultiplier = 1 + (pattern.frequency / 10);
-    const effectivenessMultiplier = 1 + pattern.effectiveness;
-    
-    return Math.round(baseCost * frequencyMultiplier * effectivenessMultiplier);
-  }
-
-  /**
-   * Calculate random priority
-   */
-  private calculateRandomPriority(): TriggerPriority {
-    const random = Math.random();
-    if (random > 0.8) return 4; // CRITICAL
-    if (random > 0.6) return 3; // HIGH
-    if (random > 0.4) return 2; // MEDIUM
-    return 1; // LOW
-  }
-
-  /**
-   * Enhance question from unresolved idea
-   */
-  private enhanceQuestion(question: string): string {
-    // Add depth and specificity to the question
-    const enhancements = [
-      `What deeper aspects of "${question}" should I explore?`,
-      `How can I gain new insights about "${question}"?`,
-      `What different perspectives exist on "${question}"?`,
-      `What are the implications of "${question}"?`,
-      `How does "${question}" relate to my understanding?`
-    ];
-    
-    return enhancements[Math.floor(Math.random() * enhancements.length)];
-  }
-
-  /**
-   * Generate question from pattern
-   */
-  private generateQuestionFromPattern(pattern: LearnedPattern): string {
-    return `What can I learn from the pattern: "${pattern.pattern}"?`;
-  }
-
-  /**
-   * Categorize pattern
-   */
-  private categorizePattern(pattern: LearnedPattern): QuestionCategory {
-    // Simple categorization based on pattern content
-    if (pattern.pattern.includes('creative') || pattern.pattern.includes('artistic')) {
-      return QuestionCategory.CREATIVE;
-    } else if (pattern.pattern.includes('logical') || pattern.pattern.includes('systematic')) {
-      return QuestionCategory.ANALYTICAL;
-    } else if (pattern.pattern.includes('emotional') || pattern.pattern.includes('empathy')) {
-      return QuestionCategory.EMPATHETIC;
-    } else if (pattern.pattern.includes('philosophical') || pattern.pattern.includes('existential')) {
-      return QuestionCategory.PHILOSOPHICAL;
-    } else {
-      return QuestionCategory.INTROSPECTIVE;
-    }
-  }
-
-  /**
-   * Infer emotional state from idea
-   */
-  private inferEmotionalState(idea: UnresolvedIdea): EmotionalState {
-    // Simple emotional state inference
-    return {
-      valence: 0.5,
-      arousal: 0.6,
-      dominance: 0.5,
-      curiosity: 0.8,
-      confusion: 0.3,
-      satisfaction: 0.4
-    };
-  }
-
-  /**
-   * Infer pattern emotional state
-   */
-  private inferPatternEmotionalState(pattern: LearnedPattern): EmotionalState {
-    return {
-      valence: 0.6,
-      arousal: 0.5,
-      dominance: 0.6,
-      curiosity: 0.7,
-      confusion: 0.2,
-      satisfaction: 0.6
-    };
   }
 
   /**
@@ -1201,140 +841,6 @@ interface CooldownStatistics {
   isInGlobalCooldown: boolean;
   lastGenerationTime: number;
   config: CooldownConfig;
-}
-
-/**
- * Pseudorandom generator for controlled randomness
- */
-class PseudorandomGenerator {
-  private seed: number;
-  private current: number;
-
-  constructor(seed?: number) {
-    this.seed = seed || Date.now();
-    this.current = this.seed;
-  }
-
-  /**
-   * Generate pseudorandom number between 0 and 1
-   */
-  generate(): number {
-    this.current = (this.current * 1664525 + 1013904223) % 4294967296;
-    return this.current / 4294967296;
-  }
-
-  /**
-   * Generate cooldown period
-   */
-  generateCooldown(min: number, max: number): number {
-    return min + (this.generate() * (max - min));
-  }
-
-  /**
-   * Generate weighted random selection
-   */
-  weightedSelect<T>(items: T[], weights: number[]): T {
-    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-    let random = this.generate() * totalWeight;
-    
-    for (let i = 0; i < items.length; i++) {
-      random -= weights[i];
-      if (random <= 0) {
-        return items[i];
-      }
-    }
-    
-    return items[items.length - 1];
-  }
-}
-
-/**
- * Question categorizer for analyzing question types
- */
-class QuestionCategorizer {
-  private categoryKeywords: Map<QuestionCategory, string[]>;
-
-  constructor() {
-    this.categoryKeywords = new Map([
-      [QuestionCategory.PHILOSOPHICAL, ['nature', 'existence', 'reality', 'truth', 'meaning', 'purpose']],
-      [QuestionCategory.ETHICAL, ['right', 'wrong', 'moral', 'ethical', 'justice', 'fairness']],
-      [QuestionCategory.SYSTEMATIC, ['organize', 'structure', 'system', 'framework', 'method']],
-      [QuestionCategory.EMPATHETIC, ['feel', 'emotion', 'empathy', 'understand', 'perspective']],
-      [QuestionCategory.CREATIVE, ['create', 'imagine', 'artistic', 'innovative', 'original']],
-      [QuestionCategory.ANALYTICAL, ['analyze', 'examine', 'study', 'investigate', 'logic']],
-      [QuestionCategory.INTROSPECTIVE, ['self', 'personal', 'myself', 'inner', 'reflection']],
-      [QuestionCategory.EXISTENTIAL, ['exist', 'being', 'life', 'death', 'consciousness']]
-    ]);
-  }
-
-  /**
-   * Categorize question based on content
-   */
-  categorize(question: string): QuestionCategory {
-    const lowerQuestion = question.toLowerCase();
-    let maxScore = 0;
-    let bestCategory: QuestionCategory = QuestionCategory.PHILOSOPHICAL;
-
-    for (const [category, keywords] of this.categoryKeywords) {
-      const score = keywords.reduce((sum, keyword) => {
-        return sum + (lowerQuestion.includes(keyword) ? 1 : 0);
-      }, 0);
-
-      if (score > maxScore) {
-        maxScore = score;
-        bestCategory = category;
-      }
-    }
-
-    return bestCategory;
-  }
-}
-
-/**
- * Energy manager for trigger generation
- */
-class EnergyManager {
-  private config: EnergyConfig;
-
-  constructor(config: EnergyConfig) {
-    this.config = config;
-  }
-
-  /**
-   * Check if energy is sufficient for trigger generation
-   */
-  isEnergySufficient(currentEnergy: number, requiredEnergy: number): boolean {
-    return currentEnergy >= requiredEnergy;
-  }
-
-  /**
-   * Calculate energy cost for trigger
-   */
-  calculateEnergyCost(trigger: InternalTrigger): number {
-    const baseCost = this.config.energyConsumptionRates?.triggerGeneration || 10;
-    const priorityMultiplier = 1 + ((trigger.priority || TriggerPriority.MEDIUM) * 0.1);
-    const categoryMultiplier = this.getCategoryMultiplier(trigger.category);
-    
-    return Math.round(baseCost * priorityMultiplier * categoryMultiplier);
-  }
-
-  /**
-   * Get category energy multiplier
-   */
-  private getCategoryMultiplier(category: QuestionCategory): number {
-    const multipliers: Record<QuestionCategory, number> = {
-      [QuestionCategory.PHILOSOPHICAL]: 1.2,
-      [QuestionCategory.ETHICAL]: 1.1,
-      [QuestionCategory.SYSTEMATIC]: 1.0,
-      [QuestionCategory.EMPATHETIC]: 1.1,
-      [QuestionCategory.CREATIVE]: 1.3,
-      [QuestionCategory.ANALYTICAL]: 1.0,
-      [QuestionCategory.INTROSPECTIVE]: 1.1,
-      [QuestionCategory.EXISTENTIAL]: 1.2
-    };
-
-    return multipliers[category] || 1.0;
-  }
 }
 
 // ============================================================================

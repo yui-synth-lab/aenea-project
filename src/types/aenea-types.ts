@@ -37,16 +37,36 @@ export interface InternalTrigger {
 
 /**
  * Categories of internal questions for diversity management
+ * 9 core philosophical categories based on actual database usage
  */
 export enum QuestionCategory {
-  PHILOSOPHICAL = 'philosophical',
-  ETHICAL = 'ethical',
+  // Primary categories (most fundamental)
+  PHILOSOPHICAL = 'philosophical',      // 哲学的探求 - General philosophical inquiry
+  EXISTENTIAL = 'existential',          // 実存の探求 - Existence and being
+  CONSCIOUSNESS = 'consciousness',      // 意識の謎 - Nature of consciousness
+
+  // Epistemological categories (knowledge)
+  EPISTEMOLOGICAL = 'epistemological',  // 知識の本質 - Nature of knowledge
+  METACOGNITIVE = 'metacognitive',      // メタ認知的探求 - Thinking about thinking
+
+  // Value and behavior categories
+  ETHICAL = 'ethical',                  // 倫理的考察 - Moral and ethical considerations
+  CREATIVE = 'creative',                // 創造的思考 - Creative thinking
+
+  // Structural categories
+  TEMPORAL = 'temporal',                // 時間性の理解 - Nature of time
+  PARADOXICAL = 'paradoxical',          // 逆説的思考 - Paradoxes and contradictions
+  ONTOLOGICAL = 'ontological',          // 存在論的問い - Ontological questions
+
+  // Deprecated/Unified categories (for backward compatibility)
+  /** @deprecated Use PHILOSOPHICAL instead */
   SYSTEMATIC = 'systematic',
+  /** @deprecated Use ETHICAL or PHILOSOPHICAL instead */
   EMPATHETIC = 'empathetic',
-  CREATIVE = 'creative',
+  /** @deprecated Use EPISTEMOLOGICAL instead */
   ANALYTICAL = 'analytical',
-  INTROSPECTIVE = 'introspective',
-  EXISTENTIAL = 'existential'
+  /** @deprecated Use METACOGNITIVE instead */
+  INTROSPECTIVE = 'introspective'
 }
 
 /**
