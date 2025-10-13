@@ -242,26 +242,43 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
     fetchInitialData();
 
     // Connect to real consciousness backend via EventSource
+    let eventSource: EventSource | null = null;
+    let isMounted = true;
+
     const connectToConsciousness = () => {
       try {
-        const eventSource = new EventSource('/api/consciousness/events');
+        eventSource = new EventSource('/api/consciousness/events');
 
         eventSource.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          handleConsciousnessEvent(data);
+          if (!isMounted) return;
+          try {
+            const data = JSON.parse(event.data);
+            handleConsciousnessEvent(data);
+          } catch (parseError) {
+            console.error('Failed to parse consciousness event:', parseError);
+          }
         };
 
         eventSource.onerror = () => {
           // Connection failed - just close, no fallback
-          eventSource.close();
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
         };
 
         return () => {
-          eventSource.close();
+          isMounted = false;
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
         };
       } catch (error) {
         // Connection failed - no fallback
-        return () => { };
+        return () => {
+          isMounted = false;
+        };
       }
     };
 
@@ -284,7 +301,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             yuiAgent: data.yuiAgent
           }
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限 // Increased limit to 200
         // Don't update Current Thought here - it should show the question/trigger
       } else if (t === 'manualTriggerQueued') {
         // Manual trigger queued for next cycle
@@ -297,7 +314,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           message: `📥 Manual trigger queued: ${question.substring(0, 100)}...`,
           details: { estimatedNextCycle: data.estimatedNextCycle }
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
       } else if (t === 'triggerGenerated') {
         const question = data.trigger?.question || data.question || '';
         const source = data.source || 'system';
@@ -314,7 +331,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           message: source === 'manual' ? `🎯 Manual trigger processing: ${question}` : `Internal trigger: ${question}`,
           details: { source }
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200)); // Increased limit to 200
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限 // Increased limit to 200
         // Update Current Thought to show the current question being processed
         if (question) {
           setCurrentThought(question);
@@ -350,7 +367,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             message: `Stage ${stageId} completed${data.name ? ` (${data.name})` : ''}`,
             details: { ...data }
           };
-          setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+          setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
           // Don't update Current Thought here - it should only show the current question
         }
       } else if (t === 'dpdUpdated') {
@@ -392,7 +409,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           type: 'system_event',
           message: `💤 Entering sleep mode (${data.reason})`
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
         setCurrentThought(`Sleep Mode: ${data.reason}`);
 
         // Reset stage progress and show sleep mode
@@ -406,7 +423,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           type: 'system_event',
           message: `Sleep: ${data.phase} (${data.progress}%)`
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
         setCurrentThought(`Sleep Phase: ${data.phase}`);
       } else if (t === 'sleepCompleted') {
         // Sleep completed
@@ -418,7 +435,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           type: 'system_event',
           message: `✨ Sleep completed (${duration}s, +${energyGain} energy)`
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
         setStats(prev => ({ ...prev, energyLevel: data.energyAfter }));
         setCurrentThought('');
 
@@ -433,7 +450,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           type: 'system_event',
           message: `❌ Sleep error: ${data.error}`
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
       } else if (t === 'cycleProcessingChanged') {
         // Update button states based on cycle processing status
         setConsciousnessState(prev => ({
@@ -448,7 +465,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           type: 'system_event',
           message: `⏸️ Entered dormancy: ${data.reason} (Energy: ${data.currentEnergy?.toFixed(1)})`
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
       } else if (t === 'consciousnessAwakened') {
         // Consciousness awakened from dormancy
         const logItem: ActivityLogItem = {
@@ -457,7 +474,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           type: 'system_event',
           message: `▶️ Awakened from dormancy (Energy: ${data.currentEnergy?.toFixed(1)})`
         };
-        setActivityLog(prev => [logItem, ...prev].slice(0, 200));
+        setActivityLog(prev => [logItem, ...prev].slice(0, 50)); // メモリリーク防止: 50件に制限
 
         // Update energy level
         if (data.currentEnergy !== undefined) {

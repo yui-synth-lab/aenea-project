@@ -121,23 +121,32 @@ export const TriggerHistory: React.FC<TriggerHistoryProps> = ({
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
+    let ws: WebSocket | null = null;
+    let isMounted = true;
 
     try {
-      const ws = new WebSocket(wsUrl);
+      ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         console.log('🔌 Connected to consciousness WebSocket');
       };
 
       ws.onmessage = (event) => {
+        if (!isMounted) return;
+
         try {
           const data = JSON.parse(event.data);
 
           if (data.type === 'triggerGenerated') {
-            setTriggers(prev => [data.trigger, ...prev.slice(0, maxItems - 1)]);
+            // メモリリーク防止: 新規トリガー追加時も最大件数を厳守
+            setTriggers(prev => {
+              const updated = [data.trigger, ...prev];
+              return updated.slice(0, maxItems);
+            });
           } else if (data.type === 'consciousnessHistory') {
             if (data.questions && data.questions.items) {
-              setTriggers(data.questions.items);
+              // メモリリーク防止: サーバーから受信したデータも最大件数に制限
+              setTriggers(data.questions.items.slice(0, maxItems));
             }
           }
         } catch (parseError) {
@@ -152,13 +161,16 @@ export const TriggerHistory: React.FC<TriggerHistoryProps> = ({
       ws.onclose = () => {
         console.log('🔌 Disconnected from consciousness WebSocket');
       };
-
-      return () => {
-        ws.close();
-      };
     } catch (wsError) {
       console.warn('WebSocket not available:', wsError);
     }
+
+    return () => {
+      isMounted = false;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
   }, [isRealTime, maxItems]);
 
   // Filter and sort triggers

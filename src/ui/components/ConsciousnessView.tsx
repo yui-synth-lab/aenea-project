@@ -102,7 +102,7 @@ export const ConsciousnessView: React.FC = () => {
 
       setConsciousnessState(prev => ({
         ...prev,
-        recentThoughts: [thought, ...prev.recentThoughts].slice(0, 10),
+        recentThoughts: [thought, ...prev.recentThoughts].slice(0, 10), // 最大10件に制限
         currentEnergy: Math.max(10, prev.currentEnergy - 5 - Math.random() * 5)
       }));
     }

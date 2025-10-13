@@ -38,25 +38,38 @@ export const DPDScoreDisplay: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let fallbackInterval: NodeJS.Timeout | null = null;
+    let isMounted = true;
+
     // サーバーからDPD履歴を取得（常にサンプリングされた最新データを取得）
     const fetchDPDEvolution = async () => {
+      if (!isMounted) return;
+
       try {
         const response = await fetch('/api/consciousness/dpd/evolution?limit=20&strategy=sampled');
-        if (response.ok) {
-          const data = await response.json();
+        if (!response.ok || !isMounted) return;
 
-          // 現在のweightsを更新
-          if (data.currentWeights) {
-            setCurrentWeights({
-              empathy: data.currentWeights.empathy,
-              coherence: data.currentWeights.coherence,
-              dissonance: data.currentWeights.dissonance,
-              timestamp: data.timestamp || Date.now()
-            });
-          }
+        const data = await response.json();
 
-          // 履歴を完全に置き換え（サンプリングされたデータセット）
-          const historyData = (data.history || []).sort((a: any, b: any) => a.version - b.version).map((item: any) => ({
+        if (!isMounted) return;
+
+        // 現在のweightsを更新
+        if (data.currentWeights) {
+          setCurrentWeights({
+            empathy: data.currentWeights.empathy,
+            coherence: data.currentWeights.coherence,
+            dissonance: data.currentWeights.dissonance,
+            timestamp: data.timestamp || Date.now()
+          });
+        }
+
+        // 履歴を完全に置き換え（サンプリングされたデータセット）
+        // メモリリーク防止: 常に最新20件のみ保持
+        const historyData = (data.history || [])
+          .sort((a: any, b: any) => a.version - b.version)
+          .slice(-20)
+          .map((item: any) => ({
             timestamp: item.timestamp,
             scores: {
               empathy: item.empathy,
@@ -66,9 +79,8 @@ export const DPDScoreDisplay: React.FC = () => {
             },
             context: item.context || item.trigger_type || 'System update'
           }));
-          setHistory(historyData);
-          setTotalCount(data.totalCount || historyData.length);
-        }
+        setHistory(historyData);
+        setTotalCount(data.totalCount || historyData.length);
       } catch (error) {
         console.error('Failed to fetch DPD evolution:', error);
       }
@@ -78,38 +90,58 @@ export const DPDScoreDisplay: React.FC = () => {
     fetchDPDEvolution();
 
     // EventSource で DPD 更新イベントを受け取る
-    let eventSource: EventSource | null = null;
-
     try {
       eventSource = new EventSource('/api/consciousness/events');
 
       eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+        if (!isMounted) return;
 
-        // DPD 更新イベントまたは思考サイクル完了時に再取得
-        if (data.type === 'dpdUpdated' || data.type === 'thoughtCycleCompleted' || data.type === 'weightUpdate') {
-          fetchDPDEvolution();
+        try {
+          const data = JSON.parse(event.data);
+
+          // DPD 更新イベントまたは思考サイクル完了時に再取得
+          if (data.type === 'dpdUpdated' || data.type === 'thoughtCycleCompleted' || data.type === 'weightUpdate') {
+            fetchDPDEvolution();
+          }
+        } catch (parseError) {
+          console.error('Failed to parse EventSource message:', parseError);
         }
       };
 
       eventSource.onerror = () => {
         console.warn('DPD EventSource connection failed, using polling fallback');
         eventSource?.close();
+        eventSource = null;
 
-        // フォールバック: 10秒ごとにポーリング
-        const fallbackInterval = setInterval(fetchDPDEvolution, 10000);
-        return () => clearInterval(fallbackInterval);
+        // フォールバック: 30秒ごとにポーリング（10秒→30秒に変更してサーバー負荷削減）
+        if (!fallbackInterval && isMounted) {
+          fallbackInterval = setInterval(() => {
+            if (isMounted) fetchDPDEvolution();
+          }, 30000);
+        }
       };
     } catch (error) {
       console.warn('Failed to connect to EventSource, using polling fallback');
 
-      // フォールバック: 10秒ごとにポーリング
-      const fallbackInterval = setInterval(fetchDPDEvolution, 10000);
-      return () => clearInterval(fallbackInterval);
+      // フォールバック: 30秒ごとにポーリング
+      if (!fallbackInterval && isMounted) {
+        fallbackInterval = setInterval(() => {
+          if (isMounted) fetchDPDEvolution();
+        }, 30000);
+      }
     }
 
+    // クリーンアップ関数
     return () => {
-      eventSource?.close();
+      isMounted = false;
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      if (fallbackInterval) {
+        clearInterval(fallbackInterval);
+        fallbackInterval = null;
+      }
     };
   }, []);
 
