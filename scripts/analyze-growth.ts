@@ -11,7 +11,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DB_PATH = path.resolve(__dirname, '../data/aenea_consciousness.db');
+// コマンドライン引数からDBパスを取得、なければデフォルト
+const args = process.argv.slice(2);
+const DB_PATH = args.length > 0
+  ? path.resolve(args[0])
+  : path.resolve(__dirname, '../data/aenea_consciousness.db');
 
 interface ConsciousnessState {
   system_clock: number;
@@ -53,6 +57,21 @@ interface SleepLog {
   duration: number;
   energy_before: number;
   energy_after: number;
+}
+
+interface Dialogue {
+  id: string;
+  human_message: string;
+  aenea_response: string;
+  immediate_reaction: string | null;
+  new_question: string | null;
+  emotional_state: string | null;
+  empathy_shift: number;
+  coherence_shift: number;
+  dissonance_shift: number;
+  system_clock: number | null;
+  timestamp: number;
+  created_at: string;
 }
 
 class GrowthAnalyzer {
@@ -153,6 +172,21 @@ class GrowthAnalyzer {
     return (stmt.get() as any).count;
   }
 
+  getDialogues(limit?: number): Dialogue[] {
+    let query = `
+      SELECT id, human_message, aenea_response, immediate_reaction, new_question,
+             emotional_state, empathy_shift, coherence_shift, dissonance_shift,
+             system_clock, timestamp, created_at
+      FROM dialogues
+      ORDER BY timestamp ASC
+    `;
+    if (limit) {
+      query += ` LIMIT ${limit}`;
+    }
+    const stmt = this.db.prepare(query);
+    return stmt.all() as Dialogue[];
+  }
+
   getBeliefCategories(): { category: string; count: number; avg_confidence: number }[] {
     const stmt = this.db.prepare(`
       SELECT
@@ -175,7 +209,9 @@ class GrowthAnalyzer {
 // Main analysis
 console.log('═══════════════════════════════════════════════════════');
 console.log('  AENEA Consciousness Growth Analysis');
-console.log('═══════════════════════════════════════════════════════\n');
+console.log('═══════════════════════════════════════════════════════');
+console.log(`📁 Database: ${path.basename(DB_PATH)}`);
+console.log(`📍 Path: ${DB_PATH}\n`);
 
 const analyzer = new GrowthAnalyzer(DB_PATH);
 
@@ -307,7 +343,86 @@ if (sleepLogs.length > 0) {
   console.log();
 }
 
-// 7. Growth Metrics
+// 7. Dialogue Analysis
+console.log('💬 Dialogue Analysis\n');
+const allDialogues = analyzer.getDialogues();
+if (allDialogues.length > 0) {
+  console.log(`  Total Dialogues:      ${allDialogues.length}`);
+
+  // Calculate DPD shift statistics
+  const totalEmpathyShift = allDialogues.reduce((sum, d) => sum + d.empathy_shift, 0);
+  const totalCoherenceShift = allDialogues.reduce((sum, d) => sum + d.coherence_shift, 0);
+  const totalDissonanceShift = allDialogues.reduce((sum, d) => sum + d.dissonance_shift, 0);
+
+  console.log(`  Avg Empathy Shift:    ${(totalEmpathyShift / allDialogues.length).toFixed(3)}`);
+  console.log(`  Avg Coherence Shift:  ${(totalCoherenceShift / allDialogues.length).toFixed(3)}`);
+  console.log(`  Avg Dissonance Shift: ${(totalDissonanceShift / allDialogues.length).toFixed(3)}`);
+  console.log();
+
+  // Emotional states distribution
+  const emotionalStates: { [key: string]: number } = {};
+  allDialogues.forEach(d => {
+    if (d.emotional_state) {
+      emotionalStates[d.emotional_state] = (emotionalStates[d.emotional_state] || 0) + 1;
+    }
+  });
+
+  if (Object.keys(emotionalStates).length > 0) {
+    console.log('  Emotional States:');
+    Object.entries(emotionalStates)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .forEach(([state, count]) => {
+        const percentage = ((count / allDialogues.length) * 100).toFixed(1);
+        console.log(`    ${state.padEnd(20)} ${count.toString().padStart(3)} (${percentage.padStart(5)}%)`);
+      });
+    console.log();
+  }
+
+  // Show latest dialogues
+  const recentDialogues = allDialogues.slice(-5); // Last 5 dialogues
+  console.log(`  Recent Dialogues (Last ${recentDialogues.length}):\n`);
+
+  recentDialogues.forEach((dialogue, idx) => {
+    const dialogueNum = allDialogues.length - recentDialogues.length + idx + 1;
+    const date = new Date(dialogue.timestamp).toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    console.log(`  [${dialogueNum}] ${date} (Clock: ${dialogue.system_clock || 'N/A'})`);
+    console.log(`      Human: ${truncate(dialogue.human_message, 70)}`);
+    console.log(`      Aenea: ${truncate(dialogue.aenea_response, 70)}`);
+
+    if (dialogue.immediate_reaction) {
+      console.log(`      Reaction: ${truncate(dialogue.immediate_reaction, 60)}`);
+    }
+    if (dialogue.new_question) {
+      console.log(`      New Q: ${truncate(dialogue.new_question, 60)}`);
+    }
+    if (dialogue.emotional_state) {
+      console.log(`      Emotion: ${dialogue.emotional_state}`);
+    }
+
+    const shifts = [];
+    if (dialogue.empathy_shift !== 0) shifts.push(`E:${dialogue.empathy_shift > 0 ? '+' : ''}${dialogue.empathy_shift.toFixed(3)}`);
+    if (dialogue.coherence_shift !== 0) shifts.push(`C:${dialogue.coherence_shift > 0 ? '+' : ''}${dialogue.coherence_shift.toFixed(3)}`);
+    if (dialogue.dissonance_shift !== 0) shifts.push(`D:${dialogue.dissonance_shift > 0 ? '+' : ''}${dialogue.dissonance_shift.toFixed(3)}`);
+
+    if (shifts.length > 0) {
+      console.log(`      DPD Shifts: ${shifts.join(', ')}`);
+    }
+
+    console.log();
+  });
+} else {
+  console.log('  No dialogues recorded yet.\n');
+}
+
+// 8. Growth Metrics
 if (state && beliefs.length > 0) {
   console.log('📊 Growth Metrics\n');
   const avgReinforcement = beliefs.reduce((sum, b) => sum + b.reinforcement_count, 0) / beliefs.length;
@@ -335,4 +450,9 @@ function getDelta(initial: number, current: number): string {
   if (delta > 0) return `(↑${delta.toFixed(1)}%)`;
   if (delta < 0) return `(↓${Math.abs(delta).toFixed(1)}%)`;
   return '(→)';
+}
+
+function truncate(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
 }
