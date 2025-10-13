@@ -22,7 +22,8 @@
     "test:ui": "node tests/ui/ui-api-test.js",
     "test:ui-selenium": "node tests/ui/selenium-ui-test.js",
     "demo": "npm run build && tsx src/server/aenea-server.ts",
-    "analyze": "tsx scripts/analyze-growth.ts"
+    "analyze": "tsx scripts/analyze-growth.ts",
+    "db:backup": "tsx scripts/backup-db.ts"
   },
   "keywords": [
     "ai",
