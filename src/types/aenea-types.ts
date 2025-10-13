@@ -87,7 +87,12 @@ export enum TriggerSource {
   RANDOM_GENERATION = 'random_generation',
   PATTERN_RECOGNITION = 'pattern_recognition',
   ENERGY_THRESHOLD = 'energy_threshold',
-  GROWTH_STIMULUS = 'growth_stimulus'
+  GROWTH_STIMULUS = 'growth_stimulus',
+  // New sources from refactored architecture
+  MANUAL = 'manual',                               // User input trigger
+  AI_EVOLVED_FROM_HISTORY = 'ai_evolved_from_history', // AI-generated from consciousness history
+  TEMPLATE_EVOLVED = 'template_evolved',           // Template-based evolved question
+  DATABASE_UNRESOLVED = 'database_unresolved'      // Selected from unresolved ideas database
 }
 
 /**

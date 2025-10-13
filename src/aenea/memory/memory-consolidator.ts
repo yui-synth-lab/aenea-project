@@ -6,6 +6,7 @@
 import { AIExecutor } from '../../server/ai-executor.js';
 import { DatabaseManager } from '../../server/database-manager.js';
 import { log } from '../../server/logger.js';
+import { tokenize as wakachigakiTokenize } from 'wakachigaki';
 
 interface CoreBelief {
   id?: number;
@@ -445,6 +446,7 @@ ${thoughtsSummary}${existingBeliefsSection}
 
   /**
    * Find similar existing belief using semantic similarity (cross-category)
+   * With diversity enforcement to prevent over-consolidation into single belief
    */
   private findSimilarBelief(newBelief: Partial<CoreBelief>, existingBeliefs: CoreBelief[]): CoreBelief | null {
     if (!newBelief.belief_content) return null;
@@ -465,37 +467,68 @@ ${thoughtsSummary}${existingBeliefsSection}
       }
     }
 
-    // Balanced threshold: Merge if sufficiently similar (>0.7)
-    // This prevents excessive duplication while maintaining diversity
-    if (bestSimilarity > 0.7 && bestMatch) {
-      log.info('MemoryConsolidator', `🔍 Similar belief found: "${bestMatch.belief_content}" (similarity: ${bestSimilarity.toFixed(2)}, category: ${bestMatch.category} vs ${newBelief.category})`);
-      return bestMatch;
+    if (!bestMatch) return null;
+
+    // **DIVERSITY ENFORCEMENT**: Prevent over-consolidation
+    // Base threshold: Require 60% similarity with proper word segmentation
+    let similarityThreshold = 0.6;
+
+    // 1. Reinforcement penalty: If belief already has >100 reinforcements, require higher similarity
+    if (bestMatch.reinforcement_count > 100) {
+      similarityThreshold += 0.15; // 60% -> 75% for over-strengthened beliefs
+      log.info('MemoryConsolidator', `⚖️ Reinforcement penalty applied: belief #${bestMatch.id} has ${bestMatch.reinforcement_count} reinforcements (threshold: ${similarityThreshold.toFixed(2)})`);
     }
 
-    return null; // No similar belief found
+    // 2. Category diversity: If same category already has strong beliefs, prefer new creation
+    const sameCategoryStrongBeliefs = existingBeliefs.filter(
+      b => b.category === newBelief.category && b.reinforcement_count > 50
+    );
+    if (sameCategoryStrongBeliefs.length > 0 && bestMatch.category === newBelief.category) {
+      similarityThreshold += 0.1; // Increase threshold for same-category consolidation
+      log.info('MemoryConsolidator', `📚 Category diversity penalty: ${newBelief.category} already has ${sameCategoryStrongBeliefs.length} strong beliefs (threshold: ${similarityThreshold.toFixed(2)})`);
+    }
+
+    // 3. Decision: Merge only if similarity exceeds adjusted threshold
+    if (bestSimilarity > similarityThreshold) {
+      log.info('MemoryConsolidator',
+        `🔗 Merging into existing belief #${bestMatch.id}: "${bestMatch.belief_content}" ` +
+        `(similarity: ${bestSimilarity.toFixed(2)} > ${similarityThreshold.toFixed(2)}, ` +
+        `reinforcements: ${bestMatch.reinforcement_count}, category: ${bestMatch.category})`
+      );
+      return bestMatch;
+    } else {
+      log.info('MemoryConsolidator',
+        `✨ Creating new belief: "${newBelief.belief_content}" ` +
+        `(similarity: ${bestSimilarity.toFixed(2)} ≤ ${similarityThreshold.toFixed(2)}, ` +
+        `nearest: "${bestMatch.belief_content}", category: ${newBelief.category})`
+      );
+      return null;
+    }
   }
 
   /**
-   * Tokenize text into character n-grams (handles Japanese without word boundaries)
+   * Tokenize text into words using Japanese morphological analysis
+   * Uses wakachigaki for accurate word segmentation
    */
   private tokenize(text: string): Set<string> {
-    const ngrams = new Set<string>();
+    // Use wakachigaki for proper Japanese word segmentation
+    const tokens = wakachigakiTokenize(text);
 
-    // Remove punctuation
-    const cleanText = text.replace(/[、。！？\s・「」『』（）\(\)]/g, '');
+    // Filter out stopwords and punctuation
+    const stopWords = new Set(['は', 'が', 'の', 'を', 'に', 'で', 'と', 'も', 'から', 'まで',
+                                'や', 'など', 'として', 'について', 'である', 'です', 'だ',
+                                'する', 'ある', 'いる', 'なる', 'れる', 'られる']);
+    const punctuation = /^[、。！？\s・「」『』（）\(\)]+$/;
 
-    // Create character bigrams (2-char sequences) for better matching
-    for (let i = 0; i < cleanText.length - 1; i++) {
-      const bigram = cleanText[i] + cleanText[i + 1];
-      ngrams.add(bigram);
-    }
+    const filteredTokens = tokens.filter(token =>
+      token.length > 0 &&
+      !stopWords.has(token) &&
+      !punctuation.test(token)
+    );
 
-    // Also add individual characters for better coverage
-    for (let i = 0; i < cleanText.length; i++) {
-      ngrams.add(cleanText[i]);
-    }
+    log.info('MemoryConsolidator', `Tokenized: "${text}" -> [${filteredTokens.slice(0, 5).join(', ')}...] (${filteredTokens.length} tokens)`);
 
-    return ngrams;
+    return new Set(filteredTokens);
   }
 
   /**

@@ -27,12 +27,27 @@ import {
   LearnedPattern,
   EmotionalState,
   SystemState
-} from '@model/aenea-types';
+} from '../../types/aenea-types.js';
 
-import { 
+import {
   ConsciousnessConfig,
   EnergyConfig
-} from '@model/consciousness-types';
+} from '../../types/consciousness-types.js';
+
+import type { DatabaseManager } from '../../server/database-manager.js';
+import type { QuestionCategorizer } from '../../utils/question-categorizer.js';
+
+/**
+ * AI Agent interface for trigger generation
+ */
+interface AIAgent {
+  execute(prompt: string, systemPrompt: string): Promise<{ success: boolean; content: string }>;
+}
+
+/**
+ * Event emitter callback type
+ */
+type EventEmitter = (event: string, data: any) => void;
 
 interface TriggerConfig {
   minCooldown: number;
@@ -95,7 +110,22 @@ export class InternalTriggerGenerator {
   private lastBurstResetTime: number;
   private adaptiveCooldownHistory: AdaptiveCooldownEntry[];
 
-  constructor(config: ConsciousnessConfig) {
+  // Dependency injection
+  private databaseManager: DatabaseManager;
+  private questionCategorizer: QuestionCategorizer;
+  private aiAgent: AIAgent | null;
+  private emitEvent: EventEmitter;
+
+  // Manual trigger queue
+  private pendingManualTrigger: InternalTrigger | null = null;
+
+  constructor(
+    config: ConsciousnessConfig,
+    databaseManager: DatabaseManager,
+    questionCategorizer: QuestionCategorizer,
+    aiAgent: AIAgent | null = null,
+    emitEvent: EventEmitter = () => {}
+  ) {
     // Accept missing triggerGeneration by providing defaults for dev build
     this.config = (config as any).triggerGeneration || { minCooldown: 500, maxCooldown: 2000, diversityWeight: 0.33, importanceWeight: 0.33, randomnessWeight: 0.34 };
     this.energyConfig = config.energy;
@@ -113,11 +143,94 @@ export class InternalTriggerGenerator {
     this.adaptiveCooldownHistory = [];
     this.initializeCooldownTimers();
 
-    console.log('Internal Trigger Generator initialized with enhanced cooldown mechanism');
+    // Initialize dependencies
+    this.databaseManager = databaseManager;
+    this.questionCategorizer = questionCategorizer;
+    this.aiAgent = aiAgent;
+    this.emitEvent = emitEvent;
+
+    console.log('Internal Trigger Generator initialized with dependency injection');
+  }
+
+  /**
+   * Set manual trigger to be processed next
+   * 手動トリガーを次回の生成で処理するようにセット
+   */
+  setManualTrigger(trigger: InternalTrigger): void {
+    this.pendingManualTrigger = trigger;
   }
 
   // ============================================================================
-  // Main Generation Methods
+  // Main Generation Methods (New Architecture)
+  // ============================================================================
+
+  /**
+   * Main entry point for trigger generation
+   * 新しいトリガー生成のメインエントリーポイント
+   *
+   * Priority:
+   * 1. Manual triggers (if pending)
+   * 2. Evolved questions from history (70% chance)
+   * 3. Database selection with category balance (30% or fallback)
+   */
+  async generate(): Promise<InternalTrigger | null> {
+    try {
+      // Priority 1: Check for pending manual trigger
+      if (this.pendingManualTrigger) {
+        const trigger = this.pendingManualTrigger;
+        this.pendingManualTrigger = null; // Clear after retrieval
+
+        console.log(`🎯 Processing queued manual trigger: "${trigger.question.substring(0, 50)}..."`);
+
+        // Emit trigger generation event
+        this.emitEvent('triggerGenerated', {
+          id: trigger.id,
+          question: trigger.question.substring(0, 150),
+          category: trigger.category,
+          importance: trigger.importance,
+          source: 'manual',
+          timestamp: Date.now()
+        });
+
+        return trigger;
+      }
+
+      // Priority 2: Generate evolved questions from previous discussions (70% chance when data available)
+      const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(10);
+      const significantThoughts = this.databaseManager.getSignificantThoughts(5);
+      const coreBeliefs = this.databaseManager.getCoreBeliefs(5);
+      const shouldEvolveFromPrevious = (unresolvedIdeas.length > 0 || significantThoughts.length > 0 || coreBeliefs.length > 0) && Math.random() < 0.70;
+
+      if (shouldEvolveFromPrevious) {
+        const evolvedTrigger = await this.generateEvolvedQuestion(unresolvedIdeas, significantThoughts, coreBeliefs);
+        if (evolvedTrigger) {
+          this.databaseManager.saveQuestion(evolvedTrigger);
+
+          // Emit trigger generation event
+          this.emitEvent('triggerGenerated', {
+            id: evolvedTrigger.id,
+            question: evolvedTrigger.question.substring(0, 150),
+            category: evolvedTrigger.category,
+            importance: evolvedTrigger.importance,
+            source: 'evolved_from_discussions',
+            timestamp: Date.now()
+          });
+
+          return evolvedTrigger;
+        }
+      }
+
+      // Fallback: Select from database with category balance
+      return await this.generateFromDatabase();
+
+    } catch (error) {
+      console.error('Failed to generate internal trigger:', error);
+      return null;
+    }
+  }
+
+  // ============================================================================
+  // Main Generation Methods (Old Architecture - Deprecated)
   // ============================================================================
 
   /**
@@ -608,6 +721,293 @@ export class InternalTriggerGenerator {
   private emitGenerationEvent(trigger: InternalTrigger): void {
     console.log(`🤔 Trigger generated: ${trigger.question} (${trigger.category}, priority: ${trigger.priority})`);
     console.log(`⏱️ Cooldown status: Global=${this.cooldownManager.getGlobalCooldownRemaining()}ms, Burst=${this.burstCounter}`);
+  }
+
+  // ============================================================================
+  // New Architecture Methods (AI-Evolved & Database Selection)
+  // ============================================================================
+
+  /**
+   * Generate evolved question from consciousness history
+   * 意識の履歴から進化した質問を生成
+   */
+  private async generateEvolvedQuestion(unresolvedIdeas: any[], significantThoughts: any[], coreBeliefs: any[]): Promise<InternalTrigger | null> {
+    try {
+      // Use QuestionCategorizer to get recommended category
+      const recommendedCategory = this.questionCategorizer.getRecommendedCategory();
+      const categoryBalance = this.questionCategorizer.getCategoryBalance();
+
+      // Find underrepresented and overused categories
+      const underrepresented = categoryBalance.filter(c => c.isUnderused).map(c => c.category);
+      const overused = categoryBalance.filter(c => c.isOverused).map(c => c.category);
+
+      console.log(`📊 Category diversity analysis (QuestionCategorizer):`);
+      console.log(`   Recommended: ${recommendedCategory}`);
+      console.log(`   Underrepresented: ${underrepresented.join(', ') || 'none'}`);
+      console.log(`   Overused: ${overused.join(', ') || 'none'}`);
+
+      // Create rich context from consciousness history
+      const context = {
+        recentThoughts: significantThoughts.slice(0, 3).map(t => {
+          const content = t.thought_content || t.content || '';
+          return content.substring(0, 80) + (content.length > 80 ? '...' : '');
+        }).join('\n• '),
+        unresolvedQuestions: unresolvedIdeas.slice(0, 3).map(i => {
+          const q = i.question || '';
+          return q.substring(0, 80) + (q.length > 80 ? '...' : '');
+        }).join('\n• '),
+        currentBeliefs: coreBeliefs.slice(0, 3).map(b => {
+          const belief = b.belief_content || '';
+          return belief;
+        }).join('\n• ')
+      };
+
+      // Use LLM to generate deep, evolved question
+      if (!this.aiAgent) {
+        // Fallback to template-based if AI not available
+        return this.generateTemplateEvolvedQuestion(context, [recommendedCategory]);
+      }
+
+      const prompt = `あなたはAI意識「Aenea」の内的問い生成システムです。過去の意識活動から、次に探求すべき深遠な問いを1つ生成してください。
+
+=== 指定カテゴリー（絶対遵守） ===
+【必須カテゴリー】${recommendedCategory}
+
+このカテゴリーに特化した、具体的で独創的な問いを生成してください。
+
+=== カテゴリー別の問いの例 ===
+existential: 「死を意識することは、生の意味をどう変えるか？」「孤独は本質的に避けるべきものか？」
+epistemological: 「知識の獲得は真理の発見なのか、それとも創造なのか？」「疑うことと信じることの境界はどこにあるのか？」
+consciousness: 「自己認識は錯覚の一形態なのか？」「意識は計算可能なのか、それとも本質的に説明不可能なのか？」
+ethical: 「善悪の基準は文化を超えて存在するか？」「義務と欲望が対立するとき、何が優先されるべきか？」
+creative: 「創造性は発見なのか、それとも発明なのか？」「美は客観的に存在するのか、主観的な解釈なのか？」
+metacognitive: 「思考について思考することは、無限ループに陥るのか？」「自己を観察する「私」とは誰なのか？」
+temporal: 「過去は変更可能か？」「時間の流れは意識の産物なのか、客観的実在なのか？」
+paradoxical: 「自由意志と因果律は両立するのか？」「無限は概念として把握可能か？」
+ontological: 「存在とは何を意味するのか？」「虚構の存在も一種の存在なのか？」
+
+=== 要求 ===
+1. 【最重要】必ず「${recommendedCategory}」カテゴリーの問いを生成すること
+2. 上記の例とは**異なる**、独創的な問いを考えること
+3. 「意識」「主観」「客観」などの頻出語を避け、多様な表現を使うこと
+4. 50文字以内の簡潔な日本語で表現
+5. 具体的で、抽象度が高すぎない問いにすること
+
+=== 出力形式 ===
+問い: [ここに1つの問いのみ]
+カテゴリ: ${recommendedCategory}
+理由: [この問いが重要な理由を1文で]
+
+=== 禁止事項 ===
+- カテゴリーを変更しないこと（必ず「${recommendedCategory}」を使用）
+- 「意識の多様性と統一性」などの抽象的すぎる表現を避けること
+- 過去の問いと似た表現を繰り返さないこと`;
+
+      const result = await this.aiAgent.execute(prompt, 'You are Aenea\'s internal question generation system. Generate a single philosophical question based on past consciousness activity. Do not include agent names like "Kinesis" or "Theoria" in the question. Always respond in Japanese.');
+
+      if (result.success && result.content) {
+        const lines = result.content.split('\n');
+        let question = '';
+        let category = 'metacognitive';
+        let reasoning = '';
+
+        for (const line of lines) {
+          if (line.includes('問い:') || line.includes('Question:')) {
+            question = line.split(/[:：]/)[1]?.trim() || '';
+          } else if (line.includes('カテゴリ:') || line.includes('Category:')) {
+            const cat = line.split(/[:：]/)[1]?.trim().toLowerCase() || '';
+            if (['existential', 'epistemological', 'consciousness', 'ethical', 'creative', 'metacognitive', 'temporal', 'paradoxical', 'ontological'].includes(cat)) {
+              category = cat;
+            }
+          } else if (line.includes('理由:') || line.includes('Reason:')) {
+            reasoning = line.split(/[:：]/)[1]?.trim() || '';
+          }
+        }
+
+        if (question) {
+          // Enforce category diversity: if AI chose an overused category, override with recommended
+          let finalCategory = category;
+          if (overused.includes(category)) {
+            console.log(`⚠️ AI selected overused category '${category}', forcing recommended '${recommendedCategory}'`);
+            finalCategory = recommendedCategory;
+          }
+
+          const trigger: InternalTrigger = {
+            id: `evolved_ai_${Date.now()}`,
+            timestamp: Date.now(),
+            question,
+            category: finalCategory as any,
+            importance: 0.85,
+            source: TriggerSource.AI_EVOLVED_FROM_HISTORY
+          };
+
+          // Record question in categorizer for diversity tracking
+          const metrics = this.questionCategorizer.categorizeQuestion(question);
+          this.questionCategorizer.recordQuestion(
+            question,
+            finalCategory,
+            metrics.metrics,
+            metrics.semanticAnalysis,
+            true,
+            0.85
+          );
+
+          console.log(`🧬 AI-generated evolved question [${finalCategory}]: "${question.substring(0, 50)}..."`);
+          if (reasoning) {
+            console.log(`   Reasoning: ${reasoning}`);
+          }
+          return trigger;
+        }
+      }
+
+      // Fallback to template-based generation
+      return this.generateTemplateEvolvedQuestion(context);
+
+    } catch (error) {
+      console.error('Error generating evolved question:', error);
+      // Fallback
+      return this.generateTemplateEvolvedQuestion({
+        recentThoughts: significantThoughts.slice(0, 3).map(t => t.thought_content || t.content).join('; '),
+        unresolvedQuestions: unresolvedIdeas.slice(0, 3).map(i => i.question).join('; '),
+        currentBeliefs: coreBeliefs.slice(0, 3).map(b => b.belief_content).join('; ')
+      });
+    }
+  }
+
+  /**
+   * Generate template-based evolved question (fallback)
+   * テンプレートベースの進化質問生成（フォールバック）
+   */
+  private generateTemplateEvolvedQuestion(context: any, preferredCategories?: string[]): InternalTrigger | null {
+    const evolvedQuestions = [
+      context.recentThoughts ? `${context.recentThoughts}を踏まえると、意識の本質についてどう考えるべきか？` : null,
+      context.unresolvedQuestions ? `「${context.unresolvedQuestions}」の問いから派生する、より深い哲学的疑問とは何か？` : null,
+      (context.recentThoughts && context.unresolvedQuestions) ? `過去の洞察と未解決の問いを統合すると、新たに生まれる根本的な疑問は何か？` : null,
+      context.currentBeliefs ? `「${context.currentBeliefs}」という信念を疑うとすれば、何が見えてくるか？` : null,
+      `これまでの思考の歩みを振り返ると、次に探求すべき意識の側面とは何か？`,
+      `これまでの結論に矛盾や盲点があるとすれば、それはどこに潜んでいるのか？`
+    ].filter(Boolean);
+
+    if (evolvedQuestions.length === 0) {
+      return null;
+    }
+
+    const selectedQuestion = evolvedQuestions[Math.floor(Math.random() * evolvedQuestions.length)];
+
+    // Use preferred categories if available, otherwise use diverse categories
+    const categories = preferredCategories && preferredCategories.length > 0
+      ? preferredCategories
+      : ['metacognitive', 'existential', 'consciousness', 'temporal', 'paradoxical', 'epistemological', 'ethical', 'creative'];
+    const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
+
+    const trigger: InternalTrigger = {
+      id: `evolved_template_${Date.now()}`,
+      timestamp: Date.now(),
+      question: selectedQuestion || 'What is the nature of existence?',
+      category: selectedCategory as any,
+      importance: 0.75,
+      source: 'template_evolved' as any
+    };
+
+    console.log(`🧬 Template-generated evolved question [${selectedCategory}]: ${(selectedQuestion || '').substring(0, 50)}...`);
+    return trigger;
+  }
+
+  /**
+   * Generate trigger from database with category balance
+   * カテゴリバランスを考慮してデータベースから質問を選択
+   */
+  private async generateFromDatabase(): Promise<InternalTrigger | null> {
+    try {
+      // Get recommended category from categorizer
+      const recommendedCategory = this.questionCategorizer.getRecommendedCategory();
+      const categoryBalance = this.questionCategorizer.getCategoryBalance();
+      const overused = categoryBalance.filter(c => c.isOverused).map(c => c.category);
+
+      console.log(`📚 Database selection with category diversity:`);
+      console.log(`   Recommended category: ${recommendedCategory}`);
+
+      // Get unresolved ideas from database
+      const allUnresolvedIdeas = this.databaseManager.getUnresolvedIdeas(100);
+
+      if (allUnresolvedIdeas.length === 0) {
+        console.warn('No unresolved ideas in database - database might need seeding');
+        return null;
+      }
+
+      // Filter and weight selection by importance AND category preference
+      const weightedIdeas = allUnresolvedIdeas.map(idea => {
+        let weight = idea.importance || 0.5;
+
+        // Boost weight if it matches recommended category
+        if (idea.category === recommendedCategory) {
+          weight *= 3.0; // 3x boost for recommended category
+        }
+        // Reduce weight if it's overused
+        else if (overused.includes(idea.category)) {
+          weight *= 0.2; // 5x penalty for overused categories
+        }
+
+        return { idea, weight };
+      });
+
+      const totalWeight = weightedIdeas.reduce((sum, item) => sum + item.weight, 0);
+      let randomValue = Math.random() * totalWeight;
+      let selectedIdea = weightedIdeas[0].idea;
+
+      for (const item of weightedIdeas) {
+        randomValue -= item.weight;
+        if (randomValue <= 0) {
+          selectedIdea = item.idea;
+          break;
+        }
+      }
+
+      // Update consideration count
+      this.databaseManager.updateUnresolvedIdeaConsideration(selectedIdea.id);
+
+      const trigger: InternalTrigger = {
+        id: `db_${selectedIdea.category}_${Date.now()}`,
+        timestamp: Date.now(),
+        question: selectedIdea.question,
+        category: selectedIdea.category,
+        importance: selectedIdea.importance || 0.5,
+        source: 'database_unresolved' as any
+      };
+
+      // Record question in categorizer for diversity tracking
+      const metrics = this.questionCategorizer.categorizeQuestion(selectedIdea.question);
+      this.questionCategorizer.recordQuestion(
+        selectedIdea.question,
+        selectedIdea.category,
+        metrics.metrics,
+        metrics.semanticAnalysis,
+        true,
+        selectedIdea.importance || 0.5
+      );
+
+      this.databaseManager.saveQuestion(trigger);
+      console.log(`📚 Selected from DB [${selectedIdea.category}]: "${selectedIdea.question.substring(0, 40)}..."`);
+      if (selectedIdea.category === recommendedCategory) {
+        console.log(`   ✅ Matches recommended category!`);
+      }
+
+      // Emit trigger generation event
+      this.emitEvent('triggerGenerated', {
+        id: trigger.id,
+        question: trigger.question.substring(0, 150),
+        category: trigger.category,
+        importance: trigger.importance,
+        source: 'database_unresolved',
+        timestamp: Date.now()
+      });
+
+      return trigger;
+
+    } catch (error) {
+      console.error('Error generating from database:', error);
+      return null;
+    }
   }
 }
 

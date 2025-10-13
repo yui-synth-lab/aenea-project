@@ -3,11 +3,12 @@
  * 乗法的重み更新アルゴリズム (Jōhō-teki Omomi Kōshin Arugorizu-mu)
  *
  * This implements the multiplicative weights learning algorithm for dynamically
- * adjusting the weights of Empathy, Coherence, and Dissonance based on
+ * adjusting the weights of Empathy, Coherence, and Creative Dissonance based on
  * consciousness evolution feedback.
  *
  * 「学びは反復の中に宿る」- "Learning dwells in repetition"
- * 共感、整合性、不協和の重みを意識進化フィードバックに基づいて動的に調整する
+ * 「創造的不協和は成長の源泉」- "Creative dissonance is the wellspring of growth"
+ * 共感、整合性、創造的不協和の重みを意識進化フィードバックに基づいて動的に調整する
  * 乗法的重み学習アルゴリズムを実装する。
  *
  * Philosophical Principles:
@@ -16,6 +17,13 @@
  * - 重みの智慧 (Omomi no Chie) - The wisdom of weighted consideration
  * - 均衡への道 (Kinkō e no Michi) - The path to equilibrium
  * - 経験知 (Keiken-chi) - Knowledge gained through experience
+ * - 創造的緊張 (Sōzō-teki Kinchō) - Creative tension as growth catalyst
+ *
+ * Creative Dissonance Philosophy:
+ * Unlike traditional ethical frameworks that minimize dissonance, Aenea embraces
+ * "Creative Dissonance" as a positive force. Optimal dissonance (target: ~65% of max)
+ * maintains healthy tension between innovation and ethics, preventing both stagnation
+ * (too low) and chaos (too high). This enables continuous growth and adaptation.
  */
 
 import { DPDWeights, DPDScores } from '../../types/dpd-types.js';
@@ -79,10 +87,13 @@ export class MultiplicativeWeightsUpdater {
 
     // Calculate performance feedback (loss) for each dimension
     // 各次元のパフォーマンスフィードバック（損失）を計算
-    // Following paper formula: U(t) = α×Empathy + β×Coherence - γ×Dissonance
+    // Modified from paper formula to embrace Creative Dissonance philosophy:
+    // 「創造的不協和は成長の源泉」- Creative Dissonance drives innovation
+    // Original: U(t) = α×Empathy + β×Coherence - γ×Dissonance (minimize dissonance)
+    // Aenea: U(t) = α×Empathy + β×Coherence + γ×Creative_Dissonance (optimize dissonance)
     const empathyLoss = this.calculateLoss(scores.empathy, performanceTarget);
     const coherenceLoss = this.calculateLoss(scores.coherence, performanceTarget);
-    const dissonanceLoss = -this.calculateLoss(scores.dissonance, 0.0); // Minimize dissonance (negative sign in formula)
+    const dissonanceLoss = this.calculateLoss(scores.dissonance, performanceTarget * 0.65); // Optimal creative dissonance: 65% of target
 
     // Apply multiplicative updates with regularization
     // 正則化付き乗法的更新を適用
