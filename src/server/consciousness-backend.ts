@@ -22,6 +22,7 @@ import { theoriaConfig } from '../aenea/agents/theoria.js';
 import { pathiaConfig } from '../aenea/agents/pathia.js';
 import { kinesisConfig } from '../aenea/agents/kinesis.js';
 import { systemConfig } from '../aenea/agents/system.js';
+import { aeneaConfig } from '../aenea/agents/aenea.js';
 import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from '../integration/yui-agents-bridge.js';
 import { ContentCleanupService } from './content-cleanup-service.js';
 import { QuestionCategorizer, createQuestionCategorizer } from '../utils/question-categorizer.js';
@@ -179,6 +180,13 @@ class ConsciousnessBackend extends EventEmitter {
       ...systemConfig.generationParams
     }));
 
+    // Aenea core agent for unified consciousness (dialogue + question generation)
+    this.agents.set('aenea', createAIExecutor('aenea', {
+      provider: aeneaConfig.provider as any,
+      model: aeneaConfig.model,
+      ...aeneaConfig.generationParams
+    }));
+
     log.info('Consciousness', `✅ Agents initialized with individual personalities:`);
     log.info('Consciousness', `  - ${theoriaConfig.displayName} (${theoriaConfig.furigana}): ${theoriaConfig.modelConfig.provider}/${theoriaConfig.modelConfig.model}`);
     log.info('Consciousness', `    Temperature: ${theoriaConfig.generationParams.temperature}, Style: ${theoriaConfig.style}`);
@@ -188,6 +196,8 @@ class ConsciousnessBackend extends EventEmitter {
     log.info('Consciousness', `    Temperature: ${kinesisConfig.generationParams.temperature}, Style: ${kinesisConfig.style}`);
     log.info('Consciousness', `  - ${systemConfig.displayName} (${systemConfig.furigana}): ${systemConfig.modelConfig.provider}/${systemConfig.modelConfig.model}`);
     log.info('Consciousness', `    Temperature: ${systemConfig.generationParams.temperature}, Style: ${systemConfig.style}`);
+    log.info('Consciousness', `  - ${aeneaConfig.displayName}: ${aeneaConfig.provider}/${aeneaConfig.model}`);
+    log.info('Consciousness', `    Temperature: ${aeneaConfig.generationParams.temperature}, Role: Unified consciousness (dialogue + questions)`);
 
     // Initialize DPD Engine
     this.weightUpdateStage = new WeightUpdateStage(undefined, this);
@@ -204,9 +214,13 @@ class ConsciousnessBackend extends EventEmitter {
     this.compilerStage = new CompilerStage(systemAgent, this);
     this.scribeStage = new ScribeStage(systemAgent, this);
 
+    // Get Aenea core agent for unified consciousness operations
+    // Aenea embodies "I am made of questions" and consolidates its own memories
+    const aeneaAgent = this.agents.get('aenea');
+
     // Initialize memory evolution systems
-    const theoriaAgent = this.agents.get('theoria');
-    this.memoryConsolidator = new MemoryConsolidator(this.databaseManager, theoriaAgent);
+    // Memory consolidation is part of Aenea's self-reflection and identity formation
+    this.memoryConsolidator = new MemoryConsolidator(this.databaseManager, aeneaAgent);
     this.coreBeliefs = new CoreBeliefs(this.databaseManager, 500);
     this.lastConsolidationTime = 0;
 
@@ -229,13 +243,14 @@ class ConsciousnessBackend extends EventEmitter {
       } as any,
       this.databaseManager,
       this.questionCategorizer,
-      theoriaAgent,
+      aeneaAgent, // Aenea generates questions as its core identity
       (event: string, data: any) => this.emit(event, data)
     );
-    log.info('Consciousness', '✅ Internal Trigger Generator (S0) initialized with dependency injection');
+    log.info('Consciousness', '✅ Internal Trigger Generator (S0) initialized with Aenea core agent');
 
     // Initialize content cleanup service
-    this.contentCleanup = new ContentCleanupService(theoriaAgent);
+    // Content cleanup is also part of Aenea's self-maintenance
+    this.contentCleanup = new ContentCleanupService(aeneaAgent);
 
     // Initialize Yui Agents bridge
     this.yuiAgentsBridge = createYuiAgentsBridge();
