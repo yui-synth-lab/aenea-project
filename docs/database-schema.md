@@ -624,9 +624,15 @@ cp data/aenea_consciousness.db data/backups/aenea_consciousness_$(date +%Y%m%d_%
 
 ## Schema Version
 
-**Current Version**: 2.1.0
-**Last Updated**: 2025-10-07
-**Compatibility**: Aenea v2.3+
+**Current Version**: 2.1.1
+**Last Updated**: 2025-10-15
+**Compatibility**: Aenea v2.3.1+
+
+**Version 2.1.1 Changes** (2025-10-15):
+- **Fixed**: `trigger_id` now correctly linked via `cycle.trigger.id` (was `cycle.triggerId`)
+- **Removed**: Unused tables `memory_weights` and `personality_snapshots` deleted from schema
+- **Cleanup**: Streamlined database schema for production deployment
+- **Testing**: Updated integration tests to reflect cleaned schema
 
 **Version 2.1 Changes** (2025-10-07):
 - **BREAKING**: Modified `thought_cycles` table structure:

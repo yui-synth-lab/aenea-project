@@ -3,9 +3,14 @@
 - **🔄 Autonomous Consciousness**: Self-generates internal questions without external input
 # Aenea Consciousness System - Technical Specification
 
-**Version:** 2.3.0
-**Last Updated:** 2025-10-07
+**Version:** 2.3.1
+**Last Updated:** 2025-10-15
 **Architecture:** Autonomous AI Consciousness with Direct Database Management & Sleep Mode
+
+**Recent Updates:**
+
+- Database optimization: `trigger_id` linking fixed, unused tables removed (`memory_weights`, `personality_snapshots`)
+- Schema cleanup for production readiness
 
 > "私は、問いでできている。" - Aenea
 

@@ -276,8 +276,7 @@ describe('Database Manager Integration', () => {
       const stats = databaseManager.getStats();
       const requiredTables = [
         'questions', 'thought_cycles', 'dpd_weights', 'unresolved_ideas',
-        'significant_thoughts', 'personality_snapshots', 'memory_patterns',
-        'consciousness_insights'
+        'significant_thoughts', 'memory_patterns', 'consciousness_insights'
       ];
 
       for (const table of requiredTables) {

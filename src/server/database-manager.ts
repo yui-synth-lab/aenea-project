@@ -122,15 +122,6 @@ class DatabaseManager {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Personality evolution snapshots
-      CREATE TABLE IF NOT EXISTS personality_snapshots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        personality_data TEXT NOT NULL, -- JSON
-        growth_indicators TEXT, -- JSON
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
       -- Memory patterns
       CREATE TABLE IF NOT EXISTS memory_patterns (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,16 +130,6 @@ class DatabaseManager {
         frequency INTEGER DEFAULT 1,
         last_seen INTEGER NOT NULL,
         significance REAL DEFAULT 0.5,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Memory weights evolution
-      CREATE TABLE IF NOT EXISTS memory_weights (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        weight_type TEXT NOT NULL,
-        weight_value REAL NOT NULL,
-        context TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -455,7 +436,7 @@ class DatabaseManager {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         cycle.id,
-        cycle.triggerId,
+        cycle.trigger?.id ?? null,
         cycle.timestamp,
         cycle.duration,
         JSON.stringify(cycle.thoughts || []),
@@ -1085,8 +1066,7 @@ class DatabaseManager {
     try {
       const tables = [
         'questions', 'thought_cycles', 'dpd_weights', 'unresolved_ideas',
-        'significant_thoughts', 'personality_snapshots', 'memory_patterns',
-        'consciousness_insights'
+        'significant_thoughts', 'memory_patterns', 'consciousness_insights'
       ];
 
       const stats: any = {};

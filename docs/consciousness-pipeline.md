@@ -428,5 +428,10 @@ async performSleepConsolidation(reason: string) {
 
 ---
 
-**最終更新**: 2025-01-07
-**バージョン**: v1.2 (Sleep-Centered Architecture)
+**最終更新**: 2025-10-15
+**バージョン**: v1.2.1 (Production-Ready with Database Optimization)
+
+**Recent Updates (v1.2.1)**:
+- Fixed `trigger_id` linkage in thought cycles (`cycle.trigger.id`)
+- Removed unused database tables (`memory_weights`, `personality_snapshots`)
+- Enhanced database schema documentation and test coverage

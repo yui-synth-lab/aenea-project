@@ -1,8 +1,15 @@
 # Aenea Features Analysis - Implemented vs Used
 
-**Generated:** 2025-10-07 (Updated with Sleep Mode & Dialogue System)
-**Project Status:** Production-Ready with Memory Consolidation, Sleep Mode, Dialogue System, Direct Database Management & t_wada Quality Tests
+**Generated:** 2025-10-15 (Updated with Database Optimization)
+**Project Status:** Production-Ready with Memory Consolidation, Sleep Mode, Dialogue System, Direct Database Management, Database Optimization & t_wada Quality Tests
 **Total TypeScript Files:** 42+
+
+**Latest Updates (2025-10-15):**
+
+- ✅ **Database Optimization**: Fixed `trigger_id` linkage in thought cycles (`cycle.trigger.id`)
+- ✅ **Schema Cleanup**: Removed unused tables (`memory_weights`, `personality_snapshots`)
+- ✅ **Test Updates**: Updated integration tests to reflect cleaned schema
+- ✅ **Documentation**: All .md files updated to v2.3.1 with latest fixes
 
 ---
 
