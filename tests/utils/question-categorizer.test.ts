@@ -1,5 +1,5 @@
 /**
- * Question Categorizer Tests - t_wada Style
+ * Question Categorizer Tests - Style
  * Tests for the advanced semantic question classification system
  */
 

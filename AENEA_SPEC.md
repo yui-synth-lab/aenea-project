@@ -419,7 +419,7 @@ npm run clean         # Clean dist directory
 - **Real-Time WebSocket**: Live consciousness state updates
 - **Activity Log**: Complete thought cycle history
 - **Database Inspection**: SQLite database in `data/` directory
-- **Test Suite**: t_wada-quality tests for core systems
+- **Test Suite**: quality tests for core systems
 
 ---
 

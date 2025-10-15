@@ -1,5 +1,5 @@
 /**
- * Jest Test Setup - t_wada Style
+ * Jest Test Setup - Style
  * Global test configuration and utilities
  */
 

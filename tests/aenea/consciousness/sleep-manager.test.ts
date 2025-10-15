@@ -1,5 +1,5 @@
 /**
- * Sleep Manager Tests - t_wada Quality
+ * Sleep Manager Tests - Quality
  * Tests for sleep cycle consolidation and memory management
  */
 
@@ -58,7 +58,7 @@ class MockAIExecutor {
   }
 }
 
-describe('SleepManager - t_wada Quality Tests', () => {
+describe('SleepManager - Quality Tests', () => {
   let sleepManager: SleepManager;
   let databaseManager: DatabaseManager;
   let energyManager: EnergyManager;

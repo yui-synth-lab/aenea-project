@@ -135,7 +135,7 @@ This theoretical framework has been implemented as **Aenea (エイネア)**, an 
 - SQLite database with direct state management
 - AI Executor (LLM integration for all stages)
 - Real-time WebSocket UI (Server-Sent Events)
-- t_wada quality test suite (comprehensive coverage)
+- Quality test suite (comprehensive coverage)
 
 **Status:** ✅ Production-ready, actively running, database optimized
 

@@ -1,5 +1,5 @@
 /**
- * Growth Metrics Tests - t_wada Style
+ * Growth Metrics Tests - Style
  * Comprehensive tests for consciousness growth analysis
  */
 
