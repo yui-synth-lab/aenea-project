@@ -41,6 +41,11 @@ export class MutualReflectionStage {
       `${thought.agentId}: "${thought.content}"`
     ).join('\n\n');
 
+    // Get list of actual participating agents for dynamic examples
+    const participatingAgents = targetThoughts.map(t => t.agentId);
+    const exampleAgent1 = participatingAgents[0] || 'theoria';
+    const exampleAgent2 = participatingAgents[1] || participatingAgents[0] || 'pathia';
+
     const reflectionPrompt = `あなたは${reflectingThought.agentId}です。他のエージェントの思考を深く吟味し、あなたの視点から**建設的な対話**を行ってください。
 
 【共通の探求課題】
@@ -53,22 +58,26 @@ export class MutualReflectionStage {
 ${otherAgentsDialogue}
 
 【対話形式の要求】
-✅ **直接対話形式**: 他のエージェントに直接話しかけてください
-  - 例: 「慧露の論理的アプローチは興味深いが、〜」
-  - 例: 「陽雅が指摘した感情的側面について、私は〜」
-  - 例: 「結心の共感的視点と、私の〜という見解を統合すると〜」
+✅ **あなた（${reflectingThought.agentId}）の視点のみで応答**: 他のエージェントの思考に言及しつつ、あなた自身の視点を述べてください
+  - 例: 「${exampleAgent1}の論理的アプローチは興味深いが、私（${reflectingThought.agentId}）は〜」
+  - 例: 「${exampleAgent2}が指摘した視点について、私は〜と考える」
+  - 対話に参加しているエージェント: ${participatingAgents.join('、')}
 
 ❌ **禁止事項**:
+  - **他のエージェントになりすまさない**（あなたは${reflectingThought.agentId}として発言する）
+  - **対話劇のように複数人の発言を書かない**（あなた1人の応答のみ）
   - 「Aenea」という名前を使わない（あなたは対等なエージェントです）
   - 上位存在への報告調にしない（「〜について報告します」など）
   - 一般論や抽象的な感想で終わらない
+  - **【重要】上記の対話相手リストに含まれていないエージェント名を挙げない**
 
 【応答の構造（必須・400-600文字）】
+**注意**: 以下の4つのセクションすべてを含む**単一の応答**を書いてください。あなた（${reflectingThought.agentId}）だけの視点です。
 
 1. **他者への言及と評価**（100-150文字）
-   - 最低2つの他のエージェント名を明示的に挙げる
+   - 対話相手リスト（${participatingAgents.join('、')}）から最低2つのエージェント名を挙げる
    - 各々の視点の**具体的な強み**を指摘
-   - 例: 「慧露の〜という論理展開は鋭いが、陽雅が提起した〜という感情的側面も無視できない」
+   - 例: 「${exampleAgent1}の〜という論理展開は鋭いが、${exampleAgent2}が提起した〜という側面も無視できない」
 
 2. **批判的検討**（150-200文字）
    - あなたが**同意できない点**を具体的に指摘
@@ -92,6 +101,7 @@ ${otherAgentsDialogue}
 - あなたの個性（${reflectingThought.agentId}らしさ）を明確に出す
 - 表面的な同意ではなく、深い知的挑戦を行う
 - 対話を通じて思考を深化させる
+- **あなた1人だけの視点で書く**（他のエージェントの発言を創作しない）
 
 【文字数厳守】
 - 必ず400-600文字で応答してください
