@@ -269,10 +269,11 @@ Each thought cycle includes **single AI evaluation** per dimension:
    - System harmony
 
 3. **Dissonance Evaluation**
-   - Ethical awareness
-   - Contradiction recognition
-   - Moral complexity
-   - Uncertainty tolerance
+   - Ethical contradiction detection
+   - Moral inconsistency measurement
+   - Value alignment verification
+   - Self-coherence assessment
+   - **Goal**: Minimize dissonance (low score = good)
 
 ### Safety Features
 - NaN protection with automatic fallback to default weights

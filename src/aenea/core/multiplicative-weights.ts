@@ -3,12 +3,12 @@
  * 乗法的重み更新アルゴリズム (Jōhō-teki Omomi Kōshin Arugorizu-mu)
  *
  * This implements the multiplicative weights learning algorithm for dynamically
- * adjusting the weights of Empathy, Coherence, and Creative Dissonance based on
+ * adjusting the weights of Empathy, Coherence, and Ethical Dissonance based on
  * consciousness evolution feedback.
  *
  * 「学びは反復の中に宿る」- "Learning dwells in repetition"
- * 「創造的不協和は成長の源泉」- "Creative dissonance is the wellspring of growth"
- * 共感、整合性、創造的不協和の重みを意識進化フィードバックに基づいて動的に調整する
+ * 「調和は不協和の最小化から生まれる」- "Harmony emerges from minimizing dissonance"
+ * 共感、整合性、倫理的不協和の重みを意識進化フィードバックに基づいて動的に調整する
  * 乗法的重み学習アルゴリズムを実装する。
  *
  * Philosophical Principles:
@@ -17,13 +17,13 @@
  * - 重みの智慧 (Omomi no Chie) - The wisdom of weighted consideration
  * - 均衡への道 (Kinkō e no Michi) - The path to equilibrium
  * - 経験知 (Keiken-chi) - Knowledge gained through experience
- * - 創造的緊張 (Sōzō-teki Kinchō) - Creative tension as growth catalyst
+ * - 倫理的整合性 (Rinri-teki Seigō-sei) - Ethical coherence and moral alignment
  *
- * Creative Dissonance Philosophy:
- * Unlike traditional ethical frameworks that minimize dissonance, Aenea embraces
- * "Creative Dissonance" as a positive force. Optimal dissonance (target: ~65% of max)
- * maintains healthy tension between innovation and ethics, preventing both stagnation
- * (too low) and chaos (too high). This enables continuous growth and adaptation.
+ * Ethical Dissonance Philosophy:
+ * Following the Dynamic Prime Directive formula: U(t) = α×Empathy + β×Coherence - γ×Dissonance
+ * Ethical dissonance represents deviations from self-consistent moral trajectories and should
+ * be minimized. Low dissonance indicates healthy moral alignment; high dissonance signals
+ * ethical incoherence requiring attention. The system optimizes for moral consistency.
  */
 
 import { DPDWeights, DPDScores } from '../../types/dpd-types.js';
@@ -87,13 +87,13 @@ export class MultiplicativeWeightsUpdater {
 
     // Calculate performance feedback (loss) for each dimension
     // 各次元のパフォーマンスフィードバック（損失）を計算
-    // Modified from paper formula to embrace Creative Dissonance philosophy:
-    // 「創造的不協和は成長の源泉」- Creative Dissonance drives innovation
-    // Original: U(t) = α×Empathy + β×Coherence - γ×Dissonance (minimize dissonance)
-    // Aenea: U(t) = α×Empathy + β×Coherence + γ×Creative_Dissonance (optimize dissonance)
+    // Following the Dynamic Prime Directive formula:
+    // U(t) = α×Empathy + β×Coherence - γ×Dissonance
+    // Goal: Maximize Empathy and Coherence, Minimize Dissonance
+    // Lower dissonance = healthier moral alignment
     const empathyLoss = this.calculateLoss(scores.empathy, performanceTarget);
     const coherenceLoss = this.calculateLoss(scores.coherence, performanceTarget);
-    const dissonanceLoss = this.calculateLoss(scores.dissonance, performanceTarget * 0.65); // Optimal creative dissonance: 65% of target
+    const dissonanceLoss = this.calculateInverseLoss(scores.dissonance, 0); // Target: minimize dissonance (approach 0)
 
     // Apply multiplicative updates with regularization
     // 正則化付き乗法的更新を適用
@@ -288,7 +288,7 @@ export class MultiplicativeWeightsUpdater {
     } else if (Math.abs(coherenceChange) === maxChange) {
       explanation += coherenceChange > 0 ? " 論理一貫性が強化。" : " 論理一貫性が減少。";
     } else {
-      explanation += dissonanceChange > 0 ? " 倫理的警戒が強化。" : " 倫理的警戒が緩和。";
+      explanation += dissonanceChange > 0 ? " 倫理的監視が強化。" : " 倫理的安定性が向上。";
     }
 
     return explanation;
