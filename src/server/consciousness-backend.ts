@@ -27,6 +27,7 @@ import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from 
 import { ContentCleanupService } from './content-cleanup-service.js';
 import { QuestionCategorizer, createQuestionCategorizer } from '../utils/question-categorizer.js';
 import { InternalTriggerGenerator } from '../aenea/core/internal-trigger.js';
+import { parseJsonObject, parseJsonArray } from '../utils/json-parser.js';
 
 interface ThoughtCycle {
   id: string;
@@ -2380,6 +2381,9 @@ class ConsciousnessBackend extends EventEmitter {
   /**
    * Helper: Clean JSON response from LLM (remove markdown code blocks)
    */
+  /**
+   * @deprecated Use parseRobustJson from utils/json-parser.ts instead
+   */
   private cleanJsonResponse(content: string): string {
     // Remove ```json and ``` markers
     return content
@@ -2423,25 +2427,28 @@ JSON形式で返してください:
 
     const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。');
 
-    try {
-      const cleanedContent = this.cleanJsonResponse(response.content);
-      const result = JSON.parse(cleanedContent);
-      const dreams = result.dreams || [];
+    const parseResult = parseJsonObject<{ dreams: Array<{ pattern: string; emotional_tone: string }> }>(
+      response.content,
+      'Dream Patterns'
+    );
 
-      // Save dream patterns to database
-      for (const dream of dreams) {
-        await this.databaseManager.saveDreamPattern({
-          pattern: dream.pattern,
-          emotionalTone: dream.emotional_tone,
-          sourceThoughtIds: recentThoughts.slice(0, 10).map(t => t.id)
-        });
-      }
-
-      return dreams;
-    } catch (error) {
-      log.error('Consciousness', 'Failed to parse dream patterns', error);
+    if (!parseResult.success || !parseResult.data) {
+      log.error('Consciousness', `Failed to parse dream patterns: ${parseResult.error}`);
       return [];
     }
+
+    const dreams = parseResult.data.dreams || [];
+
+    // Save dream patterns to database
+    for (const dream of dreams) {
+      await this.databaseManager.saveDreamPattern({
+        pattern: dream.pattern,
+        emotionalTone: dream.emotional_tone,
+        sourceThoughtIds: recentThoughts.slice(0, 10).map(t => t.id)
+      });
+    }
+
+    return dreams;
   }
 
   /**
@@ -2510,21 +2517,24 @@ JSON形式で返してください:
 
     const response = await systemAgent.execute(prompt, 'あなたは脳の睡眠メカニズムです。記憶を整理し、不要な情報を削除します。');
 
-    try {
-      const cleanedContent = this.cleanJsonResponse(response.content);
-      const result = JSON.parse(cleanedContent);
-      const toPrune = result.to_prune || [];
-      const toDelete = toPrune.map((p: any) => oldThoughts[p.index].id).filter((id: string) => id);
+    const parseResult = parseJsonObject<{ to_prune: Array<{ index: number; reason: string }> }>(
+      response.content,
+      'Synaptic Pruning'
+    );
 
-      if (toDelete.length > 0) {
-        await this.databaseManager.deleteSignificantThoughts(toDelete);
-      }
-
-      return { deleted: toDelete.length };
-    } catch (error) {
-      log.error('Consciousness', 'Failed to parse pruning results', error);
+    if (!parseResult.success || !parseResult.data) {
+      log.error('Consciousness', `Failed to parse pruning results: ${parseResult.error}`);
       return { deleted: 0 };
     }
+
+    const toPrune = parseResult.data.to_prune || [];
+    const toDelete = toPrune.map((p: any) => oldThoughts[p.index]?.id).filter((id: string) => id);
+
+    if (toDelete.length > 0) {
+      await this.databaseManager.deleteSignificantThoughts(toDelete);
+    }
+
+    return { deleted: toDelete.length };
   }
 
   /**
@@ -2560,22 +2570,25 @@ JSON形式で返してください:
 
     const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、矛盾を統合する夢の働きです。');
 
-    try {
-      const cleanedContent = this.cleanJsonResponse(response.content);
-      const result = JSON.parse(cleanedContent);
-      const resolutions = result.resolutions || [];
+    const parseResult = parseJsonObject<{ resolutions: Array<{ integrated_view: string }> }>(
+      response.content,
+      'Emotional Processing'
+    );
 
-      // Save integrated views as core beliefs
-      // TODO: Implement saveOrReinforceBelief in DatabaseManager
-      // for (const res of resolutions) {
-      //   await this.databaseManager.saveOrReinforceBelief(res.integrated_view, 0.85);
-      // }
-
-      return { count: resolutions.length };
-    } catch (error) {
-      log.error('Consciousness', 'Failed to parse emotional processing results', error);
+    if (!parseResult.success || !parseResult.data) {
+      log.error('Consciousness', `Failed to parse emotional processing results: ${parseResult.error}`);
       return { count: 0 };
     }
+
+    const resolutions = parseResult.data.resolutions || [];
+
+    // Save integrated views as core beliefs
+    // TODO: Implement saveOrReinforceBelief in DatabaseManager
+    // for (const res of resolutions) {
+    //   await this.databaseManager.saveOrReinforceBelief(res.integrated_view, 0.85);
+    // }
+
+    return { count: resolutions.length };
   }
 
   /**

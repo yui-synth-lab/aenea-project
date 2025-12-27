@@ -7,6 +7,7 @@ import { AIExecutor } from '../../server/ai-executor.js';
 import { DatabaseManager } from '../../server/database-manager.js';
 import { log } from '../../server/logger.js';
 import { tokenize as wakachigakiTokenize } from 'wakachigaki';
+import { parseJsonArray } from '../../utils/json-parser.js';
 
 interface CoreBelief {
   id?: number;
@@ -251,108 +252,50 @@ ${thoughtsSummary}${existingBeliefsSection}
    * Parse LLM response into belief objects
    */
   private parseBeliefResponse(response: any): Partial<CoreBelief>[] {
-    try {
-      // Handle different response types
-      let responseText: string;
+    // Handle different response types
+    let responseText: string;
 
-      if (typeof response === 'string') {
-        responseText = response;
-      } else if (response && typeof response === 'object') {
-        // If response is an object, try to extract text content
-        responseText = response.content || response.text || response.message || JSON.stringify(response);
-        log.info('MemoryConsolidator', `Response is object, extracted text: ${responseText.substring(0, 100)}...`);
-      } else {
-        log.error('MemoryConsolidator', `Unexpected response type: ${typeof response}`, response);
-        throw new Error(`Unexpected response type: ${typeof response}`);
-      }
-
-      // Extract JSON from response (handle markdown code blocks)
-      let jsonText = responseText;
-
-      // Remove markdown code blocks if present
-      const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (codeBlockMatch) {
-        jsonText = codeBlockMatch[1];
-      }
-
-      // Extract JSON array
-      const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        log.error('MemoryConsolidator', 'No JSON array found in response:', responseText.substring(0, 200));
-        throw new Error('No JSON array found in response');
-      }
-
-      // Clean up JSON before parsing (remove trailing commas, fix common issues)
-      let cleanJson = jsonMatch[0]
-        .replace(/,\s*([}\]])/g, '$1')  // Remove trailing commas
-        .replace(/\n/g, ' ')            // Remove newlines
-        .replace(/\r/g, '')             // Remove carriage returns
-        .replace(/「/g, '"')            // Convert Japanese opening quote to English
-        .replace(/」/g, '"')            // Convert Japanese closing quote to English
-        .replace(/『/g, '"')            // Convert Japanese double opening quote to English
-        .replace(/』/g, '"')            // Convert Japanese double closing quote to English
-        .replace(/"/g, '"')             // Convert smart quotes (left) to standard
-        .replace(/"/g, '"')             // Convert smart quotes (right) to standard
-        .replace(/'/g, "'")             // Convert smart single quotes (left) to standard
-        .replace(/'/g, "'");            // Convert smart single quotes (right) to standard
-
-      let beliefs;
-      try {
-        beliefs = JSON.parse(cleanJson);
-      } catch (parseError) {
-        // If parsing fails, log the full JSON for debugging
-        log.error('MemoryConsolidator', `JSON parse failed: ${(parseError as SyntaxError).message}`);
-        log.error('MemoryConsolidator', `Full JSON response:\n${cleanJson}`);
-
-        // Try more aggressive cleaning
-        cleanJson = cleanJson
-          .replace(/,\s*,/g, ',')         // Remove duplicate commas
-          .replace(/\[\s*,/g, '[')         // Remove leading commas in arrays
-          .replace(/{\s*,/g, '{')          // Remove leading commas in objects
-          .replace(/,\s*}/g, '}')          // Remove trailing commas before }
-          .replace(/,\s*]/g, ']');         // Remove trailing commas before ]
-
-        try {
-          beliefs = JSON.parse(cleanJson);
-          log.info('MemoryConsolidator', 'JSON parsing succeeded after aggressive cleaning');
-        } catch (secondError) {
-          log.error('MemoryConsolidator', 'JSON parsing failed even after aggressive cleaning');
-          log.error('MemoryConsolidator', `Cleaned JSON:\n${cleanJson}`);
-          throw parseError; // Throw original error for better debugging
-        }
-      }
-
-      if (!Array.isArray(beliefs)) {
-        log.error('MemoryConsolidator', 'Response is not an array');
-        throw new Error('Response is not an array');
-      }
-
-      log.info('MemoryConsolidator', `Parsed ${beliefs.length} beliefs from AI response`);
-      const now = Date.now();
-
-      return beliefs
-        .filter((b: any) => {
-          // Filter out beliefs that are too long or empty
-          if (!b.belief_content || b.belief_content.length === 0) return false;
-          return true;
-        })
-        .map((b: any) => ({
-          belief_content: b.belief_content.trim(),
-          category: b.category || 'general',
-          confidence: Math.max(0, Math.min(1, b.confidence || 0.5)),
-          strength: Math.max(0, Math.min(1, b.strength || 0.5)),
-          source_thoughts: b.source_thoughts || [],
-          first_formed: now,
-          last_reinforced: now,
-          reinforcement_count: 1,
-          contradiction_count: 0,
-          agent_affinity: {}
-        }));
-
-    } catch (error) {
-      log.error('MemoryConsolidator', 'Failed to parse belief response', error);
+    if (typeof response === 'string') {
+      responseText = response;
+    } else if (response && typeof response === 'object') {
+      // If response is an object, try to extract text content
+      responseText = response.content || response.text || response.message || JSON.stringify(response);
+      log.info('MemoryConsolidator', `Response is object, extracted text: ${responseText.substring(0, 100)}...`);
+    } else {
+      log.error('MemoryConsolidator', `Unexpected response type: ${typeof response}`, response);
       return [];
     }
+
+    // Use robust JSON parser
+    const parseResult = parseJsonArray<any>(responseText, 'Memory Consolidator');
+
+    if (!parseResult.success || !parseResult.data) {
+      log.error('MemoryConsolidator', `Failed to parse beliefs: ${parseResult.error}`);
+      return [];
+    }
+
+    const beliefs = parseResult.data;
+    log.info('MemoryConsolidator', `Parsed ${beliefs.length} beliefs from AI response`);
+    const now = Date.now();
+
+    return beliefs
+      .filter((b: any) => {
+        // Filter out beliefs that are too long or empty
+        if (!b.belief_content || b.belief_content.length === 0) return false;
+        return true;
+      })
+      .map((b: any) => ({
+        belief_content: b.belief_content.trim(),
+        category: b.category || 'general',
+        confidence: Math.max(0, Math.min(1, b.confidence || 0.5)),
+        strength: Math.max(0, Math.min(1, b.strength || 0.5)),
+        source_thoughts: b.source_thoughts || [],
+        first_formed: now,
+        last_reinforced: now,
+        reinforcement_count: 1,
+        contradiction_count: 0,
+        agent_affinity: {}
+      }));
   }
 
   /**
