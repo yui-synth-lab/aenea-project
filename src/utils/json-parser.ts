@@ -4,6 +4,8 @@
  */
 
 import { log } from '../server/logger.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface JsonParseResult<T = any> {
   success: boolean;
@@ -23,10 +25,18 @@ export function cleanJsonString(jsonText: string, context: string = 'JSON'): str
     .trim();
 
   // Remove common AI response prefixes (assistant, thought, etc.)
+  // Match prefix at start, potentially on its own line
   cleaned = cleaned
-    .replace(/^assistant\s*/i, '')
-    .replace(/^思考[:：]\s*/i, '')
-    .replace(/^応答[:：]\s*/i, '');
+    .replace(/^assistant\s*\n*/i, '')     // Remove "assistant" with optional newlines
+    .replace(/^思考[:：]\s*\n*/i, '')
+    .replace(/^応答[:：]\s*\n*/i, '');
+
+  // Also remove English conversational prefixes that LLMs often add
+  cleaned = cleaned
+    .replace(/^I'll help you .*?\n/i, '')
+    .replace(/^Let me .*?\n/i, '')
+    .replace(/^Here (?:is|are) .*?\n/i, '')
+    .trim();
 
   // Extract JSON array or object if present (greedy match to get the largest valid JSON)
   const jsonMatch = cleaned.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
@@ -81,32 +91,75 @@ function aggressiveCleanJson(jsonText: string): string {
 
 /**
  * Convert numbered list format to JSON array
- * Handles AI responses that ignore JSON format instructions
+ * Supports both quoted and unquoted formats:
  *
- * Example input:
- * 1. "belief text"
- * 2. "another belief"
+ * Quoted: 1. "belief text"
+ * Unquoted: 1. belief text (most common with LLMs)
  *
  * Returns: ["belief text", "another belief"]
  */
 function convertNumberedListToJson(text: string): string | null {
-  // Match numbered list items: "1. "text"" or "1. 'text'" or Japanese variations
-  const listPattern = /^\s*(\d+)[.．)）]\s*["'「『](.+?)["'」』]\s*$/gm;
-  const matches = Array.from(text.matchAll(listPattern));
+  // Try quoted pattern first (for backward compatibility)
+  const quotedPattern = /^\s*(\d+)[.．)）]\s*["'「『](.+?)["'」』]\s*$/gm;
+  const quotedMatches = Array.from(text.matchAll(quotedPattern));
 
-  if (matches.length === 0) {
+  if (quotedMatches.length > 0) {
+    const items = quotedMatches.map(match => {
+      const content = match[2].trim();
+      const escaped = content.replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    });
+    return `[${items.join(', ')}]`;
+  }
+
+  // Try unquoted pattern (standard numbered list - most common)
+  const unquotedPattern = /^\s*(\d+)[.．)）]\s+(.+?)$/gm;
+  const unquotedMatches = Array.from(text.matchAll(unquotedPattern));
+
+  if (unquotedMatches.length === 0) {
     return null;
   }
 
-  // Extract just the quoted content
-  const items = matches.map(match => {
+  // Extract content and escape for JSON
+  const items = unquotedMatches.map(match => {
     const content = match[2].trim();
-    // Escape double quotes inside content for JSON
     const escaped = content.replace(/"/g, '\\"');
     return `"${escaped}"`;
   });
 
   return `[${items.join(', ')}]`;
+}
+
+/**
+ * Save LLM JSON output to file for debugging
+ */
+function saveLlmOutput(originalText: string, context: string, success: boolean, error?: string): void {
+  try {
+    const outputDir = path.join(process.cwd(), 'data', 'llm-json-outputs');
+
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${timestamp}_${context.replace(/\s+/g, '_')}_${success ? 'success' : 'failed'}.txt`;
+    const filepath = path.join(outputDir, filename);
+
+    const content = `Context: ${context}
+Timestamp: ${new Date().toISOString()}
+Success: ${success}
+${error ? `Error: ${error}\n` : ''}
+--- Original LLM Output ---
+${originalText}
+--- End ---
+`;
+
+    fs.writeFileSync(filepath, content, 'utf-8');
+  } catch (err) {
+    // Silently fail - don't interrupt normal operation
+    log.warn('JSON Parser', `Failed to save LLM output: ${(err as Error).message}`);
+  }
 }
 
 /**
@@ -122,6 +175,8 @@ export function parseRobustJson<T = any>(
 
     try {
       const data = JSON.parse(cleaned);
+      // Save successful parse
+      saveLlmOutput(jsonText, context, true);
       return { success: true, data };
     } catch (firstError) {
       // Second pass: Aggressive cleaning
@@ -133,21 +188,31 @@ export function parseRobustJson<T = any>(
       try {
         const data = JSON.parse(aggressiveCleaned);
         log.info(context, 'JSON parsing succeeded after aggressive cleaning');
+        // Save successful parse after aggressive cleaning
+        saveLlmOutput(jsonText, context, true);
         return { success: true, data };
       } catch (secondError) {
         log.error(context, 'JSON parsing failed after aggressive cleaning');
         log.error(context, `Full cleaned JSON:\n${aggressiveCleaned}`);
+
+        // Save failed parse
+        const errorMsg = `Failed to parse JSON: ${(firstError as Error).message}`;
+        saveLlmOutput(jsonText, context, false, errorMsg);
+
         return {
           success: false,
-          error: `Failed to parse JSON: ${(firstError as Error).message}`
+          error: errorMsg
         };
       }
     }
   } catch (error) {
     log.error(context, 'Unexpected error during JSON parsing', error);
+    const errorMsg = `Unexpected error: ${(error as Error).message}`;
+    saveLlmOutput(jsonText, context, false, errorMsg);
+
     return {
       success: false,
-      error: `Unexpected error: ${(error as Error).message}`
+      error: errorMsg
     };
   }
 }
