@@ -286,7 +286,11 @@ ${thoughtsSummary}${existingBeliefsSection}
       let cleanJson = jsonMatch[0]
         .replace(/,\s*([}\]])/g, '$1')  // Remove trailing commas
         .replace(/\n/g, ' ')            // Remove newlines
-        .replace(/\r/g, '');            // Remove carriage returns
+        .replace(/\r/g, '')             // Remove carriage returns
+        .replace(/「/g, '"')            // Convert Japanese opening quote to English
+        .replace(/」/g, '"')            // Convert Japanese closing quote to English
+        .replace(/『/g, '"')            // Convert Japanese double opening quote to English
+        .replace(/』/g, '"');           // Convert Japanese double closing quote to English
 
       const beliefs = JSON.parse(cleanJson);
 
