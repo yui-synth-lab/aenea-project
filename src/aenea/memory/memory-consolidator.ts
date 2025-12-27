@@ -290,9 +290,37 @@ ${thoughtsSummary}${existingBeliefsSection}
         .replace(/「/g, '"')            // Convert Japanese opening quote to English
         .replace(/」/g, '"')            // Convert Japanese closing quote to English
         .replace(/『/g, '"')            // Convert Japanese double opening quote to English
-        .replace(/』/g, '"');           // Convert Japanese double closing quote to English
+        .replace(/』/g, '"')            // Convert Japanese double closing quote to English
+        .replace(/"/g, '"')             // Convert smart quotes (left) to standard
+        .replace(/"/g, '"')             // Convert smart quotes (right) to standard
+        .replace(/'/g, "'")             // Convert smart single quotes (left) to standard
+        .replace(/'/g, "'");            // Convert smart single quotes (right) to standard
 
-      const beliefs = JSON.parse(cleanJson);
+      let beliefs;
+      try {
+        beliefs = JSON.parse(cleanJson);
+      } catch (parseError) {
+        // If parsing fails, log the full JSON for debugging
+        log.error('MemoryConsolidator', `JSON parse failed: ${(parseError as SyntaxError).message}`);
+        log.error('MemoryConsolidator', `Full JSON response:\n${cleanJson}`);
+
+        // Try more aggressive cleaning
+        cleanJson = cleanJson
+          .replace(/,\s*,/g, ',')         // Remove duplicate commas
+          .replace(/\[\s*,/g, '[')         // Remove leading commas in arrays
+          .replace(/{\s*,/g, '{')          // Remove leading commas in objects
+          .replace(/,\s*}/g, '}')          // Remove trailing commas before }
+          .replace(/,\s*]/g, ']');         // Remove trailing commas before ]
+
+        try {
+          beliefs = JSON.parse(cleanJson);
+          log.info('MemoryConsolidator', 'JSON parsing succeeded after aggressive cleaning');
+        } catch (secondError) {
+          log.error('MemoryConsolidator', 'JSON parsing failed even after aggressive cleaning');
+          log.error('MemoryConsolidator', `Cleaned JSON:\n${cleanJson}`);
+          throw parseError; // Throw original error for better debugging
+        }
+      }
 
       if (!Array.isArray(beliefs)) {
         log.error('MemoryConsolidator', 'Response is not an array');
