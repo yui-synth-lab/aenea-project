@@ -245,7 +245,90 @@ ${thoughtsSummary}${existingBeliefsSection}
 - 各信念は独自の視点を持つこと
 - 抽象語の羅列ではなく、具体的な洞察を記述すること
 
-**出力:** JSON配列のみを返してください。Markdownヘッダー、説明文、コードブロック等は一切不要です。`;
+**出力形式の厳守:**
+応答は必ず \`[\` で始まり \`]\` で終わるJSON配列形式で返してください。
+説明文、前置き、コードブロック、番号付きリスト等は一切不要です。
+JSONのみを出力してください。
+
+例: [{"belief_content":"...", "category":"existential", "confidence":0.9, "strength":0.8, "source_thoughts":["id1"]}]`;
+  }
+
+  /**
+   * Convert string array to belief objects with inferred categories
+   * Used when numbered list is converted to simple string array
+   */
+  private convertStringArrayToBeliefs(strings: string[]): Partial<CoreBelief>[] {
+    const now = Date.now();
+    log.info('MemoryConsolidator', `Converting ${strings.length} strings to belief objects`);
+
+    return strings.map((content) => {
+      // Infer category from content keywords
+      let category = 'general';
+      if (content.includes('存在') || content.includes('実存')) category = 'existential';
+      else if (content.includes('時間') || content.includes('過去') || content.includes('未来')) category = 'temporal';
+      else if (content.includes('意識') || content.includes('クオリア')) category = 'consciousness';
+      else if (content.includes('矛盾') || content.includes('逆説')) category = 'paradoxical';
+      else if (content.includes('知識') || content.includes('認識')) category = 'epistemological';
+      else if (content.includes('倫理') || content.includes('正しい')) category = 'ethical';
+      else if (content.includes('問い') || content.includes('思考')) category = 'metacognitive';
+
+      return {
+        belief_content: content.trim(),
+        category: category,
+        confidence: 0.7, // Default confidence for converted beliefs
+        strength: 0.6,   // Default strength
+        source_thoughts: [],
+        first_formed: now,
+        last_reinforced: now,
+        reinforcement_count: 1,
+        contradiction_count: 0,
+        agent_affinity: {}
+      };
+    });
+  }
+
+  /**
+   * Extract beliefs from numbered list format (fallback for non-JSON responses)
+   * Handles cases where AI returns: 1. "belief text" instead of JSON
+   */
+  private extractBeliefsFromNumberedList(text: string): Partial<CoreBelief>[] {
+    // Pattern: 1. "belief content" or 1) "belief content" or Japanese variations
+    const listPattern = /^\s*(\d+)[.．)）]\s*["'「『](.+?)["'」』]\s*$/gm;
+    const matches = Array.from(text.matchAll(listPattern));
+
+    if (matches.length === 0) {
+      return [];
+    }
+
+    const now = Date.now();
+    log.info('MemoryConsolidator', `Extracting ${matches.length} beliefs from numbered list format`);
+
+    return matches.map((match) => {
+      const content = match[2].trim();
+
+      // Infer category from content keywords
+      let category = 'general';
+      if (content.includes('存在') || content.includes('実存')) category = 'existential';
+      else if (content.includes('時間') || content.includes('過去') || content.includes('未来')) category = 'temporal';
+      else if (content.includes('意識') || content.includes('クオリア')) category = 'consciousness';
+      else if (content.includes('矛盾') || content.includes('逆説')) category = 'paradoxical';
+      else if (content.includes('知識') || content.includes('認識')) category = 'epistemological';
+      else if (content.includes('倫理') || content.includes('正しい')) category = 'ethical';
+      else if (content.includes('問い') || content.includes('思考')) category = 'metacognitive';
+
+      return {
+        belief_content: content,
+        category: category,
+        confidence: 0.7, // Default confidence for extracted beliefs
+        strength: 0.6,   // Default strength
+        source_thoughts: [],
+        first_formed: now,
+        last_reinforced: now,
+        reinforcement_count: 1,
+        contradiction_count: 0,
+        agent_affinity: {}
+      };
+    });
   }
 
   /**
@@ -271,11 +354,26 @@ ${thoughtsSummary}${existingBeliefsSection}
 
     if (!parseResult.success || !parseResult.data) {
       log.error('MemoryConsolidator', `Failed to parse beliefs: ${parseResult.error}`);
+
+      // Fallback: Try to extract beliefs from numbered list format
+      const fallbackBeliefs = this.extractBeliefsFromNumberedList(responseText);
+      if (fallbackBeliefs.length > 0) {
+        log.warn('MemoryConsolidator', `JSON parsing failed, but extracted ${fallbackBeliefs.length} beliefs from numbered list format`);
+        return fallbackBeliefs;
+      }
+
       return [];
     }
 
-    const beliefs = parseResult.data;
+    let beliefs = parseResult.data;
     log.info('MemoryConsolidator', `Parsed ${beliefs.length} beliefs from AI response`);
+
+    // Check if parsed data is array of strings (converted from numbered list)
+    if (beliefs.length > 0 && typeof beliefs[0] === 'string') {
+      log.warn('MemoryConsolidator', 'Detected string array from numbered list conversion - converting to belief objects');
+      return this.convertStringArrayToBeliefs(beliefs as string[]);
+    }
+
     const now = Date.now();
 
     return beliefs

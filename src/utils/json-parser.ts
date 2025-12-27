@@ -15,16 +15,35 @@ export interface JsonParseResult<T = any> {
  * Clean JSON string by removing problematic characters
  * Converts Japanese quotes and smart quotes to apostrophes while preserving JSON structure
  */
-export function cleanJsonString(jsonText: string): string {
+export function cleanJsonString(jsonText: string, context: string = 'JSON'): string {
   // Remove markdown code blocks
   let cleaned = jsonText
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/g, '')
     .trim();
 
-  // Extract JSON array or object if present
-  const jsonMatch = cleaned.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+  // Remove common AI response prefixes (assistant, thought, etc.)
+  cleaned = cleaned
+    .replace(/^assistant\s*/i, '')
+    .replace(/^思考[:：]\s*/i, '')
+    .replace(/^応答[:：]\s*/i, '');
+
+  // Extract JSON array or object if present (greedy match to get the largest valid JSON)
+  const jsonMatch = cleaned.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
   if (!jsonMatch) {
+    // No JSON found - try to convert from numbered list format
+    const convertedJson = convertNumberedListToJson(cleaned);
+    if (convertedJson) {
+      log.warn(context, 'No JSON found, but detected numbered list format - converting to JSON array');
+      log.info(context, `Converted ${cleaned.split('\n').filter(l => /^\s*\d+[.．)）]/.test(l)).length} items from numbered list to JSON`);
+      return convertedJson;
+    }
+
+    // Check if it looks like a numbered list that we couldn't convert
+    if (/^\d+\.\s+["']/.test(cleaned.trim())) {
+      log.warn(context, 'Detected numbered list format but conversion failed');
+      log.warn(context, `Response starts with: ${cleaned.substring(0, 200)}...`);
+    }
     return cleaned;
   }
 
@@ -61,6 +80,36 @@ function aggressiveCleanJson(jsonText: string): string {
 }
 
 /**
+ * Convert numbered list format to JSON array
+ * Handles AI responses that ignore JSON format instructions
+ *
+ * Example input:
+ * 1. "belief text"
+ * 2. "another belief"
+ *
+ * Returns: ["belief text", "another belief"]
+ */
+function convertNumberedListToJson(text: string): string | null {
+  // Match numbered list items: "1. "text"" or "1. 'text'" or Japanese variations
+  const listPattern = /^\s*(\d+)[.．)）]\s*["'「『](.+?)["'」』]\s*$/gm;
+  const matches = Array.from(text.matchAll(listPattern));
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  // Extract just the quoted content
+  const items = matches.map(match => {
+    const content = match[2].trim();
+    // Escape double quotes inside content for JSON
+    const escaped = content.replace(/"/g, '\\"');
+    return `"${escaped}"`;
+  });
+
+  return `[${items.join(', ')}]`;
+}
+
+/**
  * Parse JSON with robust error handling and automatic cleaning
  */
 export function parseRobustJson<T = any>(
@@ -69,7 +118,7 @@ export function parseRobustJson<T = any>(
 ): JsonParseResult<T> {
   try {
     // First pass: Basic cleaning
-    const cleaned = cleanJsonString(jsonText);
+    const cleaned = cleanJsonString(jsonText, context);
 
     try {
       const data = JSON.parse(cleaned);
