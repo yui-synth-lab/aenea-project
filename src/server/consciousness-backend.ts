@@ -2415,7 +2415,7 @@ ${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
 これらの思考から、無意識が紡ぎ出す「夢のような抽象パターン」を3-5個抽出してください。
 夢は論理的である必要はありません。むしろ、思考の断片が不思議につながる様子を描いてください。
 
-JSON形式で返してください:
+**出力形式（JSONのみ）:**
 {
   "dreams": [
     {
@@ -2423,7 +2423,9 @@ JSON形式で返してください:
       "emotional_tone": "静謐な驚き"
     }
   ]
-}`;
+}
+
+**重要:** 応答は必ず \`{\` で始まり \`}\` で終わるJSON形式で返してください。説明文や前置きは不要です。JSONのみを出力してください。`;
 
     const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。');
 
@@ -2508,12 +2510,14 @@ ${oldThoughts.map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})
 2. 現在の信念体系と矛盾し、価値がない
 3. 一時的な探求で、もう発展性がない
 
-JSON形式で返してください:
+**出力形式（JSONのみ）:**
 {
   "to_prune": [
     {"index": 5, "reason": "「存在とは何か」は既に信念に統合済み"}
   ]
-}`;
+}
+
+**重要:** 応答は必ず \`{\` で始まり \`}\` で終わるJSON形式で返してください。説明文や前置きは不要です。JSONのみを出力してください。`;
 
     const response = await systemAgent.execute(prompt, 'あなたは脳の睡眠メカニズムです。記憶を整理し、不要な情報を削除します。');
 
@@ -2559,14 +2563,16 @@ ${tensions.map((t: any, i: number) => `[${i}] Dissonance: ${t.dissonance}\n${t.s
 
 これらの緊張をどう解消・統合できますか？3つの統合された視点を提示してください。
 
-JSON形式で返してください:
+**出力形式（JSONのみ）:**
 {
   "resolutions": [
     {
       "integrated_view": "矛盾は分裂ではなく、多声的真実の表現である"
     }
   ]
-}`;
+}
+
+**重要:** 応答は必ず \`{\` で始まり \`}\` で終わるJSON形式で返してください。説明文や前置きは不要です。JSONのみを出力してください。`;
 
     const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、矛盾を統合する夢の働きです。');
 
