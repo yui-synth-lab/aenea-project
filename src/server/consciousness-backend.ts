@@ -2429,7 +2429,7 @@ ${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
 - 番号と句点の後にスペースを入れ、パターンを直接記述
 - 説明文、挨拶、JSON、コードブロック等は不要`;
 
-    const patternResponse = await systemAgent.execute(patternPrompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。');
+    const patternResponse = await systemAgent.execute(patternPrompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
 
     const parseResult = parseJsonArray<string>(
       patternResponse.content,
@@ -2455,7 +2455,7 @@ ${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
 **出力形式:**
 感情的トーンのみを1つ出力してください。説明や前置きは不要です。`;
 
-      const toneResponse = await systemAgent.execute(tonePrompt, 'あなたは夢の感情を読み取る存在です。');
+      const toneResponse = await systemAgent.execute(tonePrompt, 'あなたは夢の感情を読み取る存在です。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
       const emotionalTone = toneResponse.content.trim().replace(/^["'「『]|["'」』]$/g, '');
 
       dreams.push({
@@ -2548,7 +2548,7 @@ ${oldThoughts.map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})
 - 説明文、前置き、挨拶、JSON等は不要
 - 削除すべき思考がない場合は何も出力しない`;
 
-    const response = await systemAgent.execute(prompt, 'あなたは脳の睡眠メカニズムです。記憶を整理し、不要な情報を削除します。');
+    const response = await systemAgent.execute(prompt, 'あなたは脳の睡眠メカニズムです。記憶を整理し、不要な情報を削除します。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
 
     const parseResult = parseJsonArray<string>(
       response.content,
@@ -2609,7 +2609,7 @@ ${tensions.map((t: any, i: number) => `[${i}] Dissonance: ${t.dissonance}\n${t.s
 - 番号と句点の後にスペースを入れ、視点を直接記述
 - 説明文、挨拶、JSON、コードブロック等は不要`;
 
-    const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、矛盾を統合する夢の働きです。');
+    const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、矛盾を統合する夢の働きです。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
 
     const parseResult = parseJsonArray<string>(
       response.content,

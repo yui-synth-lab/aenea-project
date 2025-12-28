@@ -135,8 +135,8 @@ export class MemoryConsolidator {
     const prompt = this.buildConsolidationPrompt(thoughts, existingBeliefs);
 
     try {
-      // Execute with empty personality (use agent's default)
-      const response = await this.aiExecutor.execute(prompt, '');
+      // Execute with language constraint system prompt
+      const response = await this.aiExecutor.execute(prompt, '必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
       log.info('MemoryConsolidator', `AI response type: ${typeof response}, has content: ${!!(response as any)?.content}`);
       const beliefs = this.parseBeliefResponse(response);
 

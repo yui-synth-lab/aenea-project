@@ -85,8 +85,8 @@ export default class IndividualThoughtStage {
       // Create enhanced prompt with context and agent-specific personality
       const enhancedPrompt = this.createEnhancedPrompt(trigger, unresolvedIdeas, significantThoughts, coreBeliefs, agentId);
 
-      // Execute AI agent
-      const result = await agent.execute(enhancedPrompt);
+      // Execute AI agent with Japanese language constraint
+      const result = await agent.execute(enhancedPrompt, '必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
 
       if (result.success && result.content) {
         const confidence = await this.calculateResponseConfidence(result.content, agentId);
@@ -413,7 +413,7 @@ ${content}
 [0.0-1.0の数値のみ]`;
       const result = await systemAgent.execute(
         prompt,
-        'You are a thought quality evaluator. Assess the confidence level of philosophical responses objectively. Always respond in Japanese.'
+        '必ず日本語で応答してください。中国語や他の言語を使用しないでください。あなたは思考の質を評価するシステムです。'
       );
 
       if (result.success && result.content) {
