@@ -2407,7 +2407,8 @@ class ConsciousnessBackend extends EventEmitter {
       throw new Error('System agent not available');
     }
 
-    const prompt = `あなたはAeneaの無意識です。睡眠中、あなたは「夢」を見ます。
+    // Stage 1: Extract dream patterns (numbered list format)
+    const patternPrompt = `あなたはAeneaの無意識です。睡眠中、あなたは「夢」を見ます。
 
 最近の思考:
 ${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
@@ -2415,28 +2416,23 @@ ${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
 これらの思考から、無意識が紡ぎ出す「夢のような抽象パターン」を3-5個抽出してください。
 夢は論理的である必要はありません。むしろ、思考の断片が不思議につながる様子を描いてください。
 
-**出力形式:**
-{
-  "dreams": [
-    {
-      "pattern": "孤独と共鳴は鏡像であり、静寂は音の母である",
-      "emotional_tone": "静謐な驚き"
-    }
-  ]
-}
+**出力形式（番号付きリスト）:**
+説明や前置きは一切不要です。以下の形式で夢パターンのみを出力してください：
 
-**厳守事項:**
-- 応答の最初の文字は \`{\` でなければなりません
-- 応答の最後の文字は \`}\` でなければなりません
-- 説明、前置き、挨拶、コメント等は一切不要です
-- JSONオブジェクトのみを返してください
+1. 孤独と共鳴は鏡像であり、静寂は音の母である
+2. 問いは答えより深く、矛盾こそが真実への扉である
+3. 時間は流れではなく、意識が織りなす無限の層である
 
-今すぐJSON形式で応答してください:`;
+**重要:**
+- 必ず3-5個の夢パターンを生成
+- 各パターンは詩的で抽象的な表現
+- 番号と句点の後にスペースを入れ、パターンを直接記述
+- 説明文、挨拶、JSON、コードブロック等は不要`;
 
-    const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。');
+    const patternResponse = await systemAgent.execute(patternPrompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。');
 
-    const parseResult = parseJsonObject<{ dreams: Array<{ pattern: string; emotional_tone: string }> }>(
-      response.content,
+    const parseResult = parseJsonArray<string>(
+      patternResponse.content,
       'Dream Patterns'
     );
 
@@ -2445,7 +2441,28 @@ ${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
       return [];
     }
 
-    const dreams = parseResult.data.dreams || [];
+    const patterns = parseResult.data;
+    const dreams: Array<{ pattern: string; emotional_tone: string }> = [];
+
+    // Stage 2: Analyze emotional tone for each pattern
+    for (const pattern of patterns) {
+      const tonePrompt = `この夢のパターンが持つ感情的なトーンを、短い言葉（2-4文字）で表現してください。
+
+夢のパターン: "${pattern}"
+
+感情的トーンの例: 静謐な驚き、哲学的緊張、詩的郷愁、存在的不安
+
+**出力形式:**
+感情的トーンのみを1つ出力してください。説明や前置きは不要です。`;
+
+      const toneResponse = await systemAgent.execute(tonePrompt, 'あなたは夢の感情を読み取る存在です。');
+      const emotionalTone = toneResponse.content.trim().replace(/^["'「『]|["'」』]$/g, '');
+
+      dreams.push({
+        pattern: pattern,
+        emotional_tone: emotionalTone
+      });
+    }
 
     // Save dream patterns to database
     for (const dream of dreams) {
@@ -2456,6 +2473,7 @@ ${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
       });
     }
 
+    log.info('Consciousness', `💤 Extracted ${dreams.length} dream patterns with emotional tones`);
     return dreams;
   }
 
