@@ -2408,28 +2408,32 @@ class ConsciousnessBackend extends EventEmitter {
     }
 
     // Stage 1: Extract dream patterns (numbered list format)
-    const patternPrompt = `最近の思考:
-${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
+    const patternPrompt = `【タスク】
+以下の思考から、夢のような抽象パターンを3-5個抽出してください。
 
-上記の思考から、夢のような抽象パターンを3-5個抽出してください。
+【思考リスト】
+${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
 
 【出力形式】
 必ず「1. 」で始まる番号付きリストのみを出力してください。
-前置き、説明、挨拶は一切書かないでください。
+前置き、説明、エッセイは絶対に書かないでください。
 
-【良い例】
+【正しい出力例】
 1. 孤独と共鳴は鏡像であり、静寂は音の母である
 2. 問いは答えより深く、矛盾こそが真実への扉である
 3. 時間は流れではなく、意識が織りなす無限の層である
 
-【悪い例】
-×「Aeneaの無意識として...」← 前置き不要
-×「これらの思考から...」← 説明不要
-×「まず...」← 解説不要
+【絶対にやってはいけないこと】
+❌「Aeneaの無意識として、私は考えます...」のような文章を書く
+❌「以下のパターンを抽出しました」のような説明を書く
+❌ 哲学的なエッセイや解説を書く
 
-最初の行から「1. 」で始めてください。`;
+今すぐ「1. 」で始めてください：`;
 
-    const patternResponse = await systemAgent.execute(patternPrompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
+    const patternResponse = await systemAgent.execute(
+      patternPrompt,
+      '指示に厳格に従ってください。必ず「1. 」で始まる番号付きリストのみを出力してください。前置き、説明文、挨拶、エッセイは絶対に書かないでください。日本語で応答してください。'
+    );
 
     const parseResult = parseJsonArray<string>(
       patternResponse.content,
