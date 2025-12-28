@@ -27,7 +27,7 @@ import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from 
 import { ContentCleanupService } from './content-cleanup-service.js';
 import { QuestionCategorizer, createQuestionCategorizer } from '../utils/question-categorizer.js';
 import { InternalTriggerGenerator } from '../aenea/core/internal-trigger.js';
-import { parseJsonObject, parseJsonArray } from '../utils/json-parser.js';
+import { parseJsonArray } from '../utils/json-parser.js';
 
 interface ThoughtCycle {
   id: string;
@@ -2534,35 +2534,38 @@ ${oldThoughts.map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})
 2. 現在の信念体系と矛盾し、価値がない
 3. 一時的な探求で、もう発展性がない
 
-**出力形式:**
-{
-  "to_prune": [
-    {"index": 5, "reason": "「存在とは何か」は既に信念に統合済み"}
-  ]
-}
+**出力形式（番号付きリスト）:**
+削除すべき思考のインデックス番号のみを、番号付きリストで出力してください。
+説明や理由は不要です。
 
-**厳守事項:**
-- 応答の最初の文字は \`{\` でなければなりません
-- 応答の最後の文字は \`}\` でなければなりません
-- 説明、前置き、挨拶、コメント等は一切不要です
-- JSONオブジェクトのみを返してください
+例:
+1. 5
+2. 12
+3. 18
 
-今すぐJSON形式で応答してください:`;
+**重要:**
+- インデックス番号のみを出力
+- 説明文、前置き、挨拶、JSON等は不要
+- 削除すべき思考がない場合は何も出力しない`;
 
     const response = await systemAgent.execute(prompt, 'あなたは脳の睡眠メカニズムです。記憶を整理し、不要な情報を削除します。');
 
-    const parseResult = parseJsonObject<{ to_prune: Array<{ index: number; reason: string }> }>(
+    const parseResult = parseJsonArray<string>(
       response.content,
       'Synaptic Pruning'
     );
 
     if (!parseResult.success || !parseResult.data) {
-      log.error('Consciousness', `Failed to parse pruning results: ${parseResult.error}`);
+      log.warn('Consciousness', `Failed to parse pruning results: ${parseResult.error}`);
       return { deleted: 0 };
     }
 
-    const toPrune = parseResult.data.to_prune || [];
-    const toDelete = toPrune.map((p: any) => oldThoughts[p.index]?.id).filter((id: string) => id);
+    // Parse indices from string array
+    const indices = parseResult.data
+      .map(s => parseInt(s.trim(), 10))
+      .filter(idx => !isNaN(idx) && idx >= 0 && idx < oldThoughts.length);
+
+    const toDelete = indices.map(idx => oldThoughts[idx].id);
 
     if (toDelete.length > 0) {
       await this.databaseManager.deleteSignificantThoughts(toDelete);
@@ -2593,26 +2596,22 @@ ${tensions.map((t: any, i: number) => `[${i}] Dissonance: ${t.dissonance}\n${t.s
 
 これらの緊張をどう解消・統合できますか？3つの統合された視点を提示してください。
 
-**出力形式:**
-{
-  "resolutions": [
-    {
-      "integrated_view": "矛盾は分裂ではなく、多声的真実の表現である"
-    }
-  ]
-}
+**出力形式（番号付きリスト）:**
+説明や前置きは一切不要です。以下の形式で統合された視点のみを出力してください：
 
-**厳守事項:**
-- 応答の最初の文字は \`{\` でなければなりません
-- 応答の最後の文字は \`}\` でなければなりません
-- 説明、前置き、挨拶、コメント等は一切不要です
-- JSONオブジェクトのみを返してください
+1. 矛盾は分裂ではなく、多声的真実の表現である
+2. 倫理的緊張は成長の源泉であり、解消ではなく統合を目指すべきである
+3. 不協和は調和への対話的プロセスを促す触媒である
 
-今すぐJSON形式で応答してください:`;
+**重要:**
+- 必ず3個の統合視点を生成
+- 各視点は30-70文字で具体的に記述
+- 番号と句点の後にスペースを入れ、視点を直接記述
+- 説明文、挨拶、JSON、コードブロック等は不要`;
 
     const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、矛盾を統合する夢の働きです。');
 
-    const parseResult = parseJsonObject<{ resolutions: Array<{ integrated_view: string }> }>(
+    const parseResult = parseJsonArray<string>(
       response.content,
       'Emotional Processing'
     );
@@ -2622,7 +2621,7 @@ ${tensions.map((t: any, i: number) => `[${i}] Dissonance: ${t.dissonance}\n${t.s
       return { count: 0 };
     }
 
-    const resolutions = parseResult.data.resolutions || [];
+    const resolutions = parseResult.data;
 
     // Save integrated views as core beliefs
     // TODO: Implement saveOrReinforceBelief in DatabaseManager
