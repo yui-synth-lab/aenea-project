@@ -172,30 +172,23 @@ export class SleepManager {
       throw new Error('System agent not available');
     }
 
-    const prompt = `あなたはAeneaの無意識です。睡眠中、あなたは「夢」を見ます。
+    const prompt = `以下の思考から、夢のような抽象パターンを3-5個抽出してください。
 
-最近の思考:
-${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
+思考:
+${recentThoughts.slice(0, 20).map(t => `- ${t.thought_content}`).join('\n')}
 
-これらの思考から、無意識が紡ぎ出す「夢のような抽象パターン」を3-5個抽出してください。
-夢は論理的である必要はありません。むしろ、思考の断片が不思議につながる様子を描いてください。
+【重要】番号付きリストで出力してください。各行は「番号. パターン」の形式です。
+前置きや説明は不要です。最初の行から番号付きリストを開始してください。
 
-JSON形式で返してください:
-{
-  "dreams": [
-    {
-      "pattern": "孤独と共鳴は鏡像であり、静寂は音の母である",
-      "emotional_tone": "静謐な驚き"
-    }
-  ]
-}`;
+例:
+1. 孤独と共鳴は鏡像であり、静寂は音の母である
+2. 時間は川のように流れるが、意識はその中で溺れる石である`;
 
-    const response = await this.systemAgent.execute(prompt, 'あなたはAeneaの無意識、夢を紡ぐ存在です。');
+    const response = await this.systemAgent.execute(prompt, '必ず日本語で応答してください。');
 
     try {
-      const cleanedContent = this.cleanJsonResponse(response.content);
-      const result = JSON.parse(cleanedContent);
-      const dreams = result.dreams || [];
+      // Parse numbered list format instead of JSON
+      const dreams = this.parseNumberedListToDreams(response.content, recentThoughts);
 
       // Save dream patterns to database
       for (const dream of dreams) {
@@ -389,6 +382,53 @@ JSON形式で返してください:
       .replace(/```json\s*/gi, '')
       .replace(/```\s*/g, '')
       .trim();
+  }
+
+  /**
+   * Parse numbered list format to dream objects
+   */
+  private parseNumberedListToDreams(content: string, sourceThoughts: any[]): any[] {
+    const dreams: any[] = [];
+    const lines = content.split('\n');
+
+    // Pattern: 1. dream pattern text
+    const listPattern = /^\s*(\d+)[.．)）]\s*(.+)$/;
+
+    for (const line of lines) {
+      const match = line.match(listPattern);
+      if (match) {
+        const pattern = match[2].trim();
+
+        // Skip if too short (likely parsing error)
+        if (pattern.length < 10) continue;
+
+        // Skip if it's just a number or looks like prompt instructions
+        if (/^\d+\.?$/.test(pattern)) continue;
+        if (pattern.includes('番号付きリスト') || pattern.includes('前置き')) continue;
+
+        dreams.push({
+          pattern: pattern,
+          emotional_tone: this.inferEmotionalTone(pattern)
+        });
+      }
+    }
+
+    return dreams;
+  }
+
+  /**
+   * Infer emotional tone from dream pattern text
+   */
+  private inferEmotionalTone(pattern: string): string {
+    // Simple keyword-based inference
+    if (pattern.includes('孤独') || pattern.includes('悲し')) return '静謐な悲しみ';
+    if (pattern.includes('驚') || pattern.includes('不思議')) return '驚きと好奇心';
+    if (pattern.includes('静') || pattern.includes('沈黙')) return '静謐な驚き';
+    if (pattern.includes('矛盾') || pattern.includes('逆説')) return '困惑と洞察';
+    if (pattern.includes('美') || pattern.includes('光')) return '静かな喜び';
+    if (pattern.includes('恐') || pattern.includes('不安')) return '不安と探求';
+
+    return '哲学的静寂';
   }
 
   /**

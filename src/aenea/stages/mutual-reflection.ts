@@ -56,14 +56,15 @@ ${otherAgentsDialogue}
 
 ---
 
-上記の思考について、あなた（${reflectingThought.agentId}）の視点から400-600文字で応答してください。以下を含めること：
+【重要】厳密に300-400文字以内で応答してください。超過は禁止です。
 
-1. ${participatingAgents.join('、')}の視点への評価（強みを指摘）
-2. あなたが同意できない点とその理由
-3. あなた独自の代替案や統合の提案
-4. 新たな問いや探求の方向性
+あなた（${reflectingThought.agentId}）の視点から、以下を簡潔に含めること：
+1. ${participatingAgents.join('、')}への評価
+2. 同意できない点とその理由
+3. 代替案または統合の提案
+4. 新たな問い
 
-注意：あなた1人の視点のみで書き、他のエージェントの発言を創作しないこと。`;
+必ず300-400文字以内に収めてください。`;
 
     try {
       const result = await reflectingAgent.execute(reflectionPrompt, this.getAgentPersonality(reflectingThought.agentId));
