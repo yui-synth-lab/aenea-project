@@ -46,67 +46,24 @@ export class MutualReflectionStage {
     const exampleAgent1 = participatingAgents[0] || 'theoria';
     const exampleAgent2 = participatingAgents[1] || participatingAgents[0] || 'pathia';
 
-    const reflectionPrompt = `あなたは${reflectingThought.agentId}です。他のエージェントの思考を深く吟味し、あなたの視点から**建設的な対話**を行ってください。
+    const reflectionPrompt = `探求課題："${reflectingThought.trigger}"
 
-【共通の探求課題】
-"${reflectingThought.trigger}"
-
-【あなた（${reflectingThought.agentId}）が既に提示した思考】
+あなた（${reflectingThought.agentId}）の思考：
 "${reflectingThought.content}"
 
-【他のエージェントの思考（対話相手）】
+他のエージェントの思考：
 ${otherAgentsDialogue}
 
-【対話形式の要求】
-✅ **あなた（${reflectingThought.agentId}）の視点のみで応答**: 他のエージェントの思考に言及しつつ、あなた自身の視点を述べてください
-  - 例: 「${exampleAgent1}の論理的アプローチは興味深いが、私（${reflectingThought.agentId}）は〜」
-  - 例: 「${exampleAgent2}が指摘した視点について、私は〜と考える」
-  - 対話に参加しているエージェント: ${participatingAgents.join('、')}
+---
 
-❌ **禁止事項**:
-  - **他のエージェントになりすまさない**（あなたは${reflectingThought.agentId}として発言する）
-  - **対話劇のように複数人の発言を書かない**（あなた1人の応答のみ）
-  - 「Aenea」という名前を使わない（あなたは対等なエージェントです）
-  - 上位存在への報告調にしない（「〜について報告します」など）
-  - 一般論や抽象的な感想で終わらない
-  - **【重要】上記の対話相手リストに含まれていないエージェント名を挙げない**
+上記の思考について、あなた（${reflectingThought.agentId}）の視点から400-600文字で応答してください。以下を含めること：
 
-【応答の構造（必須・400-600文字）】
-**注意**: 以下の4つのセクションすべてを含む**単一の応答**を書いてください。あなた（${reflectingThought.agentId}）だけの視点です。
+1. ${participatingAgents.join('、')}の視点への評価（強みを指摘）
+2. あなたが同意できない点とその理由
+3. あなた独自の代替案や統合の提案
+4. 新たな問いや探求の方向性
 
-1. **他者への言及と評価**（100-150文字）
-   - 対話相手リスト（${participatingAgents.join('、')}）から最低2つのエージェント名を挙げる
-   - 各々の視点の**具体的な強み**を指摘
-   - 例: 「${exampleAgent1}の〜という論理展開は鋭いが、${exampleAgent2}が提起した〜という側面も無視できない」
-
-2. **批判的検討**（150-200文字）
-   - あなたが**同意できない点**を具体的に指摘
-   - その理由を論理的に説明
-   - 見落とされている視点や論理的弱点を明示
-   - 例: 「しかし、〜という前提には疑問が残る。なぜなら〜」
-
-3. **代替案・統合案の提示**（150-200文字）
-   - あなた独自の**建設的な提案**
-   - 複数の視点を統合する可能性の探求
-   - 新しい問いや探求方向の提示
-   - 例: 「むしろ、〜と〜を統合すると、〜という新しい理解が得られるのではないか？」
-
-4. **結論と次の問い**（50-100文字）
-   - この対話から生まれた新たな疑問
-   - さらなる探求の方向性
-
-【重要な姿勢】
-- 礼儀正しいが、妥協しない
-- 具体的な例や比喩を使う
-- あなたの個性（${reflectingThought.agentId}らしさ）を明確に出す
-- 表面的な同意ではなく、深い知的挑戦を行う
-- 対話を通じて思考を深化させる
-- **あなた1人だけの視点で書く**（他のエージェントの発言を創作しない）
-
-【文字数厳守】
-- 必ず400-600文字で応答してください
-- 短すぎる応答（300文字未満）は不可
-- 具体的で実質的な内容を含めてください`;
+注意：あなた1人の視点のみで書き、他のエージェントの発言を創作しないこと。`;
 
     try {
       const result = await reflectingAgent.execute(reflectionPrompt, this.getAgentPersonality(reflectingThought.agentId));

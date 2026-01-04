@@ -147,14 +147,20 @@ export class MemoryConsolidator {
       const compressionRatio = thoughts.length / Math.max(1, beliefs.length);
       log.info('MemoryConsolidator', `📊 Compression: ${thoughts.length} thoughts → ${beliefs.length} beliefs (ratio: ${compressionRatio.toFixed(1)}:1)`);
 
+      // Create a mutable list that includes newly created beliefs in this batch
+      const allBeliefs = [...existingBeliefs];
+
       for (const belief of beliefs) {
-        const existing = this.findSimilarBelief(belief, existingBeliefs);
+        const existing = this.findSimilarBelief(belief, allBeliefs);
 
         if (existing) {
           this.reinforceBelief(existing.id!, belief.source_thoughts || []);
           updated++;
         } else {
-          this.createBelief(belief);
+          const newBelief = this.createBeliefAndReturn(belief);
+          if (newBelief) {
+            allBeliefs.push(newBelief); // Add to list to check against future beliefs in this batch
+          }
           created++;
         }
       }
@@ -592,6 +598,34 @@ ${thoughtsSummary}${existingBeliefsSection}
   private createBelief(belief: Partial<CoreBelief>): void {
     this.db.createCoreBelief(belief);
     log.info('MemoryConsolidator', `📚 New belief formed: ${belief.belief_content}...`);
+  }
+
+  /**
+   * Create a new belief in database and return it with ID
+   */
+  private createBeliefAndReturn(belief: Partial<CoreBelief>): CoreBelief | null {
+    const id = this.db.createCoreBelief(belief);
+    if (id === null) {
+      log.error('MemoryConsolidator', 'Failed to create belief in database');
+      return null;
+    }
+
+    log.info('MemoryConsolidator', `📚 New belief formed: ${belief.belief_content}...`);
+
+    // Return belief with ID assigned
+    return {
+      id,
+      belief_content: belief.belief_content || '',
+      category: belief.category || 'general',
+      confidence: belief.confidence || 0.5,
+      strength: belief.strength || 0.5,
+      source_thoughts: belief.source_thoughts || [],
+      first_formed: belief.first_formed || Date.now(),
+      last_reinforced: belief.last_reinforced || Date.now(),
+      reinforcement_count: belief.reinforcement_count || 1,
+      contradiction_count: belief.contradiction_count || 0,
+      agent_affinity: belief.agent_affinity || {}
+    };
   }
 
   /**
