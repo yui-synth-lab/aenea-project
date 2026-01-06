@@ -1,0 +1,3 @@
+[submodule "yui-protocol"]
+	path = yui-protocol
+	url = https://github.com/yui-synth-lab/yui-protocol.git
