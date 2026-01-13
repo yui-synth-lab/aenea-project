@@ -23,7 +23,14 @@
     "test:ui-selenium": "node tests/ui/selenium-ui-test.js",
     "demo": "npm run build && tsx src/server/aenea-server.ts",
     "analyze": "tsx scripts/analyze-growth.ts",
-    "db:backup": "tsx scripts/backup-db.ts"
+    "db:backup": "tsx scripts/backup-db.ts",
+    "rag:ingest": "tsx scripts/ingest-knowledge.ts",
+    "rag:ingest:github": "tsx scripts/ingest-knowledge.ts github",
+    "rag:ingest:dialogues": "tsx scripts/ingest-knowledge.ts dialogues",
+    "rag:ingest:self": "tsx scripts/ingest-knowledge.ts self",
+    "rag:clear": "tsx scripts/ingest-knowledge.ts clear",
+    "rag:stats": "tsx scripts/ingest-knowledge.ts stats",
+    "rag:health": "tsx scripts/ingest-knowledge.ts health"
   },
   "keywords": [
     "ai",
@@ -78,6 +85,6 @@
     "shx": "^0.4.0",
     "ts-jest": "^29.4.4",
     "tsx": "^3.12.0",
-    "vite": "^5.0.0"
+    "vite": "^6.4.1"
   }
 }

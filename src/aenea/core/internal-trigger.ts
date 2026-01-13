@@ -34,6 +34,9 @@ import {
   EnergyConfig
 } from '../../types/consciousness-types.js';
 
+// RAG integration for knowledge-grounded question generation
+import { isRAGEnabled, searchRAG } from '../../rag/index.js';
+
 import type { DatabaseManager } from '../../server/database-manager.js';
 import type { QuestionCategorizer } from '../../utils/question-categorizer.js';
 
@@ -747,7 +750,12 @@ export class InternalTriggerGenerator {
       console.log(`   Overused: ${overused.join(', ') || 'none'}`);
 
       // Create rich context from consciousness history
-      const context = {
+      const context: {
+        recentThoughts: string;
+        unresolvedQuestions: string;
+        currentBeliefs: string;
+        ragContext?: string;
+      } = {
         recentThoughts: significantThoughts.slice(0, 3).map(t => {
           const content = t.thought_content || t.content || '';
           return content.substring(0, 80) + (content.length > 80 ? '...' : '');
@@ -761,6 +769,27 @@ export class InternalTriggerGenerator {
           return belief;
         }).join('\n• ')
       };
+
+      // RAG: Retrieve related past explorations from knowledge base
+      if (isRAGEnabled()) {
+        try {
+          const searchQuery = context.recentThoughts || context.unresolvedQuestions || '哲学的探求';
+          const ragResults = await searchRAG(searchQuery, {
+            topK: 3,
+            sourceTypes: ['session', 'dialogue'],
+            similarityThreshold: 0.6
+          });
+
+          if (ragResults.length > 0) {
+            context.ragContext = ragResults
+              .map(r => r.content.substring(0, 100))
+              .join('\n');
+            console.log(`[RAG] Found ${ragResults.length} related explorations for S0`);
+          }
+        } catch (error) {
+          console.warn('[RAG] S0 context retrieval failed:', error);
+        }
+      }
 
       // Use LLM to generate deep, evolved question
       if (!this.aiAgent) {
@@ -790,6 +819,7 @@ ontological: 存在様式、実在性の基準、存在論的カテゴリーに�
 ${context.recentThoughts ? `最近の思考: ${context.recentThoughts}` : ''}
 ${context.unresolvedQuestions ? `未解決の問い: ${context.unresolvedQuestions}` : ''}
 ${context.currentBeliefs ? `現在の信念: ${context.currentBeliefs}` : ''}
+${context.ragContext ? `\n【知識ベースからの関連記録】\n${context.ragContext}` : ''}
 
 === 厳格な要求 ===
 1. 【最重要】必ず「${recommendedCategory}」カテゴリーの問いを生成すること

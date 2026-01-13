@@ -39,12 +39,17 @@ terraform.rc
 .cursor
 node_modules
 dist
-.claude
 sessions/
 /logs/
 /memory/*
-CLAUDE.md
 .github/copilot-instructions.md
 data/*
+!data/.gitkeep
 test-data/
 .env
+
+# RAG Knowledge Base (populated by ingestion)
+knowledge/*
+!knowledge/.gitkeep
+!knowledge/*/.gitkeep
+.claude/settings.local.json
