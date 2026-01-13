@@ -14,6 +14,9 @@ import { CoreBeliefs } from '../memory/core-beliefs.js';
 import { YuiConsultation } from './yui-consultation.js';
 import { AI_AGENT_ROSTER } from '../constants/agent-roster.js';
 
+// RAG integration for knowledge-grounded thinking
+import { isRAGEnabled, getRAGContext } from '../../rag/index.js';
+
 interface InternalTrigger {
   id: string;
   timestamp: number;
@@ -82,8 +85,21 @@ export default class IndividualThoughtStage {
       const significantThoughts = this.databaseManager.getSignificantThoughts(3);
       const coreBeliefs = this.databaseManager.getCoreBeliefs(5); // Get top 5 core beliefs
 
+      // RAG: Retrieve relevant knowledge for this question
+      let ragKnowledge = '';
+      if (isRAGEnabled()) {
+        try {
+          ragKnowledge = await getRAGContext(trigger.question, 400);
+          if (ragKnowledge) {
+            log.info('RAG', `Retrieved knowledge context for S1 (${agentId})`);
+          }
+        } catch (error) {
+          log.warn('RAG', `S1 context retrieval failed for ${agentId}: ${error}`);
+        }
+      }
+
       // Create enhanced prompt with context and agent-specific personality
-      const enhancedPrompt = this.createEnhancedPrompt(trigger, unresolvedIdeas, significantThoughts, coreBeliefs, agentId);
+      const enhancedPrompt = this.createEnhancedPrompt(trigger, unresolvedIdeas, significantThoughts, coreBeliefs, agentId, ragKnowledge);
 
       // Execute AI agent with Japanese language constraint
       const result = await agent.execute(enhancedPrompt, '必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
@@ -127,7 +143,7 @@ export default class IndividualThoughtStage {
     return null;
   }
 
-  private createEnhancedPrompt(trigger: InternalTrigger, unresolvedIdeas: any[], significantThoughts: any[], coreBeliefs: any[], agentId: string): string {
+  private createEnhancedPrompt(trigger: InternalTrigger, unresolvedIdeas: any[], significantThoughts: any[], coreBeliefs: any[], agentId: string, ragKnowledge: string = ''): string {
     const unresolvedContext = unresolvedIdeas.map(idea => idea.question).join('、');
     const significantContext = significantThoughts.map(thought => thought.thought_content?.slice(0, 200)).join('、');
     const beliefsContext = coreBeliefs.map(belief => belief.belief_text).join('、');
@@ -226,6 +242,7 @@ ${beliefsContext ? `【確立された信念】\n${beliefsContext}\n` : ''}
 
 未解決の探求: ${unresolvedContext || 'なし'}
 過去の洞察: ${significantContext || 'なし'}
+${ragKnowledge ? `\n【知識ベースからの関連情報】\n${ragKnowledge}` : ''}
 
 【厳格な制約】
 ❌ **絶対に使ってはいけない表現**:

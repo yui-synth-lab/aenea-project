@@ -8,6 +8,9 @@ import { AIExecutor } from './ai-executor.js';
 import { aeneaConfig } from '../aenea/agents/aenea.js';
 import { log } from './logger.js';
 
+// RAG integration for dialogue context and auto-ingestion
+import { isRAGEnabled, searchRAG, ingestDialogueToRAG } from '../rag/index.js';
+
 interface ConsciousnessStateSnapshot {
   coreBeliefs: any[];
   dpdWeights: any;
@@ -51,8 +54,29 @@ export class DialogueHandler {
     const state = await this.loadConsciousnessState();
     const recentMemories = this.db.getRecentDialogueMemories(5); // 最近5個
 
+    // 1.5 RAG: 関連する過去の対話を検索
+    let ragDialogueContext = '';
+    if (isRAGEnabled()) {
+      try {
+        const ragResults = await searchRAG(humanMessage, {
+          topK: 3,
+          sourceTypes: ['dialogue', 'session'],
+          similarityThreshold: 0.65
+        });
+
+        if (ragResults.length > 0) {
+          ragDialogueContext = ragResults
+            .map(r => r.content.substring(0, 150))
+            .join('\n');
+          log.info('RAG', `Found ${ragResults.length} related dialogues for context`);
+        }
+      } catch (error) {
+        log.warn('RAG', `Dialogue context retrieval failed: ${error}`);
+      }
+    }
+
     // 2. システムプロンプト生成（常にCore Beliefsを内部参照、LLMが自然に判断）
-    const systemPrompt = this.buildNaturalDialoguePrompt(state, recentMemories);
+    const systemPrompt = this.buildNaturalDialoguePrompt(state, recentMemories, ragDialogueContext);
 
     // 3. User Prompt 生成
     const userPrompt = this.buildUserPrompt(humanMessage);
@@ -127,7 +151,8 @@ export class DialogueHandler {
    */
   private buildNaturalDialoguePrompt(
     state: ConsciousnessStateSnapshot,
-    recentMemories: DialogueMemory[]
+    recentMemories: DialogueMemory[],
+    ragContext: string = ''
   ): string {
     // Core beliefs
     const beliefsText = state.coreBeliefs
@@ -159,6 +184,7 @@ ${dpdText}
 
 ### 最近の対話の記憶
 ${memoriesText || '（まだありません）'}
+${ragContext ? `\n### 知識ベースからの関連情報\n${ragContext}` : ''}
 
 ## 会話スタイル
 
@@ -305,16 +331,30 @@ Aenea: ${aeneaResponse}
       });
 
       log.info('DialogueHandler', `💾 Memory saved: ${memorySummary}`);
+
+      // RAG自動登録（非同期、エラーは無視）
+      ingestDialogueToRAG(dialogueId, humanMessage, aeneaResponse, memorySummary, {
+        topics: topics.join(', '),
+        importance
+      }).catch(err => {
+        log.warn('DialogueHandler', `RAG ingestion failed (non-critical): ${err.message}`);
+      });
     } catch (error: any) {
       log.error('DialogueHandler', 'Memory summarization failed: ' + error.message);
       // エラーでも対話は成功しているので、デフォルト記憶を保存
+      const fallbackSummary = `${humanMessage.substring(0, 50)}について対話`;
       this.db.saveDialogueMemory({
         dialogueId,
-        memorySummary: `${humanMessage.substring(0, 50)}について対話`,
+        memorySummary: fallbackSummary,
         topics: JSON.stringify([]),
         importance: 0.5,
         emotionalImpact: 0.5,
         timestamp: Date.now()
+      });
+
+      // RAG自動登録（フォールバック時も）
+      ingestDialogueToRAG(dialogueId, humanMessage, aeneaResponse, fallbackSummary).catch(() => {
+        // エラーは無視
       });
     }
   }
