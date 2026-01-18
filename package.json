@@ -24,6 +24,7 @@
     "demo": "npm run build && tsx src/server/aenea-server.ts",
     "analyze": "tsx scripts/analyze-growth.ts",
     "db:backup": "tsx scripts/backup-db.ts",
+    "db:export": "tsx scripts/export-db.ts",
     "rag:ingest": "tsx scripts/ingest-knowledge.ts",
     "rag:ingest:github": "tsx scripts/ingest-knowledge.ts github",
     "rag:ingest:dialogues": "tsx scripts/ingest-knowledge.ts dialogues",
