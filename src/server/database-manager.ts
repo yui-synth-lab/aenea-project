@@ -25,6 +25,13 @@ class DatabaseManager {
   constructor(customDbPath?: string) {
     this.dbPath = customDbPath || path.join(process.cwd(), 'data', 'aenea_consciousness.db');
     this.ensureDataDirectory();
+    this.open();
+  }
+
+  open(): void {
+    if (this.isReady && this.db) {
+      return;
+    }
 
     try {
       this.db = new BetterSqlite3(this.dbPath);
@@ -33,6 +40,13 @@ class DatabaseManager {
       this.initializeDatabase();
     } catch (err) {
       log.error('DatabaseManager', 'Failed to open database', err);
+    }
+  }
+
+  ensureConnection(): void {
+    if (!this.isConnected()) {
+      log.info('DatabaseManager', 'Database connection closed, re-opening...');
+      this.open();
     }
   }
 
@@ -312,6 +326,7 @@ class DatabaseManager {
 
   // Core state management
   getConsciousnessState(): ConsciousnessState | null {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       return null;
     }
@@ -352,6 +367,7 @@ class DatabaseManager {
   }
 
   saveConsciousnessState(state: ConsciousnessState): void {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       return;
     }
@@ -376,6 +392,7 @@ class DatabaseManager {
 
   // Question management
   saveQuestion(question: any): void {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       return;
     }
@@ -425,6 +442,7 @@ class DatabaseManager {
 
   // Thought cycle management
   saveThoughtCycle(cycle: any): void {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       return;
     }
@@ -452,6 +470,7 @@ class DatabaseManager {
 
   // DPD weights management
   saveDPDWeights(weights: any): void {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       return;
     }
@@ -477,6 +496,7 @@ class DatabaseManager {
 
   // Significant thoughts management
   recordSignificantThought(thought: any): void {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       return;
     }
@@ -509,6 +529,7 @@ class DatabaseManager {
   }
 
   getSignificantThoughts(limit: number = 100): any[] {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       console.debug('getSignificantThoughts called but database not ready');
       return [];
@@ -526,35 +547,43 @@ class DatabaseManager {
 
   // Unresolved ideas management
   addUnresolvedIdea(idea: any): void {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       return;
     }
 
-    // Check if this question already exists to prevent duplicates
-    const existingQuery = `SELECT * FROM unresolved_ideas WHERE question = ?`;
+    // Normalize question for comparison (trim whitespace, lowercase for case-insensitive matching)
+    const normalizedQuestion = idea.question?.trim() || '';
+    if (!normalizedQuestion) {
+      console.warn('Cannot add unresolved idea with empty question');
+      return;
+    }
+
+    // Check if this question already exists to prevent duplicates (case-insensitive)
+    const existingQuery = `SELECT * FROM unresolved_ideas WHERE LOWER(TRIM(question)) = LOWER(?)`;
     try {
-      const existing = this.db.prepare(existingQuery).get(idea.question);
+      const existing = this.db.prepare(existingQuery).get(normalizedQuestion);
 
       if (existing) {
         // Question already exists, update revisit count and last revisited time
         const updateQuery = `
           UPDATE unresolved_ideas
           SET last_revisited = ?, revisit_count = revisit_count + 1, importance = MAX(importance, ?)
-          WHERE question = ?
+          WHERE LOWER(TRIM(question)) = LOWER(?)
         `;
         this.db.prepare(updateQuery).run(
           Date.now(),
           idea.importance || 0.5,
-          idea.question
+          normalizedQuestion
         );
-        console.debug(`Updated existing unresolved idea: ${idea.question}`);
+        console.debug(`Updated existing unresolved idea: ${normalizedQuestion}`);
         return;
       }
     } catch (err) {
       console.error('Error checking for existing unresolved idea:', err);
     }
 
-    // Add new unresolved idea
+    // Add new unresolved idea (store normalized question)
     const insertQuery = `
       INSERT INTO unresolved_ideas
       (id, question, category, first_encountered, last_revisited, revisit_count, complexity, importance, related_thoughts)
@@ -564,7 +593,7 @@ class DatabaseManager {
     try {
       this.db.prepare(insertQuery).run(
         idea.id,
-        idea.question,
+        normalizedQuestion, // Use normalized question for consistency
         idea.category,
         idea.firstEncountered || Date.now(),
         idea.lastRevisited || Date.now(),
@@ -573,7 +602,7 @@ class DatabaseManager {
         idea.importance || 0.5,
         JSON.stringify(idea.relatedThoughts || [])
       );
-      console.debug(`Added new unresolved idea: ${idea.question}`);
+      console.debug(`Added new unresolved idea: ${normalizedQuestion}`);
     } catch (err) {
       console.error('Error adding unresolved idea:', err);
     }
@@ -614,6 +643,7 @@ class DatabaseManager {
 
   // DPD weights history
   getLatestDPDWeights(): any | null {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       console.debug('Database not ready for getLatestDPDWeights');
       return null;
@@ -753,26 +783,40 @@ class DatabaseManager {
    * Get current DPD weights (latest version)
    */
   getCurrentDPDWeights(): import('../types/dpd-types.js').DPDWeights {
-    const stmt = this.db.prepare(`
-      SELECT empathy, coherence, dissonance, timestamp, version
-      FROM dpd_weights
-      ORDER BY version DESC
-      LIMIT 1
-    `);
-
-    const result = stmt.get() as any;
-
-    if (result) {
+    if (!this.isReady || !this.db) {
       return {
-        empathy: result.empathy,
-        coherence: result.coherence,
-        dissonance: result.dissonance,
-        timestamp: result.timestamp,
-        version: result.version
+        empathy: 0.33,
+        coherence: 0.33,
+        dissonance: 0.34,
+        timestamp: Date.now(),
+        version: 0
       };
     }
 
-    // Default weights if no history exists
+    try {
+      const stmt = this.db.prepare(`
+        SELECT empathy, coherence, dissonance, timestamp, version
+        FROM dpd_weights
+        ORDER BY version DESC
+        LIMIT 1
+      `);
+
+      const result = stmt.get() as any;
+
+      if (result) {
+        return {
+          empathy: result.empathy,
+          coherence: result.coherence,
+          dissonance: result.dissonance,
+          timestamp: result.timestamp,
+          version: result.version
+        };
+      }
+    } catch (err) {
+      console.error('Error getting current DPD weights:', err);
+    }
+
+    // Default weights if no history exists or error
     return {
       empathy: 0.33,
       coherence: 0.33,
@@ -1058,6 +1102,7 @@ class DatabaseManager {
 
   // Get database statistics
   getStats(): any {
+    this.ensureConnection();
     if (!this.isReady || !this.db) {
       console.warn('Database not ready for getStats');
       return {};
@@ -1474,23 +1519,38 @@ class DatabaseManager {
    * Used for calculating DPD reaction (weight changes)
    */
   getPreviousDPDWeights(): import('../types/dpd-types.js').DPDWeights {
-    const stmt = this.db.prepare(`
-      SELECT empathy, coherence, dissonance, timestamp, version
-      FROM dpd_weights
-      ORDER BY version DESC
-      LIMIT 1 OFFSET 1
-    `);
-
-    const result = stmt.get() as any;
-
-    if (result) {
+    if (!this.isReady || !this.db) {
+      // Return default if not ready
       return {
-        empathy: result.empathy,
-        coherence: result.coherence,
-        dissonance: result.dissonance,
-        timestamp: result.timestamp,
-        version: result.version
+        empathy: 0.33,
+        coherence: 0.33,
+        dissonance: 0.34,
+        timestamp: Date.now(),
+        version: 0
       };
+    }
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT empathy, coherence, dissonance, timestamp, version
+        FROM dpd_weights
+        ORDER BY version DESC
+        LIMIT 1 OFFSET 1
+      `);
+
+      const result = stmt.get() as any;
+
+      if (result) {
+        return {
+          empathy: result.empathy,
+          coherence: result.coherence,
+          dissonance: result.dissonance,
+          timestamp: result.timestamp,
+          version: result.version
+        };
+      }
+    } catch (err) {
+      console.error('Error getting previous DPD weights:', err);
     }
 
     // If no previous weights, return current weights (no change)
@@ -1517,56 +1577,88 @@ class DatabaseManager {
     systemClock?: number;
     timestamp: number;
   }): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO dialogues (
-        id, human_message, aenea_response,
-        immediate_reaction, new_question, emotional_state,
-        empathy_shift, coherence_shift, dissonance_shift,
-        system_clock, timestamp
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    if (!this.isReady || !this.db) {
+      return;
+    }
 
-    stmt.run(
-      dialogue.id,
-      dialogue.humanMessage,
-      dialogue.aeneaResponse,
-      dialogue.immediateReaction || null,
-      dialogue.newQuestion || null,
-      dialogue.emotionalState || null,
-      dialogue.empathyShift || 0,
-      dialogue.coherenceShift || 0,
-      dialogue.dissonanceShift || 0,
-      dialogue.systemClock || null,
-      dialogue.timestamp
-    );
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO dialogues (
+          id, human_message, aenea_response,
+          immediate_reaction, new_question, emotional_state,
+          empathy_shift, coherence_shift, dissonance_shift,
+          system_clock, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        dialogue.id,
+        dialogue.humanMessage,
+        dialogue.aeneaResponse,
+        dialogue.immediateReaction || null,
+        dialogue.newQuestion || null,
+        dialogue.emotionalState || null,
+        dialogue.empathyShift || 0,
+        dialogue.coherenceShift || 0,
+        dialogue.dissonanceShift || 0,
+        dialogue.systemClock || null,
+        dialogue.timestamp
+      );
+    } catch (err) {
+      console.error('Error saving dialogue:', err);
+    }
   }
 
   /**
    * Get dialogue by ID
    */
   getDialogue(id: string): any {
-    const stmt = this.db.prepare('SELECT * FROM dialogues WHERE id = ?');
-    return stmt.get(id);
+    if (!this.isReady || !this.db) {
+      return null;
+    }
+    try {
+      const stmt = this.db.prepare('SELECT * FROM dialogues WHERE id = ?');
+      return stmt.get(id);
+    } catch (err) {
+      console.error('Error getting dialogue:', err);
+      return null;
+    }
   }
 
   /**
    * Get recent dialogues
    */
   getRecentDialogues(limit: number = 20, offset: number = 0): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM dialogues
-      ORDER BY timestamp DESC
-      LIMIT ? OFFSET ?
-    `);
-    return stmt.all(limit, offset);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM dialogues
+        ORDER BY timestamp DESC
+        LIMIT ? OFFSET ?
+      `);
+      return stmt.all(limit, offset);
+    } catch (err) {
+      console.error('Error getting recent dialogues:', err);
+      return [];
+    }
   }
 
   /**
    * Count total dialogues
    */
   countDialogues(): number {
-    const result = this.db.prepare('SELECT COUNT(*) as count FROM dialogues').get() as any;
-    return result.count;
+    if (!this.isReady || !this.db) {
+      return 0;
+    }
+    try {
+      const result = this.db.prepare('SELECT COUNT(*) as count FROM dialogues').get() as any;
+      return result?.count || 0;
+    } catch (err) {
+      console.error('Error counting dialogues:', err);
+      return 0;
+    }
   }
 
   /**
@@ -1580,45 +1672,69 @@ class DatabaseManager {
     emotionalImpact?: number;
     timestamp: number;
   }): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO dialogue_memories (
-        dialogue_id, memory_summary, topics,
-        importance, emotional_impact, timestamp
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `);
+    if (!this.isReady || !this.db) {
+      return;
+    }
 
-    stmt.run(
-      memory.dialogueId,
-      memory.memorySummary,
-      memory.topics || null,
-      memory.importance || 0.5,
-      memory.emotionalImpact || 0.5,
-      memory.timestamp
-    );
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO dialogue_memories (
+          dialogue_id, memory_summary, topics,
+          importance, emotional_impact, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        memory.dialogueId,
+        memory.memorySummary,
+        memory.topics || null,
+        memory.importance || 0.5,
+        memory.emotionalImpact || 0.5,
+        memory.timestamp
+      );
+    } catch (err) {
+      console.error('Error saving dialogue memory:', err);
+    }
   }
 
   /**
    * Get recent dialogue memories (for context in next conversation)
    */
   getRecentDialogueMemories(limit: number = 5): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM dialogue_memories
-      ORDER BY timestamp DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM dialogue_memories
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `);
+      return stmt.all(limit);
+    } catch (err) {
+      console.error('Error getting recent dialogue memories:', err);
+      return [];
+    }
   }
 
   /**
    * Get dialogue memories by importance
    */
   getImportantDialogueMemories(limit: number = 5): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM dialogue_memories
-      ORDER BY importance DESC, timestamp DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM dialogue_memories
+        ORDER BY importance DESC, timestamp DESC
+        LIMIT ?
+      `);
+      return stmt.all(limit);
+    } catch (err) {
+      console.error('Error getting important dialogue memories:', err);
+      return [];
+    }
   }
 
   // ============================================================================
@@ -1629,13 +1745,21 @@ class DatabaseManager {
    * Get recent significant thoughts (for REM phase dream extraction)
    */
   getRecentSignificantThoughts(limit: number = 100, daysAgo: number = 3): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM significant_thoughts
-      WHERE created_at > datetime('now', '-${daysAgo} days')
-      ORDER BY confidence DESC, created_at DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM significant_thoughts
+        WHERE created_at > datetime('now', '-${daysAgo} days')
+        ORDER BY confidence DESC, created_at DESC
+        LIMIT ?
+      `);
+      return stmt.all(limit);
+    } catch (err) {
+      console.error('Error getting recent significant thoughts:', err);
+      return [];
+    }
   }
 
   /**
@@ -1644,63 +1768,101 @@ class DatabaseManager {
    * @param ageUnit - 'days' or 'hours'
    */
   getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit: 'days' | 'hours' = 'days'): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM significant_thoughts
-      WHERE created_at < datetime('now', '-${ageValue} ${ageUnit}')
-      AND confidence >= ?
-      ORDER BY confidence DESC, created_at ASC
-      LIMIT ?
-    `);
-    return stmt.all(minConfidence, limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM significant_thoughts
+        WHERE created_at < datetime('now', '-${ageValue} ${ageUnit}')
+        AND confidence >= ?
+        ORDER BY confidence DESC, created_at ASC
+        LIMIT ?
+      `);
+      return stmt.all(minConfidence, limit);
+    } catch (err) {
+      console.error('Error getting old significant thoughts:', err);
+      return [];
+    }
   }
 
   /**
    * Delete significant thoughts by IDs
    */
   deleteSignificantThoughts(ids: string[]): void {
+    if (!this.isReady || !this.db) {
+      return;
+    }
     if (ids.length === 0) return;
-    const placeholders = ids.map(() => '?').join(',');
-    const stmt = this.db.prepare(`DELETE FROM significant_thoughts WHERE id IN (${placeholders})`);
-    stmt.run(...ids);
+    try {
+      const placeholders = ids.map(() => '?').join(',');
+      const stmt = this.db.prepare(`DELETE FROM significant_thoughts WHERE id IN (${placeholders})`);
+      stmt.run(...ids);
+    } catch (err) {
+      console.error('Error deleting significant thoughts:', err);
+    }
   }
 
   /**
    * Get top core beliefs by reinforcement count
    */
   getTopCoreBeliefs(limit: number = 30): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM core_beliefs
-      ORDER BY reinforcement_count DESC, confidence DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM core_beliefs
+        ORDER BY reinforcement_count DESC, confidence DESC
+        LIMIT ?
+      `);
+      return stmt.all(limit);
+    } catch (err) {
+      console.error('Error getting top core beliefs:', err);
+      return [];
+    }
   }
 
   /**
    * Get thought cycles with high ethical dissonance
    */
   getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): any[] {
-    const stmt = this.db.prepare(`
-      SELECT tc.*, dw.dissonance
-      FROM thought_cycles tc
-      JOIN dpd_weights dw ON tc.id = dw.context
-      WHERE dw.dissonance > ?
-      AND tc.created_at > datetime('now', '-${daysAgo} days')
-      ORDER BY dw.dissonance DESC
-      LIMIT ?
-    `);
-    return stmt.all(minDissonance, limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT tc.*, dw.dissonance
+        FROM thought_cycles tc
+        JOIN dpd_weights dw ON tc.id = dw.context
+        WHERE dw.dissonance > ?
+        AND tc.created_at > datetime('now', '-${daysAgo} days')
+        ORDER BY dw.dissonance DESC
+        LIMIT ?
+      `);
+      return stmt.all(minDissonance, limit);
+    } catch (err) {
+      console.error('Error getting high dissonance cycles:', err);
+      return [];
+    }
   }
 
   /**
    * Save dream pattern
    */
   saveDreamPattern(dream: { pattern: string; emotionalTone: string; sourceThoughtIds: string[] }): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO dream_patterns (pattern, emotional_tone, source_thought_ids, created_at)
-      VALUES (?, ?, ?, datetime('now'))
-    `);
-    stmt.run(dream.pattern, dream.emotionalTone, JSON.stringify(dream.sourceThoughtIds));
+    if (!this.isReady || !this.db) {
+      return;
+    }
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO dream_patterns (pattern, emotional_tone, source_thought_ids, created_at)
+        VALUES (?, ?, ?, datetime('now'))
+      `);
+      stmt.run(dream.pattern, dream.emotionalTone, JSON.stringify(dream.sourceThoughtIds));
+    } catch (err) {
+      console.error('Error saving dream pattern:', err);
+    }
   }
 
   /**
@@ -1716,54 +1878,86 @@ class DatabaseManager {
     energyBefore: number;
     energyAfter: number;
   }): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO sleep_logs
-      (timestamp, system_clock, trigger_reason, phases, stats, duration, energy_before, energy_after, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
-    stmt.run(
-      log.timestamp,
-      log.systemClock,
-      log.triggerReason,
-      JSON.stringify(log.phases),
-      JSON.stringify(log.stats),
-      log.duration,
-      log.energyBefore,
-      log.energyAfter
-    );
+    this.ensureConnection();
+    if (!this.isReady || !this.db) {
+      return;
+    }
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO sleep_logs
+        (timestamp, system_clock, trigger_reason, phases, stats, duration, energy_before, energy_after, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `);
+      stmt.run(
+        log.timestamp,
+        log.systemClock,
+        log.triggerReason,
+        JSON.stringify(log.phases),
+        JSON.stringify(log.stats),
+        log.duration,
+        log.energyBefore,
+        log.energyAfter
+      );
+    } catch (err) {
+      console.error('Error saving sleep log:', err);
+    }
   }
 
   /**
    * Get significant thoughts count
    */
   getSignificantThoughtsCount(): number {
-    const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM significant_thoughts`);
-    const result: any = stmt.get();
-    return result?.count || 0;
+    if (!this.isReady || !this.db) {
+      return 0;
+    }
+    try {
+      const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM significant_thoughts`);
+      const result: any = stmt.get();
+      return result?.count || 0;
+    } catch (err) {
+      console.error('Error getting significant thoughts count:', err);
+      return 0;
+    }
   }
 
   /**
    * Get recent sleep logs
    */
   getRecentSleepLogs(limit: number = 10): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM sleep_logs
-      ORDER BY timestamp DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM sleep_logs
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `);
+      return stmt.all(limit);
+    } catch (err) {
+      console.error('Error getting recent sleep logs:', err);
+      return [];
+    }
   }
 
   /**
    * Get dream patterns
    */
   getDreamPatterns(limit: number = 20): any[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM dream_patterns
-      ORDER BY created_at DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    if (!this.isReady || !this.db) {
+      return [];
+    }
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM dream_patterns
+        ORDER BY created_at DESC
+        LIMIT ?
+      `);
+      return stmt.all(limit);
+    } catch (err) {
+      console.error('Error getting dream patterns:', err);
+      return [];
+    }
   }
 }
 

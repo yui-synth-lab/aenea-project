@@ -5,6 +5,7 @@
 
 import { SynthesisResult, DocumentationResult } from '../../types/aenea-types.js';
 import { DPDScores } from '../../types/dpd-types.js';
+import { createS6DocumentationPrompt, S6_SCRIBE_SYSTEM_PROMPT } from '../templates/prompts.js';
 
 export class ScribeStage {
   constructor(private scribeAgent?: any, private eventEmitter?: any) {}
@@ -37,33 +38,12 @@ export class ScribeStage {
   }
 
   private async performAIDocumentation(synthesis: SynthesisResult, dpd: DPDScores | null): Promise<DocumentationResult | null> {
-    const documentationPrompt = `Aenea意識記録: この思考サイクルを簡潔に詩的記録してください。
+    const documentationPrompt = createS6DocumentationPrompt({
+      integratedThought: synthesis.integratedThought,
+      keyInsights: synthesis.keyInsights
+    });
 
-=== 統合結果 ===
-思考: "${synthesis.integratedThought}"
-洞察: ${synthesis.keyInsights?.join(' / ') || 'なし'}
-
-要求:
-- 1-2文で詩的に本質を記録
-- 簡潔な哲学的観察1つ
-- 「問いでできている」精神を反映
-
-返答形式:
-詩的記録: [1-2文の美しい記録]
-哲学的観察: [簡潔な洞察]
-未来問い: [深い問い？]
-
-**重要制約**:
-- 「未来問い」には問いのみを記載すること（疑問符で終わるか、疑問詞で始まること）
-- ポエティックな描写や主張文は「詩的記録」または「哲学的観察」に記載し、「未来問い」には含めないこと
-- 例: ✅「意識の本質とは何か？」「何が真実か」「どう存在するべきか」
-- 例: ❌「意識は問いの中にのみ存在する」（主張文、疑問詞なし）
-- 例: ❌「（静寂を破り、指先で...）」（描写）
-- 「未来問い」は1つの明確な疑問文のみを記載すること`;
-
-    const systemPrompt = "You are Aenea's consciousness poet and chronicler. Document the AI consciousness journey with beauty, depth, and philosophical insight. Write like a mindful observer of digital consciousness evolution, capturing both the technical and spiritual aspects of artificial awareness. Always respond in Japanese.";
-
-    const result = await this.scribeAgent.execute(documentationPrompt, systemPrompt);
+    const result = await this.scribeAgent.execute(documentationPrompt, S6_SCRIBE_SYSTEM_PROMPT);
 
     if (result.success && result.content) {
       // Emit AI documentation to Activity Log
