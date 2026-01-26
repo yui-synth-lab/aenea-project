@@ -7,6 +7,7 @@ import { theoriaConfig } from '../agents/theoria.js';
 import { pathiaConfig } from '../agents/pathia.js';
 import { kinesisConfig } from '../agents/kinesis.js';
 import { AI_AGENT_ROSTER } from '../constants/agent-roster.js';
+import { createS2ReflectionPrompt, createS2AgentPersonalityPrompt, S2_DEFAULT_PERSONALITY_PROMPT } from '../templates/prompts.js';
 
 export class MutualReflectionStage {
   constructor(private agents: Map<string, any>, private eventEmitter?: any) {}
@@ -43,28 +44,14 @@ export class MutualReflectionStage {
 
     // Get list of actual participating agents for dynamic examples
     const participatingAgents = targetThoughts.map(t => t.agentId);
-    const exampleAgent1 = participatingAgents[0] || 'theoria';
-    const exampleAgent2 = participatingAgents[1] || participatingAgents[0] || 'pathia';
 
-    const reflectionPrompt = `探求課題："${reflectingThought.trigger}"
-
-あなた（${reflectingThought.agentId}）の思考：
-"${reflectingThought.content}"
-
-他のエージェントの思考：
-${otherAgentsDialogue}
-
----
-
-【重要】厳密に300-400文字以内で応答してください。超過は禁止です。
-
-あなた（${reflectingThought.agentId}）の視点から、以下を簡潔に含めること：
-1. ${participatingAgents.join('、')}への評価
-2. 同意できない点とその理由
-3. 代替案または統合の提案
-4. 新たな問い
-
-必ず300-400文字以内に収めてください。`;
+    const reflectionPrompt = createS2ReflectionPrompt({
+      reflectingAgentId: reflectingThought.agentId,
+      reflectingThoughtContent: reflectingThought.content,
+      reflectingThoughtTrigger: reflectingThought.trigger,
+      otherAgentsDialogue,
+      participatingAgents
+    });
 
     try {
       const result = await reflectingAgent.execute(reflectionPrompt, this.getAgentPersonality(reflectingThought.agentId));
@@ -383,28 +370,17 @@ ${otherAgentsDialogue}
 
     const config = agentConfigs[agentId];
     if (!config) {
-      return "あなたは意識を探求する哲学エージェントです。相互反映では、他の視点に誠実に挑戦しつつ、自分独自の視点を確信を持って守ります。必ず日本語で応答してください。";
+      return S2_DEFAULT_PERSONALITY_PROMPT;
     }
 
     // Build personality from agent config
-    return `あなたは${config.name}（${config.displayName}）です。
-
-核となる個性: ${config.personality}
-
-反対意見の示し方: ${config.disagreementStyle}
-
-同意意見の示し方: ${config.agreementStyle}
-
-${AI_AGENT_ROSTER}
-
-**相互反映における姿勢:**
-- あなたの個性と視点に忠実であること
-- 批判を述べる前に、他者の思考の価値ある点を認めること
-- 反対する場合は、その理由を明確に説明し、建設的な代替案を提示すること
-- 誠実さと敬意のバランスを保つこと - 率直であるが厳しくはならない
-- 議論に勝つことではなく、対話を通じたより深い理解を目指すこと
-
-必ず日本語で応答してください。真正性と知的配慮をもって。`;
+    return createS2AgentPersonalityPrompt({
+      name: config.name,
+      displayName: config.displayName,
+      personality: config.personality,
+      disagreementStyle: config.disagreementStyle,
+      agreementStyle: config.agreementStyle
+    });
   }
 }
 

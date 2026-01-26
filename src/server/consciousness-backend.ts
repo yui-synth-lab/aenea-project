@@ -511,14 +511,21 @@ class ConsciousnessBackend extends EventEmitter {
       throw new Error('Consciousness is already running');
     }
 
+    // Ensure database connection is open
+    this.databaseManager.ensureConnection();
+
     this.isRunning = true;
     this.isPaused = false;
 
     this.emit('consciousnessStarted', this.getState());
     log.info('Consciousness', 'Started');
 
-    // Start the main consciousness loop
-    this.consciousnessLoop();
+    // Start the main consciousness loop with error handling
+    this.consciousnessLoop().catch((error) => {
+      log.error('Consciousness', 'Fatal error in consciousness loop', error);
+      this.emit('consciousnessError', { error: (error as Error).message });
+      this.isRunning = false;
+    });
   }
 
   async pause(): Promise<void> {
@@ -551,7 +558,15 @@ class ConsciousnessBackend extends EventEmitter {
     this.isPaused = false;
     this.isDormant = false;
     this.saveConsciousnessState(); // Save final state
-    // DB connection remains open - no cleanup needed
+
+    // Cleanup database connection to prevent memory leaks
+    try {
+      this.databaseManager.cleanup();
+      log.info('Consciousness', 'Database connection closed');
+    } catch (error) {
+      log.error('Consciousness', 'Failed to cleanup database connection', error);
+    }
+
     this.emit('consciousnessStopped', this.getState());
     log.info('Consciousness', 'Stopped');
   }
@@ -2207,6 +2222,9 @@ class ConsciousnessBackend extends EventEmitter {
    * Enter sleep mode (can be triggered manually or automatically)
    */
   async enterSleepMode(manual: boolean = false): Promise<void> {
+    // Ensure database connection is open (critical for sleep consolidation)
+    this.databaseManager.ensureConnection();
+
     if (this.isSleeping) {
       log.warn('Consciousness', '💤 Already in sleep mode');
       return;

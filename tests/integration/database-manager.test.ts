@@ -364,6 +364,18 @@ describe('Database Manager Integration', () => {
       // Should handle multiple cleanup calls
       expect(() => databaseManager.cleanup()).not.toThrow();
     });
+
+    test('should re-open connection if closed using ensureConnection', () => {
+      databaseManager.cleanup();
+      expect(databaseManager.isConnected()).toBe(false);
+
+      databaseManager.ensureConnection();
+      expect(databaseManager.isConnected()).toBe(true);
+
+      // Should be able to perform operations
+      const state = databaseManager.getConsciousnessState();
+      expect(state).toBeTruthy();
+    });
   });
 
   describe('Performance and Scalability', () => {

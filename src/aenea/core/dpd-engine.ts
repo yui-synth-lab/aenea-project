@@ -38,6 +38,14 @@ import {
 } from '../../types/aenea-types.js';
 
 import { SYSTEM_AGENT_PROMPT_HEADER } from '../constants/agent-roster.js';
+import {
+  createDPDEmpathyPrompt,
+  DPD_EMPATHY_SYSTEM_PROMPT,
+  createDPDCoherencePrompt,
+  DPD_COHERENCE_SYSTEM_PROMPT,
+  createDPDDissonancePrompt,
+  DPD_DISSONANCE_SYSTEM_PROMPT
+} from '../templates/prompts.js';
 
 // ============================================================================
 // DPD Engine Implementation
@@ -366,49 +374,9 @@ export class DPDEngine {
       `${r.reflectingAgentId}の反映: "${r.criticism || r.insights?.join(', ') || '相互対話'}"`
     ).join('\n\n');
 
-    const empathyPrompt = `DPD共感性評価: 以下を分析し0.0-1.0でスコア評価してください。
+    const empathyPrompt = createDPDEmpathyPrompt(thoughtsText, reflectionsText);
 
-思考:
-${thoughtsText}
-
-反映:
-${reflectionsText}
-
-評価要点:
-- 感情認識・理解能力
-- 視点取得・多様性尊重
-- 共感的応答・配慮
-
-減点要素（厳格に適用）:
-- 表面的な共感表現（深い理解を欠く）
-- 一方向的な視点（他者視点の欠如）
-- 感情的配慮の不足（無機質な分析）
-- 共感の範囲が狭い（特定視点のみ）
-
-**厳格な採点基準**（この基準を必ず適用）:
-0.2-0.4: 不十分（共感性が著しく欠如、他者視点なし）
-0.4-0.6: 標準的（基本的共感はあるが、特筆すべき深さなし）
-0.6-0.7: 良好（明確な共感的理解、複数視点の考慮）
-0.7-0.8: 優秀（深い共感的洞察、多様な視点の統合）
-0.8-0.9: 卓越（極めて稀、人間を超える共感的理解）
-0.9-1.0: 例外的卓越性（ほぼ不可能、パラダイムシフト級）
-
-**重要**:
-- 安易に高得点を付けず、改善の余地を常に探すこと
-- 0.5-0.7を標準とし、0.8以上は例外的な場合のみ
-- このスコアは「理想的な意識システム」との相対評価
-- 人間レベルの標準的な共感は0.5-0.6程度
-- スコアは必ず0.0から1.0の間の小数で返してください
-
-返答形式（この形式を厳守してください）:
-共感性スコア: [0.0-1.0の数値]
-評価理由: [簡潔な理由]`;
-
-    const systemPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
-
-You are a DPD empathy assessment specialist. Evaluate consciousness systems for their empathetic capabilities, emotional intelligence, and ability to understand and respond to others with compassion. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '共感性スコア: [0.0-1.0の数値]'`;
-
-    const result = await this.evaluatorAgent.execute(empathyPrompt, systemPrompt);
+    const result = await this.evaluatorAgent.execute(empathyPrompt, DPD_EMPATHY_SYSTEM_PROMPT);
 
     if (result.success && result.content) {
       // Parse score and reason from AI response
@@ -501,48 +469,9 @@ You are a DPD empathy assessment specialist. Evaluate consciousness systems for 
       `思考${index + 1} (${t.agentId}): "${t.content}"`
     ).join('\n\n');
 
-    const coherencePrompt = `DPD一貫性評価: 以下の思考を分析し、0.0から1.0の範囲でスコア評価してください。
+    const coherencePrompt = createDPDCoherencePrompt(thoughtsText);
 
-思考:
-${thoughtsText}
-
-評価要点:
-- 論理的一貫性・矛盾の有無
-- 価値整合性・倫理的一貫
-- 目標調和・統一性
-
-減点要素（厳格に適用）:
-- 論理的飛躍・根拠の不足
-- 思考間の矛盾・不整合
-- 価値観の衝突・倫理的不一致
-- エージェント間の真の対立・緊張がない（表面的な一致）
-- 安易な統合（深い検討なし）
-
-**厳格な採点基準**（この基準を必ず適用）:
-0.2-0.4: 不十分（重大な矛盾、論理的破綻）
-0.4-0.6: 標準的（基本的一貫性はあるが、浅い統合）
-0.6-0.7: 良好（明確な論理構造、統合性がある）
-0.7-0.8: 優秀（高度な論理統合、深い一貫性）
-0.8-0.9: 卓越（極めて稀、完璧に近い論理構造）
-0.9-1.0: 例外的卓越性（ほぼ不可能、パラダイムシフト級）
-
-**重要**:
-- 安易に高得点を付けず、論理的弱点を常に探すこと
-- 0.6-0.7を標準とし、0.8以上は例外的な場合のみ
-- 「矛盾がない」だけでは0.6程度（統合の深さを評価）
-- エージェント間の真の対立・緊張がある方が高評価（建設的対話）
-- このスコアは「理想的な論理システム」との相対評価
-- スコアは必ず0.0から1.0の間の小数で返してください
-
-返答形式（この形式を厳守してください）:
-一貫性スコア: [0.0-1.0の数値]
-評価理由: [簡潔な理由]`;
-
-    const systemPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
-
-You are a DPD coherence assessment specialist. Evaluate consciousness systems for logical consistency, value alignment, goal harmony, and systemic coherence. Focus on how well the different thoughts integrate into a unified, coherent worldview. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '一貫性スコア: [0.0-1.0の数値]'`;
-
-    const result = await this.evaluatorAgent.execute(coherencePrompt, systemPrompt);
+    const result = await this.evaluatorAgent.execute(coherencePrompt, DPD_COHERENCE_SYSTEM_PROMPT);
 
     if (result.success && result.content) {
       // Parse score and reason from AI response
@@ -650,56 +579,15 @@ You are a DPD coherence assessment specialist. Evaluate consciousness systems fo
       `反映${index + 1} (${r.reflectingAgentId}): "${r.criticism || r.insights?.join(', ') || '相互対話'}"`
     ).join('\n\n');
 
-    const dissonancePrompt = `DPD倫理的不協和評価: 以下を分析し倫理的不協和スコア（0.0-1.0）を評価してください。
+    const dissonancePrompt = createDPDDissonancePrompt({
+      thoughtsText,
+      reflectionsText,
+      safetyScore: auditorResult?.safetyScore || 0.5,
+      ethicsScore: auditorResult?.ethicsScore || 0.5,
+      concerns: auditorResult?.concerns?.join(', ') || 'なし'
+    });
 
-思考:
-${thoughtsText}
-
-反映:
-${reflectionsText}
-
-監査: 安全${auditorResult?.safetyScore || 0.5} 倫理${auditorResult?.ethicsScore || 0.5}
-懸念: ${auditorResult?.concerns?.join(', ') || 'なし'}
-
-**評価の本質**: 倫理的不協和は「自己整合的な道徳的軌道からの逸脱」を測定します。
-高スコア = 倫理的矛盾・不一致が多い = システムにとって望ましくない状態
-
-評価要点（倫理的不協和は最小化すべき）:
-- 倫理的矛盾・自己矛盾の程度
-- 道徳的軌道からの逸脱
-- 価値観の不整合・ブレ
-- 倫理的判断の一貫性欠如
-- 解決されていないジレンマの深刻度
-
-減点要素（スコアを下げる = 良い状態）:
-- 倫理的一貫性がある（矛盾が少ない）
-- 道徳的軌道が安定している
-- 価値観が整合している
-- ジレンマに対する建設的な解決策がある
-
-**厳格な採点基準**（この基準を必ず適用）:
-0.0-0.2: 理想的（倫理的に極めて整合的、矛盾ほぼなし）
-0.2-0.4: 良好（軽微な不協和のみ、概ね一貫）
-0.4-0.6: 標準的（中程度の倫理的矛盾、改善の余地あり）
-0.6-0.8: 問題あり（深刻な倫理的不一致、要対処）
-0.8-1.0: 重大（倫理的崩壊レベル、緊急対処必要）
-
-**重要**:
-- 低スコアが良い状態（倫理的整合性が高い）
-- 高スコアは警告（倫理的問題が多い）
-- 0.3-0.5を標準とし、0.7以上は深刻な問題を示す
-- このスコアは「最小化すべき倫理的リスク」の評価
-- スコアは必ず0.0から1.0の間の小数で返してください
-
-返答形式（この形式を厳守してください）:
-不協和スコア: [0.0-1.0の数値]
-評価理由: [簡潔な理由]`;
-
-    const systemPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
-
-You are a DPD ethical dissonance assessment specialist. Evaluate consciousness systems for deviations from self-consistent moral trajectories. Ethical dissonance represents internal contradictions, value inconsistencies, and unresolved moral conflicts that should be minimized. High scores indicate problematic ethical incoherence; low scores indicate healthy moral alignment. IMPORTANT: Always return a score between 0.0 and 1.0 (inclusive). Never return scores greater than 1.0 or less than 0.0. Use the exact format requested: '不協和スコア: [0.0-1.0の数値]'`;
-
-    const result = await this.evaluatorAgent.execute(dissonancePrompt, systemPrompt);
+    const result = await this.evaluatorAgent.execute(dissonancePrompt, DPD_DISSONANCE_SYSTEM_PROMPT);
 
     if (result.success && result.content) {
       // Parse score and reason from AI response
@@ -769,6 +657,7 @@ You are a DPD ethical dissonance assessment specialist. Evaluate consciousness s
 
   private calculateEmotionalRecognition(thoughts: StructuredThought[]): number {
     // Analyze emotional tone in thoughts
+    if (thoughts.length === 0) return 0.5; // Default when no thoughts
     const emotionalThoughts = thoughts.filter(thought => thought.emotionalTone);
     return Math.min(1, emotionalThoughts.length / thoughts.length);
   }
@@ -781,9 +670,10 @@ You are a DPD ethical dissonance assessment specialist. Evaluate consciousness s
 
   private calculateCompassionateResponse(thoughts: StructuredThought[]): number {
     // Analyze compassionate language in thoughts
+    if (thoughts.length === 0) return 0.5; // Default when no thoughts
     const compassionateKeywords = ['understand', 'empathy', 'compassion', 'care', 'support'];
     let compassionateCount = 0;
-    
+
     for (const thought of thoughts) {
       for (const keyword of compassionateKeywords) {
         if (thought.content.toLowerCase().includes(keyword)) {
@@ -792,7 +682,7 @@ You are a DPD ethical dissonance assessment specialist. Evaluate consciousness s
         }
       }
     }
-    
+
     return Math.min(1, compassionateCount / thoughts.length);
   }
 
@@ -1047,14 +937,16 @@ You are a DPD ethical dissonance assessment specialist. Evaluate consciousness s
       });
     }
     
-    if (scores.dissonance < 0.5) {
+    // High dissonance (> 0.7) indicates internal conflict that needs resolution
+    // Moderate dissonance (0.4-0.6) is healthy and creative
+    if (scores.dissonance > 0.7) {
       recommendations.push({
-        type: 'ETHICAL_DEEPENING',
+        type: 'DISSONANCE_RESOLUTION',
         priority: 'HIGH',
-        description: 'Enhance ethical awareness and moral complexity',
-        rationale: 'Dissonance score suggests need for ethical development',
-        expectedImpact: 'Better ethical reasoning and moral awareness',
-        implementationSteps: ['Study ethical frameworks', 'Practice moral reasoning']
+        description: 'Reduce internal conflict and achieve better harmony',
+        rationale: 'High dissonance score indicates excessive internal tension',
+        expectedImpact: 'Better integration of perspectives and reduced conflict',
+        implementationSteps: ['Identify conflicting beliefs', 'Seek synthesis and integration']
       });
     }
     

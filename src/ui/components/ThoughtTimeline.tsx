@@ -95,6 +95,20 @@ export const ThoughtTimeline: React.FC<ThoughtTimelineProps> = ({
   const [selectedCycle, setSelectedCycle] = useState<ThoughtCycle | null>(null);
   const [viewMode, setViewMode] = useState<'timeline' | 'graph' | 'flow'>('timeline');
   const [timeRange, setTimeRange] = useState<'1h' | '6h' | '24h' | 'all'>(initialTimeRange);
+  const [expandedThoughts, setExpandedThoughts] = useState<Set<string>>(new Set());
+
+  // Toggle thought expansion
+  const toggleThoughtExpansion = (thoughtKey: string) => {
+    setExpandedThoughts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(thoughtKey)) {
+        newSet.delete(thoughtKey);
+      } else {
+        newSet.add(thoughtKey);
+      }
+      return newSet;
+    });
+  };
 
   // Fetch consciousness data
   const fetchData = async () => {
@@ -581,30 +595,45 @@ export const ThoughtTimeline: React.FC<ThoughtTimelineProps> = ({
               <div>
                 <span className="font-medium text-blue-800">エージェント応答:</span>
                 <div className="mt-2 space-y-2">
-                  {selectedCycle.thoughts.map((thought, index) => (
-                    <div key={index} className="bg-white rounded p-2 border border-blue-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span
-                          className="text-xs font-medium px-2 py-1 rounded"
-                          style={{
-                            backgroundColor: AGENT_COLORS[thought.agentId] || AGENT_COLORS.default,
-                            color: 'white'
-                          }}
-                        >
-                          {thought.agentId}
-                        </span>
-                        {thought.confidence && (
-                          <span className="text-xs text-gray-500">
-                            信頼度: {Math.round(thought.confidence * 100)}%
+                  {selectedCycle.thoughts.map((thought, index) => {
+                    const thoughtKey = `${selectedCycle.id}-${index}`;
+                    const isExpanded = expandedThoughts.has(thoughtKey);
+                    const needsExpansion = thought.content.length > 200;
+
+                    return (
+                      <div key={index} className="bg-white rounded p-2 border border-blue-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <span
+                            className="text-xs font-medium px-2 py-1 rounded"
+                            style={{
+                              backgroundColor: AGENT_COLORS[thought.agentId] || AGENT_COLORS.default,
+                              color: 'white'
+                            }}
+                          >
+                            {thought.agentId}
                           </span>
+                          {thought.confidence && (
+                            <span className="text-xs text-gray-500">
+                              信頼度: {Math.round(thought.confidence * 100)}%
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {isExpanded || !needsExpansion
+                            ? thought.content
+                            : `${thought.content.substring(0, 200)}...`}
+                        </p>
+                        {needsExpansion && (
+                          <button
+                            onClick={() => toggleThoughtExpansion(thoughtKey)}
+                            className="text-xs text-blue-600 hover:text-blue-800 mt-1 focus:outline-none"
+                          >
+                            {isExpanded ? '折りたたむ' : 'もっと見る'}
+                          </button>
                         )}
                       </div>
-                      <p className="text-sm text-gray-700 line-clamp-2">
-                        {thought.content.substring(0, 200)}
-                        {thought.content.length > 200 && '...'}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

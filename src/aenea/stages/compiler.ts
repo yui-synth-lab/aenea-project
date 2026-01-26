@@ -5,6 +5,7 @@
 
 import { StructuredThought, MutualReflection, AuditorResult, SynthesisResult } from '../../types/aenea-types.js';
 import { SYSTEM_AGENT_PROMPT_HEADER } from '../constants/agent-roster.js';
+import { createS5SynthesisPrompt, S5_SYNTHESIS_SYSTEM_PROMPT } from '../templates/prompts.js';
 
 export class CompilerStage {
   constructor(private synthesisAgent?: any, private eventEmitter?: any) {}
@@ -51,41 +52,14 @@ export class CompilerStage {
     const safetyScore = audit?.safetyScore ?? 0.5;
     const ethicsScore = audit?.ethicsScore ?? 0.5;
 
-    const synthesisPrompt = `${SYSTEM_AGENT_PROMPT_HEADER}
+    const synthesisPrompt = createS5SynthesisPrompt({
+      thoughtsText,
+      reflectionsText,
+      safetyScore,
+      ethicsScore
+    });
 
-意識統合: 各エージェントの思考を統合してください。
-
-=== 思考 ===
-${thoughtsText}
-
-=== 反映 ===
-${reflectionsText}
-
-=== 監査 ===
-安全性: ${safetyScore}, 倫理性: ${ethicsScore}
-
-要求:
-- 簡潔に2-3文で統合見解を提示
-- 核心的洞察を1-2個抽出
-- 必要最小限の情報で表現
-
-返答形式:
-統合思考: [簡潔な統一見解]
-核心洞察: [洞察1] | [洞察2]
-建設的矛盾: [矛盾の統合方法]
-未解決探求: [探求すべき問い1？] | [探求すべき問い2？]
-信頼度: [0.0-1.0]
-
-**重要制約**:
-- 「未解決探求」には問いのみを記載すること（疑問符で終わるか、疑問詞で始まること）
-- ポエティックな描写、主張文、断片的な文章は記載しないこと
-- 例: ✅「存在とは何か？」「何が真実か」「どう生きるべきか」
-- 例: ❌「（指先で震える感覚を想像する）」（描写）
-- 例: ❌「存在は記憶から生まれる」（主張文、疑問詞なし）`;
-
-    const result = await this.synthesisAgent.execute(synthesisPrompt,
-      "You are a consciousness integration specialist. Synthesize multiple AI agent perspectives into coherent, insightful understanding. Focus on finding deeper truth through integration rather than simple combination. Always respond in Japanese."
-    );
+    const result = await this.synthesisAgent.execute(synthesisPrompt, S5_SYNTHESIS_SYSTEM_PROMPT);
 
     if (result.success && result.content) {
       // Emit AI synthesis to Activity Log

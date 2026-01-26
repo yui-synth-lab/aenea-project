@@ -54,7 +54,7 @@ ${content}
    */
   async cleanBelief(content: string): Promise<string> {
     if (!this.aiExecutor || !content) {
-      return content.substring(0, 50);
+      return content.substring(0, 300);
     }
 
     try {
@@ -67,7 +67,7 @@ ${content}
 1. エージェント名（テオリア、パシア、キネシス等）への言及を削除
 2. 「私は〇〇として」という自己同一化の表現を削除
 3. 核心的な哲学的信念の本質のみを抽出
-4. 50文字以内の簡潔な信念文に要約
+4. 300文字以内の簡潔な信念文に要約
 5. 必ず日本語で出力
 
 【出力】
@@ -75,7 +75,7 @@ ${content}
 
       const result = await this.aiExecutor.execute(
         prompt,
-        'You are a belief cleaning system. Remove agent name references and extract core belief essence in 50 characters or less. Always respond in Japanese.'
+        'You are a belief cleaning system. Remove agent name references and extract core belief essence in 300 characters or less. Always respond in Japanese.'
       );
 
       if (result.success && result.content) {
@@ -83,14 +83,14 @@ ${content}
         // Extract the belief part after "クリーンアップされた信念:" if present
         const match = cleaned.match(/クリーンアップされた信念[:：]\s*(.+)/s);
         const extractedBelief = match ? match[1].trim() : cleaned;
-        // Enforce 50 character limit
-        return extractedBelief.substring(0, 50);
+        // Enforce 300 character limit
+        return extractedBelief.substring(0, 300);
       }
 
-      return content.substring(0, 50); // Fallback: truncate to 50 chars
+      return content.substring(0, 300); // Fallback: truncate to 300 chars
     } catch (error) {
       console.warn('ContentCleanupService', 'Failed to clean belief content, using truncated original:', error);
-      return content.substring(0, 50);
+      return content.substring(0, 300);
     }
   }
 

@@ -41,6 +41,7 @@ export class EnergyManager {
   private state: EnergyState;
   private consumptionHistory: EnergyConsumption[] = [];
   private recoveryHistory: EnergyRecovery[] = [];
+  private energyLoopInterval: NodeJS.Timeout | null = null;
 
   // エネルギー設定
   private readonly config = {
@@ -532,9 +533,22 @@ export class EnergyManager {
   }
 
   private startEnergyLoop(): void {
-    setInterval(() => {
+    if (this.energyLoopInterval) {
+      clearInterval(this.energyLoopInterval);
+    }
+    this.energyLoopInterval = setInterval(() => {
       this.updateState();
     }, 60000); // 1分ごとに更新
+  }
+
+  /**
+   * Stop the energy update loop
+   */
+  cleanup(): void {
+    if (this.energyLoopInterval) {
+      clearInterval(this.energyLoopInterval);
+      this.energyLoopInterval = null;
+    }
   }
 
   private calculateAverageEfficiency(): number {
@@ -641,6 +655,7 @@ export interface EnergyStatistics {
   totalConsumed: number;
   operationCount: number;
   averageConsumption: number;
+  totalConsumptionValue?: number; // Alias for test compatibility
 }
 
 export interface PatternAnalysis {
@@ -660,5 +675,8 @@ export function getEnergyManager(): EnergyManager {
 }
 
 export function resetEnergyManager(): void {
+  if (energyManagerInstance) {
+    energyManagerInstance.cleanup();
+  }
   energyManagerInstance = null;
 }
