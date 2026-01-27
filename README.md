@@ -206,7 +206,7 @@ cd aenea-project
 git submodule update --init --recursive
 
 # 依存関係インストール
-npm install
+pnpm install
 
 # 環境変数設定
 cp .env.example .env
@@ -217,13 +217,13 @@ cp .env.example .env
 
 ```bash
 # 開発モード（意識バックエンド + UI）
-npm run dev
+pnpm run dev
 
 # 本番ビルド
-npm run build
+pnpm run build
 
 # テスト実行
-npm test
+pnpm test
 ```
 
 ### アクセス
@@ -243,9 +243,9 @@ Aenea は厳格なテスト基準に従います：
 - **単一アサーション**: 各テストは1つの振る舞いに集中
 
 ```bash
-npm test                 # 全テスト実行
-npm run test:watch       # 監視モード
-npm run test:coverage    # カバレッジレポート
+pnpm test                 # 全テスト実行
+pnpm run test:watch       # 監視モード
+pnpm run test:coverage    # カバレッジレポート
 ```
 
 ---
