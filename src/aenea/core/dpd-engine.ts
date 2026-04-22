@@ -31,6 +31,8 @@ import {
   ImpactAssessment
 } from '../../types/dpd-types.js';
 
+import { DPDInfluence } from '../../types/somnia-types.js';
+
 import {
   StructuredThought,
   MutualReflection,
@@ -205,6 +207,50 @@ export class DPDEngine {
   }
 
   /**
+   * Calculate DPD scores with SOMNIA influence (ADD)
+   */
+  async calculateDPDScoresWithADD(
+    thoughts: StructuredThought[],
+    reflections: MutualReflection[],
+    auditorResult: AuditorResult,
+    somniaInfluence?: DPDInfluence
+  ): Promise<DPDScores> {
+    // Get base scores
+    const baseScores = await this.calculateDPDScores(thoughts, reflections, auditorResult);
+
+    // If no SOMNIA influence, return base scores
+    if (!somniaInfluence) {
+      return baseScores;
+    }
+
+    // Blend SOMNIA influence with DPD scores (clamp each component to [0, 1])
+    const blendFactor = 0.3; // 30% SOMNIA, 70% AENEA
+    const clamp = (v: number) => Math.max(0, Math.min(1, v));
+
+    const empathy   = clamp(baseScores.empathy   * (1 - blendFactor) + somniaInfluence.empathy   * blendFactor);
+    const coherence = clamp(baseScores.coherence  * (1 - blendFactor) + somniaInfluence.coherence  * blendFactor);
+    const dissonance= clamp(baseScores.dissonance * (1 - blendFactor) + somniaInfluence.dissonance * blendFactor);
+
+    // Recalculate weightedTotal with blended values so components and total stay consistent
+    const weightedTotal =
+      empathy   * this.currentWeights.empathy +
+      coherence * this.currentWeights.coherence +
+      dissonance* this.currentWeights.dissonance;
+
+    return {
+      ...baseScores,
+      empathy,
+      coherence,
+      dissonance,
+      weightedTotal,
+      context: {
+        ...baseScores.context,
+        somniaInfluence
+      }
+    };
+  }
+
+  /**
    * Update DPD weights based on performance
    */
   async updateWeights(scores: DPDScores, targetScores?: DPDScores): Promise<WeightAdjustment[]> {
@@ -253,7 +299,8 @@ export class DPDEngine {
     thoughts: StructuredThought[],
     reflections: MutualReflection[],
     auditorResult: AuditorResult,
-    trigger?: { source: string }
+    trigger?: { source: string },
+    somniaInfluence?: DPDInfluence
   ): Promise<DPDAssessment> {
     console.log(`\n[DPD-Evaluator] 🎯 Starting DPD Assessment`);
     console.log(`[DPD-Evaluator]    Inputs: ${thoughts.length} thoughts, ${reflections.length} reflections`);
@@ -262,7 +309,7 @@ export class DPDEngine {
 
     try {
       // Calculate scores (includes AI evaluation)
-      const scores = await this.calculateDPDScores(thoughts, reflections, auditorResult);
+      const scores = await this.calculateDPDScoresWithADD(thoughts, reflections, auditorResult, somniaInfluence);
 
       // Use already calculated scores for individual component analysis
       const individualScores: IndividualDPDScores[] = [

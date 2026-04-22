@@ -198,6 +198,7 @@
     "trigger"
     "stage"
     "energy"
+    "somnia"
     "dpd"
     "thought"
     "activity"
@@ -209,6 +210,7 @@
 .manual-trigger { grid-area: trigger; }
 .stage-progression { grid-area: stage; }
 .energy { grid-area: energy; }
+.somnia-visualizer { grid-area: somnia; }
 .dpd-scores { grid-area: dpd; }
 .current-thought { grid-area: thought; }
 .activity-log { grid-area: activity; }
@@ -237,7 +239,7 @@
       "control thought"
       "trigger stage"
       "energy activity"
-      "dpd activity"
+      "somnia activity"
       "dpd activity"
       "dpd activity"
       "dpd philosophy";
