@@ -300,11 +300,19 @@ describe('InternalTriggerGenerator', () => {
 
       mockAI.setResponseContent('問い: 創造性の本質とは何か？\nカテゴリ: creative\n理由: 創造的思考の根本を問う');
 
-      const trigger = await generator.generate();
+      // Force evolution path by mocking Math.random
+      const originalRandom = Math.random;
+      Math.random = jest.fn().mockReturnValue(0.1); // < 0.70 to trigger evolution
 
-      expect(trigger).toBeDefined();
-      expect(trigger?.question).toBe('創造性の本質とは何か？');
-      expect(trigger?.category).toBe('creative');
+      try {
+        const trigger = await generator.generate();
+
+        expect(trigger).toBeDefined();
+        expect(trigger?.question).toBe('創造性の本質とは何か？');
+        expect(trigger?.category).toBe('creative');
+      } finally {
+        Math.random = originalRandom;
+      }
     });
   });
 

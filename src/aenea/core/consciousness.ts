@@ -943,7 +943,18 @@ export class AeneaConsciousness implements Consciousness {
    */
   private normalizeWeights(weights: DPDWeights): DPDWeights {
     const total = weights.empathy + weights.coherence + weights.dissonance;
-    
+
+    // Guard against zero division and invalid totals
+    if (total <= 0 || !isFinite(total)) {
+      return {
+        empathy: 0.33,
+        coherence: 0.33,
+        dissonance: 0.34,
+        timestamp: Date.now(),
+        version: (weights.version || 0) + 1
+      };
+    }
+
     return {
       empathy: weights.empathy / total,
       coherence: weights.coherence / total,

@@ -5,7 +5,7 @@
 
 import { SleepManager, SleepResult } from '../../../src/aenea/consciousness/sleep-manager.js';
 import { DatabaseManager } from '../../../src/server/database-manager.js';
-import { EnergyManager, getEnergyManager } from '../../../src/utils/energy-management.js';
+import { EnergyManager, getEnergyManager, resetEnergyManager } from '../../../src/utils/energy-management.js';
 import { MemoryConsolidator } from '../../../src/aenea/memory/memory-consolidator.js';
 import { AIExecutor } from '../../../src/server/ai-executor.js';
 import { EventEmitter } from 'events';
@@ -19,12 +19,8 @@ class MockAIExecutor {
     if (prompt.includes('夢')) {
       return {
         success: true,
-        content: JSON.stringify({
-          dreams: [
-            { pattern: "静寂と音は表裏一体である", emotional_tone: "静謐" },
-            { pattern: "孤独は自己発見の入口である", emotional_tone: "内省的" }
-          ]
-        }),
+        // Return numbered list format as expected by extractDreamPatterns
+        content: "1. 静寂と音は表裏一体である\n2. 孤独は自己発見の入口である",
         duration: 100
       };
     }
@@ -109,6 +105,9 @@ describe('SleepManager - Quality Tests', () => {
     if (databaseManager) {
       databaseManager.cleanup();
     }
+    
+    // Cleanup energy manager loop
+    resetEnergyManager();
 
     // Clean up test database
     if (fs.existsSync(testDbPath)) {
