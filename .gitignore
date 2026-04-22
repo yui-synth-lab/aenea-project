@@ -53,3 +53,6 @@ knowledge/*
 !knowledge/.gitkeep
 !knowledge/*/.gitkeep
 .claude/settings.local.json
+
+# Database exports
+exports/

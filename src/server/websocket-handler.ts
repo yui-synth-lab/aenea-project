@@ -20,7 +20,7 @@ export function setupWebSocketHandlers(io: SocketIOServer, consciousness: Consci
   });
 
   consciousness.on('thoughtCycleCompleted', (cycle: any) => {
-    // Limit data size to prevent JSON.stringify errors
+    // Limit data size to prevent JSON.stringify errors (increased limits for better display)
     const limitedCycle = {
       id: cycle.id,
       timestamp: cycle.timestamp,
@@ -28,17 +28,17 @@ export function setupWebSocketHandlers(io: SocketIOServer, consciousness: Consci
       status: cycle.status,
       totalEnergy: cycle.totalEnergy,
       totalStages: cycle.totalStages,
-      // Limit thoughts array to essential info
-      thoughts: cycle.thoughts?.slice(0, 3).map((t: any) => ({
+      // Include more thoughts with longer content for UI display
+      thoughts: cycle.thoughts?.slice(0, 10).map((t: any) => ({
         id: t.id,
         agentId: t.agentId,
-        content: t.content?.slice(0, 200), // Limit content length
+        content: t.content?.slice(0, 800), // Increased from 200 to 800
         confidence: t.confidence
       })) || [],
-      // Limit other arrays
+      // Include more synthesis data
       synthesis: cycle.synthesis ? {
-        integratedThought: cycle.synthesis.integratedThought?.slice(0, 300),
-        keyInsights: cycle.synthesis.keyInsights?.slice(0, 3)
+        integratedThought: cycle.synthesis.integratedThought?.slice(0, 1200), // Increased from 300 to 1200
+        keyInsights: cycle.synthesis.keyInsights?.slice(0, 10) // Increased from 3 to 10
       } : null
     };
     try {

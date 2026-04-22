@@ -188,7 +188,7 @@ export class InternalTriggerGenerator {
         // Emit trigger generation event
         this.emitEvent('triggerGenerated', {
           id: trigger.id,
-          question: trigger.question.substring(0, 150),
+          question: trigger.question.substring(0, 500),
           category: trigger.category,
           importance: trigger.importance,
           source: 'manual',
@@ -212,7 +212,7 @@ export class InternalTriggerGenerator {
           // Emit trigger generation event
           this.emitEvent('triggerGenerated', {
             id: evolvedTrigger.id,
-            question: evolvedTrigger.question.substring(0, 150),
+            question: evolvedTrigger.question.substring(0, 500),
             category: evolvedTrigger.category,
             importance: evolvedTrigger.importance,
             source: 'evolved_from_discussions',
@@ -1052,7 +1052,7 @@ ${context.ragContext ? `\n【知識ベースからの関連記録】\n${context.
       // Emit trigger generation event
       this.emitEvent('triggerGenerated', {
         id: trigger.id,
-        question: trigger.question.substring(0, 150),
+        question: trigger.question.substring(0, 500),
         category: trigger.category,
         importance: trigger.importance,
         source: 'database_unresolved',

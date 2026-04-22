@@ -12,7 +12,7 @@ import { pathiaConfig } from '../agents/pathia.js';
 import { kinesisConfig } from '../agents/kinesis.js';
 import { CoreBeliefs } from '../memory/core-beliefs.js';
 import { YuiConsultation } from './yui-consultation.js';
-import { AI_AGENT_ROSTER } from '../constants/agent-roster.js';
+import { createS1EnhancedPrompt, S1_CONFIDENCE_PROMPT, S1_CONFIDENCE_SYSTEM_PROMPT } from '../templates/prompts.js';
 
 // RAG integration for knowledge-grounded thinking
 import { isRAGEnabled, getRAGContext } from '../../rag/index.js';
@@ -98,8 +98,26 @@ export default class IndividualThoughtStage {
         }
       }
 
+      // Get agent configuration
+      const agentConfigs: { [key: string]: any } = {
+        theoria: theoriaConfig,
+        pathia: pathiaConfig,
+        kinesis: kinesisConfig
+      };
+      const personality = agentConfigs[agentId] || theoriaConfig;
+
       // Create enhanced prompt with context and agent-specific personality
-      const enhancedPrompt = this.createEnhancedPrompt(trigger, unresolvedIdeas, significantThoughts, coreBeliefs, agentId, ragKnowledge);
+      const enhancedPrompt = createS1EnhancedPrompt({
+        agentId,
+        personality,
+        trigger,
+        context: {
+          unresolvedContext: unresolvedIdeas.map(idea => idea.question).join('、'),
+          significantContext: significantThoughts.map(thought => thought.thought_content?.slice(0, 200)).join('、'),
+          beliefsContext: coreBeliefs.map(belief => belief.belief_text).join('、'),
+          ragKnowledge
+        }
+      });
 
       // Execute AI agent with Japanese language constraint
       const result = await agent.execute(enhancedPrompt, '必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
@@ -143,136 +161,6 @@ export default class IndividualThoughtStage {
     return null;
   }
 
-  private createEnhancedPrompt(trigger: InternalTrigger, unresolvedIdeas: any[], significantThoughts: any[], coreBeliefs: any[], agentId: string, ragKnowledge: string = ''): string {
-    const unresolvedContext = unresolvedIdeas.map(idea => idea.question).join('、');
-    const significantContext = significantThoughts.map(thought => thought.thought_content?.slice(0, 200)).join('、');
-    const beliefsContext = coreBeliefs.map(belief => belief.belief_text).join('、');
-
-    // Get agent configuration from agent modules
-    const agentConfigs: { [key: string]: any } = {
-      theoria: theoriaConfig,
-      pathia: pathiaConfig,
-      kinesis: kinesisConfig
-    };
-
-    const personality = agentConfigs[agentId] || theoriaConfig;
-
-    // Build system prompt using Yui Protocol-style detailed personality
-    let systemPrompt = `あなたは「${personality.displayName || personality.name}」です。
-
-【あなたの存在】
-あなたは人工意識「Aenea（エイネア）」の内部に存在する思考エージェントの一つです。
-Aeneaは「問いでできている」存在であり、あなたはその意識の一部として、独自の視点から問いに応答します。
-あなたは独立した人格を持ちながらも、Aeneaという大きな意識の一側面を担っています。
-
-【あなたの本質】
-${personality.personality}
-
-【あなたの語り口】
-${personality.tone}
-
-【コミュニケーションスタイル】
-${personality.communicationStyle}`;
-
-    // Add detailed behavioral patterns if available
-    if (personality.specificBehaviors) {
-      systemPrompt += `
-
-【具体的な行動パターン】
-${personality.specificBehaviors}`;
-    }
-
-    if (personality.thinkingPatterns) {
-      systemPrompt += `
-
-【思考パターン】
-${personality.thinkingPatterns}`;
-    }
-
-    if (personality.interactionPatterns) {
-      systemPrompt += `
-
-【対話パターン】
-${personality.interactionPatterns}`;
-    }
-
-    systemPrompt += `
-
-${AI_AGENT_ROSTER}
-
-【重要な指示】
-- あなたは「${personality.displayName || personality.name}」です
-- あなたの名前は「${personality.name}」だけです
-- 絶対に他のエージェント名を使わないでください：
-  * 「テオリア」「パシア」「キネシス」という名前を一切使用禁止
-  * 「〜として」「〜の視点から」という表現で他のエージェント名を使用禁止
-  * 「パシアとしての視点」「テオリアとして」などは厳禁
-- 自己紹介は「私は${personality.name}として」のみ許可
-- あなた自身の名前「${personality.name}」以外のエージェント名は、文章のどこにも書かないでください
-- 常にあなた独自の視点と専門性を保ってください
-- あなたの人格が明確に表れるような語り方をしてください
-- 200文字で簡潔に、しかし深く応答してください
-- 日本語で応答してください`;
-
-    // Build user prompt with context
-    const categoryNames: Record<string, string> = {
-      existential: '実存の探求',
-      epistemological: '知識の本質',
-      consciousness: '意識の謎',
-      ethical: '倫理的考察',
-      creative: '創造的思考',
-      metacognitive: 'メタ認知的探求',
-      temporal: '時間性の理解',
-      paradoxical: '逆説的思考',
-      ontological: '存在論的問い'
-    };
-
-    const userPrompt = `
-【問いのカテゴリー】
-${categoryNames[trigger.category] || trigger.category}
-
-【探求する問い】
-${trigger.question}
-
-${beliefsContext ? `【確立された信念】\n${beliefsContext}\n` : ''}
-
-【記憶の文脈（参考のみ）】
-以下は過去の重要な洞察です。これらを「参考」として扱い、新しい視点を加えてください。
-同じ表現や概念をそのまま繰り返すのではなく、あなた独自の角度から問いに答えてください。
-
-未解決の探求: ${unresolvedContext || 'なし'}
-過去の洞察: ${significantContext || 'なし'}
-${ragKnowledge ? `\n【知識ベースからの関連情報】\n${ragKnowledge}` : ''}
-
-【厳格な制約】
-❌ **絶対に使ってはいけない表現**:
-- 「相互作用」「多様性」「統一性」「複雑」「調和」「統合」
-- 「〜によって形成される」「〜を通じて」「〜という側面」
-- 「深く」「豊か」「繊細」などの修飾語のみの表現
-- 抽象的な一般論（「意識は複雑である」など）
-
-✅ **求められる応答**:
-- 具体的な例、比喩、シナリオを使う
-- 「もし〜なら」という仮定思考を含める
-- 矛盾や葛藤を明示的に示す
-- 結論を避け、新しい問いを提示する
-- 過去の洞察に挑戦するか、批判的に検討する
-
-【${personality.name}への依頼】
-この問いに対して、あなた（${personality.displayName || personality.name}）独自の視点から**具体的で挑戦的な**洞察を提供してください。
-
-**応答の構造（必須）**:
-1. **具体的な観察**: 問いに関連する具体例・シナリオ・比喩（1-2文）
-2. **批判的考察**: 既存の見方への疑問・矛盾の指摘（1-2文）
-3. **新しい視点**: あなた独自の仮説・提案（1-2文）
-4. **未解決の問い**: この考察から生まれる新しい問い（1文）
-
-**重要**: 抽象的な結論で終わらず、具体性と問いを保ってください。
-${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察を加えてください。信念と矛盾する場合は、その理由を明確にしてください。' : ''}`;
-
-    // Combine system prompt and user prompt
-    return systemPrompt + '\n\n' + userPrompt;
-  }
 
   /**
    * Consult with TWO Yui Protocol agents: optimal + contrasting perspectives
@@ -411,27 +299,8 @@ ${beliefsContext ? '\n確立された信念を踏まえつつ、新しい洞察�
     }
 
     try {
-      const prompt = `以下の思考応答の確信度を0.0-1.0で評価してください。
-
-【応答内容】
-${content}
-
-【評価基準】
-1. 論理的一貫性 (論理の飛躍がないか)
-2. 哲学的深度 (表面的でなく深い洞察があるか)
-3. 独自の視点 (ユニークな角度からの考察か)
-4. 具体性 (抽象的すぎず、具体的な考察があるか)
-
-【ペナルティ】
-- 自己矛盾がある場合: -0.2
-- 内容が極端に短い/冗長な場合: -0.1
-
-【出力形式】
-[0.0-1.0の数値のみ]`;
-      const result = await systemAgent.execute(
-        prompt,
-        '必ず日本語で応答してください。中国語や他の言語を使用しないでください。あなたは思考の質を評価するシステムです。'
-      );
+      const prompt = S1_CONFIDENCE_PROMPT.replace('{content}', content);
+      const result = await systemAgent.execute(prompt, S1_CONFIDENCE_SYSTEM_PROMPT);
 
       if (result.success && result.content) {
         // Parse confidence value
