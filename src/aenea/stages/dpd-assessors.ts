@@ -6,6 +6,7 @@
 import { StructuredThought, MutualReflection, AuditorResult } from '../../types/aenea-types.js';
 import { DPDEngine } from '../core/dpd-engine.js';
 import { DPDScores, DPDAssessment, DPDWeights } from '../../types/dpd-types.js';
+import { DPDInfluence } from '../../types/somnia-types.js';
 
 export class DPDAssessmentStage {
   private engine: DPDEngine;
@@ -14,7 +15,7 @@ export class DPDAssessmentStage {
     this.engine = new DPDEngine(initialWeights, evaluatorAgent, eventEmitter);
   }
 
-  async run(thoughts: StructuredThought[], reflections: MutualReflection[], audit: AuditorResult, trigger?: { source: string }): Promise<{ scores: DPDScores; assessment: DPDAssessment; weights: DPDWeights; }> {
+  async run(thoughts: StructuredThought[], reflections: MutualReflection[], audit: AuditorResult, trigger?: { source: string }, somniaInfluence?: DPDInfluence): Promise<{ scores: DPDScores; assessment: DPDAssessment; weights: DPDWeights; }> {
     // Emit DPD evaluation start to Activity Log
     if (this.eventEmitter) {
       this.eventEmitter.emit('agentThought', {
@@ -25,7 +26,7 @@ export class DPDAssessmentStage {
       });
     }
 
-    const assessment = await this.engine.performAssessment(thoughts, reflections, audit, trigger);
+    const assessment = await this.engine.performAssessment(thoughts, reflections, audit, trigger, somniaInfluence);
     const weights = this.engine.getCurrentWeights();
 
     // Emit final DPD scores to Activity Log

@@ -45,21 +45,26 @@ router.get('/state', (_req, res) => {
     return res.status(500).json({ error: 'Consciousness not initialized' });
   }
 
-  const state = consciousness.getState();
-  const statistics = consciousness.getStatistics();
+  try {
+    const state = consciousness.getState();
+    const statistics = consciousness.getStatistics();
 
-  // Combine state with statistics for UI
-  res.json({
-    ...state,
-    statistics: {
-      totalThoughtCycles: statistics.totalThoughts || 0,
-      totalQuestions: statistics.totalQuestions || 0,
-      averageConfidence: (statistics.averageConfidence || 0) / 100, // Convert back to 0-1 range
-      uptime: statistics.uptime || 0
-    },
-    currentEnergy: state.energy,
-    dpdScores: state.dpdWeights
-  });
+    // Combine state with statistics for UI
+    res.json({
+      ...state,
+      statistics: {
+        totalThoughtCycles: statistics.totalThoughts || 0,
+        totalQuestions: statistics.totalQuestions || 0,
+        averageConfidence: (statistics.averageConfidence || 0) / 100, // Convert back to 0-1 range
+        uptime: statistics.uptime || 0
+      },
+      currentEnergy: state.energy,
+      dpdScores: state.dpdWeights
+    });
+  } catch (error: any) {
+    console.error('Error in /state:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
 });
 
 // GET /api/consciousness/statistics
@@ -332,6 +337,8 @@ router.get('/events', (req, res) => {
   const consciousnessAwakenedListener = (data: any) => sendEvent('consciousnessAwakened', data);
   const energyUpdatedListener = (data: any) => sendEvent('energyUpdated', data);
   const cycleProcessingChangedListener = (data: any) => sendEvent('cycleProcessingChanged', data);
+  const somniaStateChangedListener = (data: any) => sendEvent('somniaStateChanged', data);
+  const somniaTransitionedListener = (data: any) => sendEvent('somniaTransitioned', data);
 
   console.log('🔗 Registering SSE event listeners...');
   consciousness.on('triggerGenerated', triggerGeneratedListener);
@@ -359,7 +366,9 @@ router.get('/events', (req, res) => {
   consciousness.on('sleepCompleted', sleepCompletedListener);
   consciousness.on('sleepError', sleepErrorListener);
   consciousness.on('cycleProcessingChanged', cycleProcessingChangedListener);
-  console.log('✅ SSE event listeners registered (25 events)');
+  consciousness.on('somniaStateChanged', somniaStateChangedListener);
+  consciousness.on('somniaTransitioned', somniaTransitionedListener);
+  console.log('✅ SSE event listeners registered (27 events)');
 
   // Clean up on client disconnect
   req.on('close', () => {
@@ -388,6 +397,8 @@ router.get('/events', (req, res) => {
     consciousness.removeListener('sleepCompleted', sleepCompletedListener);
     consciousness.removeListener('sleepError', sleepErrorListener);
     consciousness.removeListener('cycleProcessingChanged', cycleProcessingChangedListener);
+    consciousness.removeListener('somniaStateChanged', somniaStateChangedListener);
+    consciousness.removeListener('somniaTransitioned', somniaTransitionedListener);
     console.log('SSE client disconnected');
   });
 });

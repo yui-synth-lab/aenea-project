@@ -28,6 +28,10 @@ import { ContentCleanupService } from './content-cleanup-service.js';
 import { QuestionCategorizer, createQuestionCategorizer } from '../utils/question-categorizer.js';
 import { InternalTriggerGenerator } from '../aenea/core/internal-trigger.js';
 import { parseJsonArray } from '../utils/json-parser.js';
+import { SomniaConsciousness } from '../aenea/somnia/consciousness.js';
+import { emotiveSync, reflectiveReturn } from '../aenea/integration/saip.js';
+import { synchronizeEnergy } from '../aenea/integration/energy-sync.js';
+import { SomniaState } from '../types/somnia-types.js';
 
 interface ThoughtCycle {
   id: string;
@@ -57,6 +61,7 @@ export interface ConsciousnessState {
   totalThoughts: number;
   lastActivity: string;
   dpdWeights: DPDWeights;
+  somniaState?: SomniaState;
 }
 
 class ConsciousnessBackend extends EventEmitter {
@@ -111,6 +116,9 @@ class ConsciousnessBackend extends EventEmitter {
   // Internal trigger generator for S0 stage
   private triggerGenerator: InternalTriggerGenerator | null = null;
 
+  // Somnia (Affective Dynamic Directive) integration
+  private somnia: SomniaConsciousness;
+
   constructor() {
     super(); // Call EventEmitter constructor
 
@@ -144,6 +152,17 @@ class ConsciousnessBackend extends EventEmitter {
 
     // Initialize question categorizer for diversity management
     this.questionCategorizer = createQuestionCategorizer();
+
+    // Initialize Somnia
+    this.somnia = new SomniaConsciousness({}, this);
+
+    this.on('somniaStateChanged', (state) => {
+      this.databaseManager.saveSomniaState(state);
+    });
+
+    this.on('somniaTransitioned', (data) => {
+      this.databaseManager.saveSomniaTransition(data.from, data.to, 'internal', data.duration);
+    });
 
     // Try to restore from previous consciousness state (must come AFTER dpdWeights initialization)
     this.restoreFromDatabase();
@@ -297,6 +316,35 @@ class ConsciousnessBackend extends EventEmitter {
 
         // Inherit consciousness from previous state
         this.inheritConsciousnessFromDatabase();
+
+        // Restore SOMNIA affective state
+        const somniaRecord = this.databaseManager.getLatestSomniaState();
+        if (somniaRecord) {
+          this.somnia.setState({
+            mode: somniaRecord.mode,
+            somatic: {
+              lambda: somniaRecord.lambda,
+              phi: somniaRecord.phi,
+              mu: {
+                serotonin: somniaRecord.mu_serotonin,
+                dopamine: somniaRecord.mu_dopamine,
+                cortisol: somniaRecord.mu_cortisol,
+                oxytocin: somniaRecord.mu_oxytocin
+              }
+            },
+            affective: {
+              theta: somniaRecord.theta,
+              psi: somniaRecord.psi,
+              xi: somniaRecord.xi
+            }
+          });
+          log.info('Consciousness', 'SOMNIA state restored from database', {
+            mode: somniaRecord.mode,
+            lambda: somniaRecord.lambda,
+            phi: somniaRecord.phi,
+            xi: somniaRecord.xi
+          });
+        }
 
         log.info('Consciousness', 'Consciousness state restored from database', {
           systemClock: this.systemClock,
@@ -472,8 +520,13 @@ class ConsciousnessBackend extends EventEmitter {
       totalQuestions: dbStats.questions || 0,
       totalThoughts: dbStats.thought_cycles || 0,
       lastActivity: new Date().toISOString(),
-      dpdWeights: this.dpdWeights
+      dpdWeights: this.dpdWeights,
+      somniaState: this.somnia.getState()
     };
+  }
+
+  getSomniaState(): SomniaState {
+    return this.somnia.getState();
   }
 
   getDatabaseManager() {
@@ -664,8 +717,45 @@ class ConsciousnessBackend extends EventEmitter {
         return;
       }
 
+      // Map InternalTrigger to ExternalStimulus
+      const stimulus: import('../types/somnia-types.js').ExternalStimulus = {
+        type: 'internal',
+        valence: 0, // neutral default
+        arousal: trigger.category === 'philosophical' ? 0.8 : 0.5,
+        significance: trigger.importance || 0.5,
+        context: trigger.question
+      };
+
+      // SOMNIA: Advance affective state
+      const somniaState = await this.somnia.tick(stimulus);
+
+      // Energy synchronization between Somnia and Aenea
+      const energySyncState = synchronizeEnergy(
+        energyState.available,
+        energyState.capacity,
+        somniaState.somatic.phi
+      );
+
+      // Apply energy sync: adjust available energy based on SOMNIA φ influence
+      if (energySyncState.aeneaEnergy < energyState.available) {
+        const reduction = energyState.available - energySyncState.aeneaEnergy;
+        await this.energyManager.consumeEnergy(reduction, 'somnia_phi_sync');
+        log.info('EnergySync', `φ-based energy adjustment: -${reduction.toFixed(1)} (mode: ${energySyncState.energyMode})`);
+      }
+
       // Execute thought cycle
       await this.executeAdaptiveThoughtCycle(trigger);
+
+      // SAIP: Reflective Return — feed DPD scores (not weights) back to SOMNIA
+      if (this.previousDpdScores) {
+        try {
+          const bias = reflectiveReturn(this.previousDpdScores);
+          this.somnia.applyAffectiveBias(bias);
+          log.info('SAIP', `Reflective Return applied: pleasureBias=${bias.pleasureBias.toFixed(3)}, coherenceBias=${bias.coherenceBias.toFixed(3)}, dissonanceTrigger=${bias.dissonanceTrigger}`);
+        } catch (saipError) {
+          log.error('SAIP', 'Reflective Return failed', saipError);
+        }
+      }
     } finally {
       // Always mark cycle as completed, even if stopped or error occurs
       this.isProcessingCycle = false;
@@ -980,6 +1070,9 @@ class ConsciousnessBackend extends EventEmitter {
     thoughtCycle.totalEnergy += energyCost;
     thoughtCycle.totalStages++;
 
+    // Emotive Sync from Somnia
+    const somniaInfluence = emotiveSync(this.somnia.getState());
+
     // Use the dedicated DPDAssessmentStage implementation
     const result = await this.dpdAssessmentStage.run(
       thoughtCycle.thoughts,
@@ -991,12 +1084,14 @@ class ConsciousnessBackend extends EventEmitter {
         concerns: [],
         recommendations: []
       },
-      thoughtCycle.trigger // Pass trigger for impact assessment
+      thoughtCycle.trigger, // Pass trigger for impact assessment
+      somniaInfluence // Pass somnia influence
     );
 
     thoughtCycle.dpdScores = result.scores;
     thoughtCycle.impactAssessment = result.assessment.impactAssessment; // Store impact assessment
     this.dpdWeights = result.weights; // Update current weights
+    this.previousDpdScores = result.scores; // Cache for SAIP reflective return
 
     console.log(`[Backend S4] DPD Scores calculated: empathy=${result.scores.empathy.toFixed(3)}, coherence=${result.scores.coherence.toFixed(3)}, dissonance=${result.scores.dissonance.toFixed(3)}, weighted=${result.scores.weightedTotal.toFixed(3)} at ${new Date().toISOString()}`);
 

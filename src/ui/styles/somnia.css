@@ -1,0 +1,123 @@
+/* Somnia Visualizer Styles */
+
+.somnia-visualizer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.somnia-visualizer.empty {
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--cyber-text-dim);
+  gap: 1rem;
+}
+
+.somnia-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--cyber-border);
+  padding-bottom: 0.75rem;
+}
+
+.somnia-header h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  color: var(--cyber-text);
+}
+
+.somnia-mode-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.05em;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid transparent;
+}
+
+.somnia-mode-badge.awake {
+  color: #fcd34d;
+  border-color: rgba(252, 211, 77, 0.3);
+  box-shadow: 0 0 10px rgba(252, 211, 77, 0.1);
+}
+
+.somnia-mode-badge.dream {
+  color: #a5b4fc;
+  border-color: rgba(165, 180, 252, 0.3);
+  box-shadow: 0 0 10px rgba(165, 180, 252, 0.1);
+}
+
+.somnia-mode-badge.flow {
+  color: #67e8f9;
+  border-color: rgba(103, 232, 249, 0.3);
+  box-shadow: 0 0 10px rgba(103, 232, 249, 0.1);
+}
+
+.somnia-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.metric-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.metric-group h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--cyber-text-dim);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.metric-label {
+  width: 120px;
+  font-size: 0.875rem;
+  color: var(--cyber-text);
+  white-space: nowrap;
+}
+
+.metric-bar-container {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.metric-bar {
+  height: 100%;
+  border-radius: 3px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.metric-value {
+  width: 40px;
+  text-align: right;
+  font-family: monospace;
+  font-size: 0.875rem;
+  color: var(--cyber-accent);
+}

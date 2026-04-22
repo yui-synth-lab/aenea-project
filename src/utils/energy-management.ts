@@ -11,6 +11,7 @@ export interface EnergyState {
   efficiency: number;      // エネルギー効率 (0-1)
   lastUpdate: number;      // 最終更新時刻
   maxEnergy: number;       // 最大エネルギー量（tests compatible）
+  capacity: number;        // 最大容量 (alias for maxEnergy/total)
 }
 
 export interface EnergyConsumption {
@@ -109,7 +110,8 @@ export class EnergyManager {
       recovery: this.config.baseRecoveryRate,
       efficiency: 1.0,
       lastUpdate: Date.now(),
-      maxEnergy: this.config.maxEnergy
+      maxEnergy: this.config.maxEnergy,
+      capacity: this.config.maxEnergy
     };
   }
 
