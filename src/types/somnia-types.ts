@@ -70,6 +70,7 @@ export interface CognitiveMirrorState {
   empathicProjection: SemanticVector;
   dpdInfluence: DPDInfluence;
   temporalDilation: number;
+  qualia?: string; // LLM-generated physical/emotional feeling (Slow Track)
 }
 
 // ============================================================================
@@ -274,6 +275,7 @@ export interface SomniaStateRecord {
   addDissonance?: number;
   addTemporalFlow?: number;
   addTotal?: number;
+  qualia?: string;
 }
 
 /**

@@ -99,4 +99,123 @@ describe('SOMNIA Affective System Core', () => {
       expect(state.somatic.phi).toBeLessThan(100); // 100 - arousal * 5
     });
   });
+
+  describe('Qualia (Slow Track)', () => {
+    it('cognitive.qualia should be undefined before setQualia is called', () => {
+      const somnia = new SomniaConsciousness();
+      expect(somnia.getState().cognitive.qualia).toBeUndefined();
+    });
+
+    it('setQualia should persist in cognitive.qualia', () => {
+      const somnia = new SomniaConsciousness();
+      somnia.setQualia('軽度の疲労感');
+      expect(somnia.getState().cognitive.qualia).toBe('軽度の疲労感');
+    });
+
+    it('setQualia should overwrite a previous qualia value', () => {
+      const somnia = new SomniaConsciousness();
+      somnia.setQualia('焦燥感');
+      somnia.setQualia('穏やかな充足感');
+      expect(somnia.getState().cognitive.qualia).toBe('穏やかな充足感');
+    });
+
+    it('setQualia should emit somniaStateChanged event', () => {
+      const { EventEmitter } = require('events');
+      const emitter = new EventEmitter();
+      const somnia = new SomniaConsciousness({}, emitter);
+
+      const handler = jest.fn();
+      emitter.on('somniaStateChanged', handler);
+
+      somnia.setQualia('倦怠感');
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      const emittedState = handler.mock.calls[0][0];
+      expect(emittedState.cognitive.qualia).toBe('倦怠感');
+    });
+
+    it('qualia should survive a tick() call', async () => {
+      const somnia = new SomniaConsciousness();
+      somnia.setQualia('静寂な集中');
+      await somnia.tick();
+      // qualia is only set by Slow Track LLM, tick does not clear it
+      expect(somnia.getState().cognitive.qualia).toBe('静寂な集中');
+    });
+  });
+
+  describe('forceDream / wakeUp', () => {
+    it('forceDream should set mode to dream and recover φ to 100', () => {
+      const somnia = new SomniaConsciousness();
+      // Drain some energy first
+      somnia.setState({ somatic: { phi: 30 } as any });
+      somnia.forceDream();
+      const state = somnia.getState();
+      expect(state.mode).toBe('dream');
+      expect(state.somatic.phi).toBe(100);
+    });
+
+    it('wakeUp should set mode back to awake', () => {
+      const somnia = new SomniaConsciousness();
+      somnia.forceDream();
+      somnia.wakeUp();
+      expect(somnia.getState().mode).toBe('awake');
+    });
+  });
+
+  describe('State machine – φ-based exhaustion sleep', () => {
+    it('should trigger dream transition when φ falls below threshold', () => {
+      const sm = new SomniaStateMachine();
+
+      const exhaustedState: SomniaState = {
+        mode: 'awake',
+        somatic: {
+          lambda: 0.1,
+          phi: 10, // below phiDreamThreshold (20)
+          mu: { serotonin: 0.2, dopamine: 0.2, cortisol: 0.5, oxytocin: 0.2 }
+        },
+        affective: { theta: 0.5, psi: 0.5, xi: 0 }, // xi is low — no dissonance sleep
+        cognitive: {
+          empathicProjection: { dimensions: [], magnitude: 0, context: 'awake' },
+          dpdInfluence: { empathy: 0, coherence: 0, dissonance: 0 },
+          temporalDilation: 1.0
+        },
+        timestamp: Date.now(),
+        lastTransition: Date.now(),
+        transitionCount: 0
+      };
+
+      // Advance past MIN_DWELL_TICKS (3)
+      sm.checkTransition(exhaustedState);
+      sm.checkTransition(exhaustedState);
+      const transitionTo = sm.checkTransition(exhaustedState);
+      expect(transitionTo).toBe('dream');
+    });
+
+    it('should NOT trigger φ-based dream when φ is above threshold', () => {
+      const sm = new SomniaStateMachine();
+
+      const energeticState: SomniaState = {
+        mode: 'awake',
+        somatic: {
+          lambda: 0.1,
+          phi: 80,
+          mu: { serotonin: 0.2, dopamine: 0.2, cortisol: 0.2, oxytocin: 0.2 }
+        },
+        affective: { theta: 0.5, psi: 0.5, xi: 0 },
+        cognitive: {
+          empathicProjection: { dimensions: [], magnitude: 0, context: 'awake' },
+          dpdInfluence: { empathy: 0, coherence: 0, dissonance: 0 },
+          temporalDilation: 1.0
+        },
+        timestamp: Date.now(),
+        lastTransition: Date.now(),
+        transitionCount: 0
+      };
+
+      sm.checkTransition(energeticState);
+      sm.checkTransition(energeticState);
+      const transitionTo = sm.checkTransition(energeticState);
+      expect(transitionTo).toBeNull();
+    });
+  });
 });

@@ -45,6 +45,12 @@ interface ExportData {
   memoryPatterns: any[];
   consciousnessInsights: any[];
   questions: any[];
+  somniaStates: any[];
+  somniaTransitions: any[];
+  somniaSaipEvents: any[];
+  beliefEvolution: any[];
+  consolidationJobs: any[];
+  forgettingEvents: any[];
 }
 
 function parseArgs(): ExportOptions {
@@ -146,7 +152,13 @@ function collectData(db: DatabaseManager): ExportData {
     dreamPatterns,
     memoryPatterns,
     consciousnessInsights: insights,
-    questions
+    questions,
+    somniaStates: (db as any).getRecentSomniaStates ? (db as any).getRecentSomniaStates(500) : [],
+    somniaTransitions: (db as any).getRecentSomniaTransitions ? (db as any).getRecentSomniaTransitions(200) : [],
+    somniaSaipEvents: (db as any).getRecentSomniaSaipEvents ? (db as any).getRecentSomniaSaipEvents(200) : [],
+    beliefEvolution: (db as any).getRecentBeliefEvolution ? (db as any).getRecentBeliefEvolution(500) : [],
+    consolidationJobs: (db as any).getRecentConsolidationJobs ? (db as any).getRecentConsolidationJobs(100) : [],
+    forgettingEvents: (db as any).getRecentForgettingEvents ? (db as any).getRecentForgettingEvents(200) : []
   };
 }
 
@@ -401,6 +413,86 @@ function generateMarkdown(data: ExportData): string {
     }
   } else {
     lines.push('*No questions*');
+  }
+  lines.push('');
+
+  // 13. SOMNIA Affective States
+  lines.push('## 13. SOMNIA Affective States');
+  lines.push('');
+  if (data.somniaStates && data.somniaStates.length > 0) {
+    lines.push(`Total: ${data.somniaStates.length} states`);
+    lines.push('');
+    lines.push('| Timestamp | Mode | Lambda | Phi | Xi | Qualia |');
+    lines.push('|-----------|------|--------|-----|----|--------|');
+    for (const s of data.somniaStates.slice(0, 50)) {
+      lines.push(`| ${formatTimestamp(s.timestamp)} | ${s.mode} | ${s.lambda?.toFixed(3)} | ${s.phi?.toFixed(3)} | ${s.xi?.toFixed(3)} | ${s.qualia || '-'} |`);
+    }
+    if (data.somniaStates.length > 50) {
+      lines.push(`| ... | ... | ... | ... | ... | ... |`);
+    }
+  } else {
+    lines.push('*No SOMNIA states*');
+  }
+  lines.push('');
+
+  // 14. SOMNIA Transitions
+  lines.push('## 14. SOMNIA Transitions');
+  lines.push('');
+  if (data.somniaTransitions && data.somniaTransitions.length > 0) {
+    for (const t of data.somniaTransitions.slice(0, 20)) {
+      lines.push(`- [${formatTimestamp(t.timestamp)}] ${t.from_mode} → ${t.to_mode} (${t.trigger_reason})`);
+    }
+  } else {
+    lines.push('*No SOMNIA transitions*');
+  }
+  lines.push('');
+
+  // 15. SOMNIA SAIP Events
+  lines.push('## 15. SOMNIA SAIP Events');
+  lines.push('');
+  if (data.somniaSaipEvents && data.somniaSaipEvents.length > 0) {
+    for (const e of data.somniaSaipEvents.slice(0, 20)) {
+      lines.push(`- [${formatTimestamp(e.timestamp)}] **${e.event_type}** (Impact: ${e.impact_score?.toFixed(3)})`);
+    }
+  } else {
+    lines.push('*No SAIP events*');
+  }
+  lines.push('');
+
+  // 16. Belief Evolution
+  lines.push('## 16. Belief Evolution');
+  lines.push('');
+  if (data.beliefEvolution && data.beliefEvolution.length > 0) {
+    for (const e of data.beliefEvolution.slice(0, 50)) {
+      lines.push(`- [${formatTimestamp(e.timestamp)}] **${e.belief_content}**: ${e.event_type}`);
+      if (e.notes) lines.push(`  - ${e.notes}`);
+    }
+  } else {
+    lines.push('*No belief evolution records*');
+  }
+  lines.push('');
+
+  // 17. Consolidation Jobs
+  lines.push('## 17. Consolidation Jobs');
+  lines.push('');
+  if (data.consolidationJobs && data.consolidationJobs.length > 0) {
+    for (const j of data.consolidationJobs.slice(0, 20)) {
+      lines.push(`- [${formatTimestamp(j.timestamp)}] ${j.job_type}: ${j.status} (Processed: ${j.thoughts_processed}, Created: ${j.beliefs_created})`);
+    }
+  } else {
+    lines.push('*No consolidation jobs*');
+  }
+  lines.push('');
+
+  // 18. Forgetting Events
+  lines.push('## 18. Forgetting Events');
+  lines.push('');
+  if (data.forgettingEvents && data.forgettingEvents.length > 0) {
+    for (const e of data.forgettingEvents.slice(0, 20)) {
+      lines.push(`- [${formatTimestamp(e.timestamp)}] Forgotten ${e.forgotten_type} (${e.forgotten_id}): ${e.reason}`);
+    }
+  } else {
+    lines.push('*No forgetting events*');
   }
 
   return lines.join('\n');

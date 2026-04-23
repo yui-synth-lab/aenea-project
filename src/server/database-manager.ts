@@ -303,6 +303,7 @@ class DatabaseManager {
         add_dissonance REAL,
         add_temporal_flow REAL,
         add_total REAL,
+        qualia TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -340,6 +341,9 @@ class DatabaseManager {
       this.db.exec(schema);
       log.info('DatabaseManager', 'Database schema initialized successfully');
 
+      // Run lightweight migrations for pre-existing DBs
+      this.runMigrations();
+
       // Initialize consciousness state if it doesn't exist
       this.initializeConsciousnessState();
 
@@ -357,6 +361,22 @@ class DatabaseManager {
       }
     } catch (err) {
       log.error('DatabaseManager', 'Failed to initialize database schema', err);
+    }
+  }
+
+  /**
+   * Apply idempotent column-level migrations for tables that pre-date newer columns.
+   * Safe to run on every startup.
+   */
+  private runMigrations(): void {
+    try {
+      const cols = this.db.prepare(`PRAGMA table_info(somnia_state)`).all() as Array<{ name: string }>;
+      if (!cols.some(c => c.name === 'qualia')) {
+        this.db.exec(`ALTER TABLE somnia_state ADD COLUMN qualia TEXT`);
+        log.info('DatabaseManager', 'Migrated somnia_state: added qualia column');
+      }
+    } catch (err) {
+      log.error('DatabaseManager', 'Migration failed', err);
     }
   }
 
@@ -669,16 +689,22 @@ class DatabaseManager {
     console.debug(`Getting unresolved ideas with limit: ${limit}`);
 
     try {
-      const result = this.db.prepare(`
+      const rows = this.db.prepare(`
         SELECT * FROM unresolved_ideas
         ORDER BY importance DESC, last_revisited ASC
         LIMIT ?
-      `).all(limit);
+      `).all(limit) as any[];
 
-      console.debug(`Found ${result.length} unresolved ideas in database`);
-      console.debug(`Returning ${result.length} unresolved ideas`);
+      console.debug(`Found ${rows.length} unresolved ideas in database`);
 
-      return result;
+      // Map snake_case DB columns to camelCase expected by the UI
+      return rows.map(row => ({
+        ...row,
+        firstAppeared: row.first_encountered,
+        lastRevisited: row.last_revisited,
+        revisitCount: row.revisit_count,
+        relatedThoughts: row.related_thoughts ? JSON.parse(row.related_thoughts) : []
+      }));
     } catch (err) {
       console.error('Error getting unresolved ideas:', err);
       return [];
@@ -1163,7 +1189,10 @@ class DatabaseManager {
     try {
       const tables = [
         'questions', 'thought_cycles', 'dpd_weights', 'unresolved_ideas',
-        'significant_thoughts', 'memory_patterns', 'consciousness_insights'
+        'significant_thoughts', 'memory_patterns', 'consciousness_insights',
+        'forgetting_events', 'dream_patterns', 'sleep_logs', 'core_beliefs',
+        'dialogues', 'dialogue_memories', 'belief_evolution', 'consolidation_jobs',
+        'somnia_state', 'somnia_transitions', 'somnia_saip_events'
       ];
 
       const stats: any = {};
@@ -1173,7 +1202,7 @@ class DatabaseManager {
           const count = this.db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get();
           stats[table] = (count as any).count;
         } catch (err) {
-          console.error(`Error counting ${table}:`, err);
+          // Table might not exist yet if it's a very old DB and migrations haven't run or failed
           stats[table] = 0;
         }
       }
@@ -1188,6 +1217,14 @@ class DatabaseManager {
   // Check if database is ready
   isConnected(): boolean {
     return this.isReady && !!this.db;
+  }
+
+  close(): void {
+    if (this.db) {
+      this.db.close();
+      this.db = null as any;
+      this.isReady = false;
+    }
   }
 
   // Core Beliefs Management
@@ -2026,8 +2063,8 @@ class DatabaseManager {
       this.db.prepare(`
         INSERT INTO somnia_state
         (timestamp, cycle_id, mode, lambda, phi, mu_serotonin, mu_dopamine, mu_cortisol, mu_oxytocin,
-         theta, psi, xi, add_pleasure, add_coherence, add_dissonance, add_temporal_flow, add_total)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         theta, psi, xi, add_pleasure, add_coherence, add_dissonance, add_temporal_flow, add_total, qualia)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         state.timestamp || Date.now(),
         cycleId || null,
@@ -2045,7 +2082,8 @@ class DatabaseManager {
         state.add?.coherence ?? null,
         state.add?.dissonance ?? null,
         state.add?.temporalFlow ?? null,
-        state.add?.total ?? null
+        state.add?.total ?? null,
+        state.cognitive?.qualia ?? null
       );
     } catch (err) {
       console.error('Error saving SOMNIA state:', err);
@@ -2090,6 +2128,92 @@ class DatabaseManager {
     } catch (err) {
       console.error('Error getting latest SOMNIA state:', err);
       return null;
+    }
+  }
+
+  getRecentSomniaStates(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM somnia_state
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent SOMNIA states:', err);
+      return [];
+    }
+  }
+
+  getRecentSomniaTransitions(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM somnia_transitions
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent SOMNIA transitions:', err);
+      return [];
+    }
+  }
+
+  getRecentSomniaSaipEvents(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM somnia_saip_events
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent SOMNIA SAIP events:', err);
+      return [];
+    }
+  }
+
+  getRecentBeliefEvolution(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT be.*, cb.belief_content
+        FROM belief_evolution be
+        JOIN core_beliefs cb ON be.belief_id = cb.id
+        ORDER BY be.timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent belief evolution:', err);
+      return [];
+    }
+  }
+
+  getRecentConsolidationJobs(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM consolidation_jobs
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent consolidation jobs:', err);
+      return [];
+    }
+  }
+
+  getRecentForgettingEvents(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM forgetting_events
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent forgetting events:', err);
+      return [];
     }
   }
 }
