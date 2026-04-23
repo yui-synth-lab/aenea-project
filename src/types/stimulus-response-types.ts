@@ -74,6 +74,7 @@ export interface ConsciousnessStateSnapshot {
   totalQuestions: number;
   totalThoughts: number;
   energy: number;
+  somniaQualia?: string;
 }
 
 export interface ObservableResponse {

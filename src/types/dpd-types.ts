@@ -49,6 +49,7 @@ export interface DPDContext {
   previousScores?: DPDScores[];
   emotionalState?: EmotionalState;
   systemState?: SystemState;
+  somniaInfluence?: import('./somnia-types.js').DPDInfluence;
   historicalPatterns?: DPDPattern[];
 }
 

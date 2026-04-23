@@ -146,7 +146,7 @@ export class CompilerStage {
       integratedThought: integratedThought || 'AI統合処理により生成された統合思考',
       keyInsights: keyInsights.length > 0 ? keyInsights : ['統合による新たな洞察'],
       contradictions: contradictions.length > 0 ? contradictions : [],
-      unresolvedQuestions: unresolvedQuestions.length > 0 ? unresolvedQuestions : ['さらなる探求が必要な領域'],
+      unresolvedQuestions: unresolvedQuestions,
       confidence
     };
   }

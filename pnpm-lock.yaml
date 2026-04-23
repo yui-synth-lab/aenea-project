@@ -768,6 +768,7 @@ packages:
     resolution: {integrity: sha512-NAQnIKLw9K33KMODNXBEW0qC8/safWzZtqbVC7j1GcE7PSk0Uc6x7w5nrH5gvleZggjaxY9jaRVTqmtg7PNmqw==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@lancedb/vectordb-darwin-x64@0.21.2':
     resolution: {integrity: sha512-PudbltlbRiXvBf/bkAaDPL8+RqcI4TG69u00rQHxwkhH7PgPYRTUjfzfaQfiDXZuLXuZHQq703RyoHOqzsHN0Q==}

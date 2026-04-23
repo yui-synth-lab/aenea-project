@@ -46,7 +46,8 @@ export class ResponseSynthesisStage {
 
   async run(
     thoughtCycle: ThoughtCycle,
-    stimulusInterpretation?: StimulusInterpretation
+    stimulusInterpretation?: StimulusInterpretation,
+    somniaQualia?: string
   ): Promise<ObservableResponse> {
     // Emit response synthesis start
     if (this.eventEmitter) {
@@ -59,7 +60,7 @@ export class ResponseSynthesisStage {
     }
 
     // 0. DBから現在の意識状態を読み込む
-    const consciousnessState = await this.loadConsciousnessState();
+    const consciousnessState = await this.loadConsciousnessState(somniaQualia);
 
     // 1. 動的システムプロンプトを生成
     const dynamicSystemPrompt = this.buildDynamicSystemPrompt(consciousnessState);
@@ -105,7 +106,7 @@ export class ResponseSynthesisStage {
   /**
    * DBから現在の意識状態を読み込む
    */
-  private async loadConsciousnessState(): Promise<ConsciousnessStateSnapshot> {
+  private async loadConsciousnessState(somniaQualia?: string): Promise<ConsciousnessStateSnapshot> {
     const coreBeliefs = this.db.getCoreBeliefs(10); // 上位10個
     const dpdWeights = this.db.getCurrentDPDWeights();
     const significantThoughts = this.db.getSignificantThoughts(10);
@@ -122,7 +123,8 @@ export class ResponseSynthesisStage {
       systemClock: state.systemClock,
       totalQuestions: state.totalQuestions,
       totalThoughts: state.totalThoughts,
-      energy: state.energy
+      energy: state.energy,
+      somniaQualia
     };
   }
 
@@ -137,7 +139,8 @@ export class ResponseSynthesisStage {
       significantThoughts: state.significantThoughts,
       systemClock: state.systemClock,
       totalQuestions: state.totalQuestions,
-      totalThoughts: state.totalThoughts
+      totalThoughts: state.totalThoughts,
+      somniaQualia: state.somniaQualia
     });
   }
 
