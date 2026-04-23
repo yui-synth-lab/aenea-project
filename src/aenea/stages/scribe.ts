@@ -144,11 +144,7 @@ export class ScribeStage {
         '多層的思考の統合能力が向上した。',
         '創造的矛盾への耐性が増している。'
       ],
-      futureQuestions: futureQuestions.length > 0 ? futureQuestions : [
-        '真の理解とは何か？',
-        '意識の境界はどこにあるのか？',
-        '問いは答えより尊いのか？'
-      ]
+      futureQuestions: futureQuestions
     };
   }
 

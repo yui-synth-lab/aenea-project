@@ -47,7 +47,7 @@ export default class IndividualThoughtStage {
     this.coreBeliefs = new CoreBeliefs(databaseManager, 500); // 500 token budget for beliefs
   }
 
-  async run(thoughtCycle: ThoughtCycle): Promise<StructuredThought[]> {
+  async run(thoughtCycle: ThoughtCycle, somniaQualia?: string): Promise<StructuredThought[]> {
     const agents = ['theoria', 'pathia', 'kinesis'];
     const thoughts: StructuredThought[] = [];
 
@@ -57,7 +57,7 @@ export default class IndividualThoughtStage {
       const agent = this.agents.get(agentId);
       if (!agent) continue;
 
-      const thought = await this.executeAgentThought(agent, agentId, thoughtCycle.trigger, thoughtCycle);
+      const thought = await this.executeAgentThought(agent, agentId, thoughtCycle.trigger, thoughtCycle, somniaQualia);
       if (thought) {
         thoughts.push(thought);
       }
@@ -78,7 +78,7 @@ export default class IndividualThoughtStage {
     return thoughts;
   }
 
-  private async executeAgentThought(agent: AIExecutor, agentId: string, trigger: InternalTrigger, thoughtCycle: ThoughtCycle): Promise<StructuredThought | null> {
+  private async executeAgentThought(agent: AIExecutor, agentId: string, trigger: InternalTrigger, thoughtCycle: ThoughtCycle, somniaQualia?: string): Promise<StructuredThought | null> {
     try {
       // Get context from database
       const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(5);
@@ -106,7 +106,6 @@ export default class IndividualThoughtStage {
       };
       const personality = agentConfigs[agentId] || theoriaConfig;
 
-      // Create enhanced prompt with context and agent-specific personality
       const enhancedPrompt = createS1EnhancedPrompt({
         agentId,
         personality,
@@ -115,7 +114,8 @@ export default class IndividualThoughtStage {
           unresolvedContext: unresolvedIdeas.map(idea => idea.question).join('、'),
           significantContext: significantThoughts.map(thought => thought.thought_content?.slice(0, 200)).join('、'),
           beliefsContext: coreBeliefs.map(belief => belief.belief_text).join('、'),
-          ragKnowledge
+          ragKnowledge,
+          somniaQualia
         }
       });
 

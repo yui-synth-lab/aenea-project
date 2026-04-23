@@ -282,11 +282,67 @@ class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_dialogue_memories_dialogue_id ON dialogue_memories(dialogue_id);
       CREATE INDEX IF NOT EXISTS idx_dialogue_memories_importance ON dialogue_memories(importance DESC);
       CREATE INDEX IF NOT EXISTS idx_dialogue_memories_timestamp ON dialogue_memories(timestamp DESC);
+
+      -- SOMNIA state records
+      CREATE TABLE IF NOT EXISTS somnia_state (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        cycle_id TEXT,
+        mode TEXT NOT NULL CHECK(mode IN ('awake', 'dream', 'flow')),
+        lambda REAL NOT NULL,
+        phi REAL NOT NULL,
+        mu_serotonin REAL NOT NULL,
+        mu_dopamine REAL NOT NULL,
+        mu_cortisol REAL NOT NULL,
+        mu_oxytocin REAL NOT NULL,
+        theta REAL NOT NULL,
+        psi REAL NOT NULL,
+        xi REAL NOT NULL,
+        add_pleasure REAL,
+        add_coherence REAL,
+        add_dissonance REAL,
+        add_temporal_flow REAL,
+        add_total REAL,
+        qualia TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- State transitions
+      CREATE TABLE IF NOT EXISTS somnia_transitions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        from_mode TEXT NOT NULL,
+        to_mode TEXT NOT NULL,
+        trigger_reason TEXT,
+        duration_in_previous INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- SAIP events
+      CREATE TABLE IF NOT EXISTS somnia_saip_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        somnia_state_json TEXT,
+        aenea_dpd_json TEXT,
+        influence_json TEXT,
+        impact_score REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Indexes for SOMNIA
+      CREATE INDEX IF NOT EXISTS idx_somnia_state_timestamp ON somnia_state(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_somnia_state_mode ON somnia_state(mode);
+      CREATE INDEX IF NOT EXISTS idx_somnia_transitions_timestamp ON somnia_transitions(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_somnia_saip_event_type ON somnia_saip_events(event_type);
     `;
 
     try {
       this.db.exec(schema);
       log.info('DatabaseManager', 'Database schema initialized successfully');
+
+      // Run lightweight migrations for pre-existing DBs
+      this.runMigrations();
 
       // Initialize consciousness state if it doesn't exist
       this.initializeConsciousnessState();
@@ -305,6 +361,22 @@ class DatabaseManager {
       }
     } catch (err) {
       log.error('DatabaseManager', 'Failed to initialize database schema', err);
+    }
+  }
+
+  /**
+   * Apply idempotent column-level migrations for tables that pre-date newer columns.
+   * Safe to run on every startup.
+   */
+  private runMigrations(): void {
+    try {
+      const cols = this.db.prepare(`PRAGMA table_info(somnia_state)`).all() as Array<{ name: string }>;
+      if (!cols.some(c => c.name === 'qualia')) {
+        this.db.exec(`ALTER TABLE somnia_state ADD COLUMN qualia TEXT`);
+        log.info('DatabaseManager', 'Migrated somnia_state: added qualia column');
+      }
+    } catch (err) {
+      log.error('DatabaseManager', 'Migration failed', err);
     }
   }
 
@@ -617,16 +689,22 @@ class DatabaseManager {
     console.debug(`Getting unresolved ideas with limit: ${limit}`);
 
     try {
-      const result = this.db.prepare(`
+      const rows = this.db.prepare(`
         SELECT * FROM unresolved_ideas
         ORDER BY importance DESC, last_revisited ASC
         LIMIT ?
-      `).all(limit);
+      `).all(limit) as any[];
 
-      console.debug(`Found ${result.length} unresolved ideas in database`);
-      console.debug(`Returning ${result.length} unresolved ideas`);
+      console.debug(`Found ${rows.length} unresolved ideas in database`);
 
-      return result;
+      // Map snake_case DB columns to camelCase expected by the UI
+      return rows.map(row => ({
+        ...row,
+        firstAppeared: row.first_encountered,
+        lastRevisited: row.last_revisited,
+        revisitCount: row.revisit_count,
+        relatedThoughts: row.related_thoughts ? JSON.parse(row.related_thoughts) : []
+      }));
     } catch (err) {
       console.error('Error getting unresolved ideas:', err);
       return [];
@@ -1111,7 +1189,10 @@ class DatabaseManager {
     try {
       const tables = [
         'questions', 'thought_cycles', 'dpd_weights', 'unresolved_ideas',
-        'significant_thoughts', 'memory_patterns', 'consciousness_insights'
+        'significant_thoughts', 'memory_patterns', 'consciousness_insights',
+        'forgetting_events', 'dream_patterns', 'sleep_logs', 'core_beliefs',
+        'dialogues', 'dialogue_memories', 'belief_evolution', 'consolidation_jobs',
+        'somnia_state', 'somnia_transitions', 'somnia_saip_events'
       ];
 
       const stats: any = {};
@@ -1121,7 +1202,7 @@ class DatabaseManager {
           const count = this.db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get();
           stats[table] = (count as any).count;
         } catch (err) {
-          console.error(`Error counting ${table}:`, err);
+          // Table might not exist yet if it's a very old DB and migrations haven't run or failed
           stats[table] = 0;
         }
       }
@@ -1136,6 +1217,14 @@ class DatabaseManager {
   // Check if database is ready
   isConnected(): boolean {
     return this.isReady && !!this.db;
+  }
+
+  close(): void {
+    if (this.db) {
+      this.db.close();
+      this.db = null as any;
+      this.isReady = false;
+    }
   }
 
   // Core Beliefs Management
@@ -1956,6 +2045,174 @@ class DatabaseManager {
       return stmt.all(limit);
     } catch (err) {
       console.error('Error getting dream patterns:', err);
+      return [];
+    }
+  }
+
+  // ============================================================================
+  // SOMNIA Management
+  // ============================================================================
+
+  saveSomniaState(state: any, cycleId?: string): void {
+    this.ensureConnection();
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        INSERT INTO somnia_state
+        (timestamp, cycle_id, mode, lambda, phi, mu_serotonin, mu_dopamine, mu_cortisol, mu_oxytocin,
+         theta, psi, xi, add_pleasure, add_coherence, add_dissonance, add_temporal_flow, add_total, qualia)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        state.timestamp || Date.now(),
+        cycleId || null,
+        state.mode,
+        state.somatic?.lambda ?? 0,
+        state.somatic?.phi ?? 0,
+        state.somatic?.mu?.serotonin ?? 0,
+        state.somatic?.mu?.dopamine ?? 0,
+        state.somatic?.mu?.cortisol ?? 0,
+        state.somatic?.mu?.oxytocin ?? 0,
+        state.affective?.theta ?? 0,
+        state.affective?.psi ?? 0,
+        state.affective?.xi ?? 0,
+        state.add?.pleasure ?? null,
+        state.add?.coherence ?? null,
+        state.add?.dissonance ?? null,
+        state.add?.temporalFlow ?? null,
+        state.add?.total ?? null,
+        state.cognitive?.qualia ?? null
+      );
+    } catch (err) {
+      console.error('Error saving SOMNIA state:', err);
+    }
+  }
+
+  saveSomniaTransition(from: string, to: string, triggerReason: string, duration: number): void {
+    this.ensureConnection();
+    if (!this.isReady || !this.db) {
+      return;
+    }
+
+    try {
+      this.db.prepare(`
+        INSERT INTO somnia_transitions
+        (timestamp, from_mode, to_mode, trigger_reason, duration_in_previous)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        Date.now(),
+        from,
+        to,
+        triggerReason,
+        duration
+      );
+    } catch (err) {
+      console.error('Error saving SOMNIA transition:', err);
+    }
+  }
+
+  getLatestSomniaState(): any {
+    this.ensureConnection();
+    if (!this.isReady || !this.db) {
+      return null;
+    }
+
+    try {
+      return this.db.prepare(`
+        SELECT * FROM somnia_state
+        ORDER BY timestamp DESC
+        LIMIT 1
+      `).get();
+    } catch (err) {
+      console.error('Error getting latest SOMNIA state:', err);
+      return null;
+    }
+  }
+
+  getRecentSomniaStates(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM somnia_state
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent SOMNIA states:', err);
+      return [];
+    }
+  }
+
+  getRecentSomniaTransitions(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM somnia_transitions
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent SOMNIA transitions:', err);
+      return [];
+    }
+  }
+
+  getRecentSomniaSaipEvents(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM somnia_saip_events
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent SOMNIA SAIP events:', err);
+      return [];
+    }
+  }
+
+  getRecentBeliefEvolution(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT be.*, cb.belief_content
+        FROM belief_evolution be
+        JOIN core_beliefs cb ON be.belief_id = cb.id
+        ORDER BY be.timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent belief evolution:', err);
+      return [];
+    }
+  }
+
+  getRecentConsolidationJobs(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM consolidation_jobs
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent consolidation jobs:', err);
+      return [];
+    }
+  }
+
+  getRecentForgettingEvents(limit: number = 100): any[] {
+    if (!this.isReady || !this.db) return [];
+    try {
+      return this.db.prepare(`
+        SELECT * FROM forgetting_events
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent forgetting events:', err);
       return [];
     }
   }

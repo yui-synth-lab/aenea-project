@@ -13,6 +13,7 @@ import {
 import { DialogueModal } from '../components/DialogueModal.js';
 import { GrowthModal } from '../components/GrowthModal.js';
 import ParticleBackground from '../components/ParticleBackground.js';
+import SomniaVisualizer from '../components/SomniaVisualizer.js';
 import '../styles/dashboard.css';
 
 interface DashboardProps {
@@ -74,6 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
   const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
   const [currentStage, setCurrentStage] = useState<string>('');
   const [stageProgress, setStageProgress] = useState<StageProgress[]>([]);
+  const [somniaState, setSomniaState] = useState<any>(null);
 
   // Consciousness control functions
   const startConsciousness = async () => {
@@ -219,6 +221,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           // Update current thought if available
           if (stateData.currentThought) {
             setCurrentThought(stateData.currentThought);
+          }
+
+          // Update Somnia state if available
+          if (stateData.somniaState) {
+            setSomniaState(stateData.somniaState);
           }
         }
 
@@ -483,6 +490,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
 
         // Refresh consciousness state to update control buttons
         fetchConsciousnessState();
+      } else if (t === 'somniaStateChanged') {
+        setSomniaState(data);
       }
     };
 
@@ -625,6 +634,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
       </motion.div>
 
       <div className="dashboard-layout">
+        <div className="left-column">
         {/* Consciousness Control */}
         <motion.div
           className="dashboard-card consciousness-control"
@@ -780,6 +790,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           </div>
         </div>
 
+        {/* SOMNIA Visualizer */}
+        <SomniaVisualizer somniaState={somniaState} />
+
         {/* DPD Scores - Barycentric Display */}
         <div className="dashboard-card dpd-scores">
           <h3>Dynamic Prime Directive</h3>
@@ -881,6 +894,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           </button>
         </div>
 
+        </div>{/* end left-column */}
+
+        <div className="right-column">
         {/* Current Thought */}
         <motion.div
           className="dashboard-card current-thought"
@@ -1004,6 +1020,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             </p>
           </div>
         </div>
+        </div>{/* end right-column */}
       </div>
 
       <DialogueModal

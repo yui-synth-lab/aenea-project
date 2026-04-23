@@ -11,6 +11,22 @@ export function setupWebSocketHandlers(io: SocketIOServer, consciousness: Consci
     io.emit('thoughtCycleStarted', data);
   });
 
+  consciousness.on('somniaStateChanged', (state: any) => {
+    io.emit('somniaStateChanged', {
+      timestamp: Date.now(),
+      mode: state.mode,
+      theta: state.affective.theta,
+      psi: state.affective.psi,
+      xi: state.affective.xi,
+      lambda: state.somatic.lambda,
+      phi: state.somatic.phi
+    });
+  });
+
+  consciousness.on('somniaTransitioned', (data: any) => {
+    io.emit('somniaTransitioned', data);
+  });
+
   consciousness.on('stageChanged', (data: any) => {
     io.emit('stageChanged', data);
   });
