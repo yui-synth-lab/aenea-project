@@ -28,6 +28,8 @@ export interface TransitionThresholds {
   flowPsiThreshold: number;
   dreamAwakeEnergyThreshold: number;
   flowAwakeEnergyThreshold: number;
+  /** φ below this triggers awake→dream (exhaustion-based sleep) */
+  phiDreamThreshold: number;
 }
 
 const DEFAULT_THRESHOLDS: TransitionThresholds = {
@@ -36,6 +38,7 @@ const DEFAULT_THRESHOLDS: TransitionThresholds = {
   flowPsiThreshold: 0.8,
   dreamAwakeEnergyThreshold: 20,  // dream exits early only at critically low energy
   flowAwakeEnergyThreshold: 30,   // flow exits when energy is insufficient to sustain it
+  phiDreamThreshold: 20,          // φ below this triggers exhaustion-based sleep
 };
 
 function buildTransitions(t: TransitionThresholds): StateTransition[] {
@@ -48,6 +51,17 @@ function buildTransitions(t: TransitionThresholds): StateTransition[] {
         affective: {
           theta: s.affective.theta * 0.5,  // Relax temporal anchoring
           xi: 0                             // Reset dissonance
+        }
+      })
+    },
+    {
+      // Exhaustion-based sleep: low φ triggers dream for recovery
+      from: 'awake',
+      to: 'dream',
+      condition: (s) => s.somatic.phi < t.phiDreamThreshold,
+      onEnter: (s) => ({
+        affective: {
+          theta: s.affective.theta * 0.5,  // Relax temporal anchoring
         }
       })
     },

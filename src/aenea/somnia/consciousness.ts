@@ -20,6 +20,7 @@ export class SomniaConsciousness {
   private affectiveCore: AffectiveCore;
   private stateMachine: SomniaStateMachine;
   private config: SomniaConfig;
+  private qualiaText?: string;
 
   // Event emitter for integration
   private eventEmitter?: EventEmitter;
@@ -141,6 +142,14 @@ export class SomniaConsciousness {
   }
 
   /**
+   * Set the LLM-generated qualia (Slow Track)
+   */
+  setQualia(qualia: string): void {
+    this.qualiaText = qualia;
+    this.emitEvent('somniaStateChanged', this.getState());
+  }
+
+  /**
    * Get cognitive mirror state (Layer 3)
    */
   private getCognitiveState(): CognitiveMirrorState {
@@ -156,7 +165,8 @@ export class SomniaConsciousness {
         context: this.stateMachine.getCurrentMode()
       },
       dpdInfluence: this.calculateDPDInfluence(),
-      temporalDilation: 1.0 + (affective.theta - 0.5) * 0.5
+      temporalDilation: 1.0 + (affective.theta - 0.5) * 0.5,
+      qualia: this.qualiaText
     };
   }
 
@@ -227,6 +237,54 @@ export class SomniaConsciousness {
         ...config?.energySync
       }
     };
+  }
+
+  /**
+   * Force transition to Dream mode and fully recover φ.
+   * Called by the backend during unified sleep so that SOMNIA
+   * "dreams" together with AENEA's sleep cycle.
+   */
+  forceDream(): void {
+    const currentMode = this.stateMachine.getCurrentMode();
+
+    // Transition to dream
+    this.stateMachine.setMode('dream');
+
+    // Relax temporal anchoring (same as normal dream entry)
+    const affective = this.affectiveCore.getState();
+    this.affectiveCore.setState({
+      theta: affective.theta * 0.5,
+      xi: 0  // Reset dissonance
+    });
+
+    // Fully recover somatic energy
+    this.somaticLayer.setState({ phi: 100 });
+
+    this.emitEvent('somniaTransitioned', {
+      from: currentMode,
+      to: 'dream',
+      duration: this.stateMachine.getModeDuration(),
+      timestamp: Date.now(),
+      reason: 'unified_sleep'
+    });
+  }
+
+  /**
+   * Transition back to Awake mode after sleep.
+   * Restores normal temporal anchoring.
+   */
+  wakeUp(): void {
+    const currentMode = this.stateMachine.getCurrentMode();
+    this.stateMachine.setMode('awake');
+    this.affectiveCore.setState({ theta: 0.5 });
+
+    this.emitEvent('somniaTransitioned', {
+      from: currentMode,
+      to: 'awake',
+      duration: this.stateMachine.getModeDuration(),
+      timestamp: Date.now(),
+      reason: 'unified_wake'
+    });
   }
 
   /**

@@ -23,12 +23,14 @@ import { pathiaConfig } from '../aenea/agents/pathia.js';
 import { kinesisConfig } from '../aenea/agents/kinesis.js';
 import { systemConfig } from '../aenea/agents/system.js';
 import { aeneaConfig } from '../aenea/agents/aenea.js';
+import { somniaAgentConfig } from '../aenea/agents/somnia.js';
 import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from '../integration/yui-agents-bridge.js';
 import { ContentCleanupService } from './content-cleanup-service.js';
 import { QuestionCategorizer, createQuestionCategorizer } from '../utils/question-categorizer.js';
 import { InternalTriggerGenerator } from '../aenea/core/internal-trigger.js';
 import { parseJsonArray } from '../utils/json-parser.js';
 import { SomniaConsciousness } from '../aenea/somnia/consciousness.js';
+import { createSOMNIAQualiaPrompt, SOMNIA_QUALIA_SYSTEM_PROMPT } from '../aenea/templates/prompts.js';
 import { emotiveSync, reflectiveReturn } from '../aenea/integration/saip.js';
 import { synchronizeEnergy } from '../aenea/integration/energy-sync.js';
 import { SomniaState } from '../types/somnia-types.js';
@@ -80,6 +82,11 @@ class ConsciousnessBackend extends EventEmitter {
   private databaseManager: DatabaseManager;
   private energyManager: EnergyManager;
   private lastSaveTime: number;
+
+  // SOMNIA state-save sampling: persist every Nth somniaStateChanged event
+  // (transitions and qualia updates bypass this counter and save immediately)
+  private somniaStateChangeCounter: number = 0;
+  private static readonly SOMNIA_SAVE_SAMPLE_RATE = 5;
 
   // Stage processors for complete consciousness pipeline
   private individualThoughtStage: IndividualThoughtStage;
@@ -157,11 +164,16 @@ class ConsciousnessBackend extends EventEmitter {
     this.somnia = new SomniaConsciousness({}, this);
 
     this.on('somniaStateChanged', (state) => {
-      this.databaseManager.saveSomniaState(state);
+      this.somniaStateChangeCounter++;
+      if (this.somniaStateChangeCounter % ConsciousnessBackend.SOMNIA_SAVE_SAMPLE_RATE === 0) {
+        this.databaseManager.saveSomniaState(state);
+      }
     });
 
     this.on('somniaTransitioned', (data) => {
       this.databaseManager.saveSomniaTransition(data.from, data.to, 'internal', data.duration);
+      // Mode transitions are meaningful — persist the state snapshot immediately
+      this.databaseManager.saveSomniaState(this.somnia.getState());
     });
 
     // Try to restore from previous consciousness state (must come AFTER dpdWeights initialization)
@@ -207,6 +219,13 @@ class ConsciousnessBackend extends EventEmitter {
       ...aeneaConfig.generationParams
     }));
 
+    // Somnia Interoceptive Cortex agent (Slow Track for body feelings)
+    this.agents.set('somnia', createAIExecutor('somnia', {
+      provider: somniaAgentConfig.modelConfig.provider as any,
+      model: somniaAgentConfig.modelConfig.model,
+      ...somniaAgentConfig.generationParams
+    }));
+
     log.info('Consciousness', `✅ Agents initialized with individual personalities:`);
     log.info('Consciousness', `  - ${theoriaConfig.displayName} (${theoriaConfig.furigana}): ${theoriaConfig.modelConfig.provider}/${theoriaConfig.modelConfig.model}`);
     log.info('Consciousness', `    Temperature: ${theoriaConfig.generationParams.temperature}, Style: ${theoriaConfig.style}`);
@@ -216,6 +235,8 @@ class ConsciousnessBackend extends EventEmitter {
     log.info('Consciousness', `    Temperature: ${kinesisConfig.generationParams.temperature}, Style: ${kinesisConfig.style}`);
     log.info('Consciousness', `  - ${systemConfig.displayName} (${systemConfig.furigana}): ${systemConfig.modelConfig.provider}/${systemConfig.modelConfig.model}`);
     log.info('Consciousness', `    Temperature: ${systemConfig.generationParams.temperature}, Style: ${systemConfig.style}`);
+    log.info('Consciousness', `  - ${somniaAgentConfig.displayName} (${somniaAgentConfig.furigana}): ${somniaAgentConfig.modelConfig.provider}/${somniaAgentConfig.modelConfig.model}`);
+    log.info('Consciousness', `    Temperature: ${somniaAgentConfig.generationParams.temperature}, Role: Interoceptive Cortex (Slow Track)`);
     log.info('Consciousness', `  - ${aeneaConfig.displayName}: ${aeneaConfig.provider}/${aeneaConfig.model}`);
     log.info('Consciousness', `    Temperature: ${aeneaConfig.generationParams.temperature}, Role: Unified consciousness (dialogue + questions)`);
 
@@ -743,6 +764,14 @@ class ConsciousnessBackend extends EventEmitter {
         log.info('EnergySync', `φ-based energy adjustment: -${reduction.toFixed(1)} (mode: ${energySyncState.energyMode})`);
       }
 
+      // Slow Track: Generate Qualia every 3 cycles
+      if (this.systemClock % 3 === 0) {
+        // Run asynchronously so it doesn't block the thought cycle completely,
+        // or await it if we want the current thought cycle to use it immediately.
+        // For interoceptive feelings, blocking briefly is okay to provide context.
+        await this.generateSOMNIAQualia();
+      }
+
       // Execute thought cycle
       await this.executeAdaptiveThoughtCycle(trigger);
 
@@ -945,7 +974,8 @@ class ConsciousnessBackend extends EventEmitter {
     thoughtCycle.totalEnergy += energyCost;
     thoughtCycle.totalStages++;
 
-    const thoughts = await this.individualThoughtStage.run(thoughtCycle);
+    const somniaQualia = this.somnia.getState().cognitive.qualia;
+    const thoughts = await this.individualThoughtStage.run(thoughtCycle, somniaQualia);
     thoughtCycle.thoughts = thoughts;
 
     // Emit stage completion event
@@ -1487,6 +1517,36 @@ class ConsciousnessBackend extends EventEmitter {
    * - Assertions without interrogatives: 存在は記憶から生じる。
    * - Too short (< 3 characters)
    */
+  /**
+   * Strip Markdown decorations and split compound questions into individual ones.
+   * Handles two patterns found in LLM output:
+   *   - "** 問いA？ 問いB？"  → ["問いA？", "問いB？"]
+   *   - "1. 問いA？ 2. 問いB？" → ["問いA？", "問いB？"]
+   */
+  private sanitizeAndSplitQuestions(raw: string): string[] {
+    const cleaned = raw.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+
+    // Numbered list: "1. ... 2. ..."
+    if (/\d+\.\s/.test(cleaned)) {
+      return cleaned
+        .split(/\d+\.\s+/)
+        .map(q => q.trim())
+        .filter(q => q.length >= 3);
+    }
+
+    // Multiple question marks — split at "？ " boundaries
+    const questionMarkCount = (cleaned.match(/？/g) || []).length;
+    if (questionMarkCount > 1) {
+      return cleaned
+        .split(/？\s+/)
+        .map((q, i, arr) => (i < arr.length - 1 ? q + '？' : q))
+        .map(q => q.trim())
+        .filter(q => q.length >= 3);
+    }
+
+    return [cleaned];
+  }
+
   private isValidQuestion(text: string): boolean {
     const trimmed = text.trim();
 
@@ -1528,68 +1588,37 @@ class ConsciousnessBackend extends EventEmitter {
       .map(thought => thought.thought_content?.toLowerCase()?.trim())
       .filter(content => content));
 
-    // Extract from synthesis if available
-    if (thoughtCycle.synthesis?.unresolvedQuestions) {
-      thoughtCycle.synthesis.unresolvedQuestions.forEach((question: string) => {
-        const questionLower = question.toLowerCase().trim();
-
-        // Validate that it's actually a question
-        if (!this.isValidQuestion(question)) {
-          log.debug('Consciousness', `⚠️ Rejected non-question from synthesis: ${question.substring(0, 50)}...`);
-          return;
-        }
-
-        // Only add if it's not already recorded as a significant thought
-        if (!significantQuestions.has(questionLower)) {
-          // Use QuestionCategorizer to determine category based on content
-          const categorization = this.questionCategorizer.categorizeQuestion(question);
-          const detectedCategory = categorization.category || 'philosophical';
-
+    const addQuestions = (rawList: string[], idPrefix: string, importance: number, defaultCategory: string) => {
+      rawList.forEach((raw: string) => {
+        const candidates = this.sanitizeAndSplitQuestions(raw);
+        candidates.forEach(question => {
+          if (!this.isValidQuestion(question)) {
+            log.debug('Consciousness', `⚠️ Rejected non-question from ${idPrefix}: ${question.substring(0, 50)}`);
+            return;
+          }
+          if (significantQuestions.has(question.toLowerCase().trim())) {
+            log.debug('Consciousness', `⚙️ Skipping (already significant): ${question.substring(0, 50)}`);
+            return;
+          }
+          const category = this.questionCategorizer.categorizeQuestion(question).category || defaultCategory;
           unresolvedIdeas.push({
-            id: `unresolved_${Date.now()}_${Math.random()}`,
-            question: question,
-            category: detectedCategory,
-            importance: 0.7,
+            id: `${idPrefix}_${Date.now()}_${Math.random()}`,
+            question,
+            category,
+            importance,
             firstEncountered: Date.now()
           });
-
-          log.debug('Consciousness', `📝 Categorized unresolved question as [${detectedCategory}]: ${question.substring(0, 50)}...`);
-        } else {
-          log.info('Consciousness', `⚙️ Skipping question already resolved as significant thought: ${question}`);
-        }
+          log.debug('Consciousness', `📝 [${category}] ${question.substring(0, 60)}`);
+        });
       });
+    };
+
+    if (thoughtCycle.synthesis?.unresolvedQuestions) {
+      addQuestions(thoughtCycle.synthesis.unresolvedQuestions, 'unresolved', 0.7, 'philosophical');
     }
 
-    // Extract from documentation if available
     if (thoughtCycle.documentation?.futureQuestions) {
-      thoughtCycle.documentation.futureQuestions.forEach((question: string) => {
-        const questionLower = question.toLowerCase().trim();
-
-        // Validate that it's actually a question
-        if (!this.isValidQuestion(question)) {
-          log.debug('Consciousness', `⚠️ Rejected non-question from documentation: ${question.substring(0, 50)}...`);
-          return;
-        }
-
-        // Only add if it's not already recorded as a significant thought
-        if (!significantQuestions.has(questionLower)) {
-          // Use QuestionCategorizer to determine category based on content
-          const categorization = this.questionCategorizer.categorizeQuestion(question);
-          const detectedCategory = categorization.category || 'exploratory';
-
-          unresolvedIdeas.push({
-            id: `future_${Date.now()}_${Math.random()}`,
-            question: question,
-            category: detectedCategory,
-            importance: 0.6,
-            firstEncountered: Date.now()
-          });
-
-          log.debug('Consciousness', `📝 Categorized future question as [${detectedCategory}]: ${question.substring(0, 50)}...`);
-        } else {
-          log.info('Consciousness', `⚙️ Skipping future question already resolved as significant thought: ${question}`);
-        }
-      });
+      addQuestions(thoughtCycle.documentation.futureQuestions, 'future', 0.6, 'exploratory');
     }
 
     // Save to database (only non-duplicate questions that aren't already significant)
@@ -2295,12 +2324,14 @@ class ConsciousnessBackend extends EventEmitter {
    */
   private shouldEnterSleep(): boolean {
     const energy = this.energyManager.getEnergyState().available;
+    const somniaPhi = this.somnia.getState().somatic.phi;
     const hoursSinceLastSleep = (Date.now() - this.lastSleepTime) / (1000 * 60 * 60);
 
     // Sleep conditions:
-    // - Energy critical (<=20) for extended period (>10 cycles = ~10 min)
+    // - Mental energy critical (<=20) for extended period (>10 cycles)
+    // - Physical energy critical (φ<=20) for extended period (>10 cycles)
     // - Or 24 hours since last sleep
-    const criticalDuration = energy <= 20;
+    const criticalDuration = energy <= 20 || somniaPhi <= 20;
     if (criticalDuration) {
       this.criticalModeDuration += 1; // Increment per cycle check
     } else {
@@ -2308,7 +2339,7 @@ class ConsciousnessBackend extends EventEmitter {
     }
 
     return (
-      (energy <= 20 && this.criticalModeDuration > 10) ||
+      (criticalDuration && this.criticalModeDuration > 10) ||
       hoursSinceLastSleep > 24
     );
   }
@@ -2326,16 +2357,18 @@ class ConsciousnessBackend extends EventEmitter {
     }
 
     const energyBefore = this.energyManager.getEnergyState().available;
+    const phiBefore = this.somnia.getState().somatic.phi;
     const startTime = Date.now();
 
     const reason = manual ? 'manual' :
                    energyBefore <= 20 ? 'energy_critical' :
+                   phiBefore <= 20 ? 'phi_critical' :
                    'scheduled';
 
     // Auto-stop consciousness if running and entering sleep due to energy crisis
     if (this.isRunning) {
-      if (!manual && energyBefore <= 20) {
-        log.info('Consciousness', `⏸️ Auto-stopping consciousness for critical sleep (energy: ${energyBefore.toFixed(1)})`);
+      if (!manual && (energyBefore <= 20 || phiBefore <= 20)) {
+        log.info('Consciousness', `⏸️ Auto-stopping consciousness for critical sleep (mental: ${energyBefore.toFixed(1)}, physical/φ: ${phiBefore.toFixed(1)})`);
         this.stop();
       } else if (!manual) {
         log.warn('Consciousness', '⚠️ Cannot enter automatic sleep while consciousness is running');
@@ -2358,24 +2391,34 @@ class ConsciousnessBackend extends EventEmitter {
       // Perform sleep consolidation
       await this.performSleepConsolidation(reason);
 
-      // Energy recovery during sleep
+      // Mental energy recovery during sleep
       this.energyManager.deepRest();
+
+      // Physical energy recovery: SOMNIA enters Dream and fully recovers φ
+      this.somnia.forceDream();
+      log.info('SOMNIA', `🌙 SOMNIA entered Dream mode for unified sleep (φ: ${phiBefore.toFixed(1)} → 100)`);
 
       const duration = Date.now() - startTime;
       const energyAfter = this.energyManager.getEnergyState().available;
+      const phiAfter = this.somnia.getState().somatic.phi;
 
       this.lastSleepTime = Date.now();
       this.criticalModeDuration = 0;
 
+      // Wake SOMNIA back up after sleep
+      this.somnia.wakeUp();
+
       // Save energy recovery to database
       this.saveConsciousnessState();
 
-      log.info('Consciousness', `✨ Sleep completed (duration: ${(duration/1000).toFixed(1)}s, energy: ${energyBefore.toFixed(1)} → ${energyAfter.toFixed(1)})`);
+      log.info('Consciousness', `✨ Sleep completed (duration: ${(duration/1000).toFixed(1)}s, mental: ${energyBefore.toFixed(1)} → ${energyAfter.toFixed(1)}, physical/φ: ${phiBefore.toFixed(1)} → ${phiAfter.toFixed(1)})`);
 
       this.emit('sleepCompleted', {
         duration,
         energyBefore,
         energyAfter,
+        phiBefore,
+        phiAfter,
         timestamp: Date.now()
       });
 
@@ -2395,6 +2438,40 @@ class ConsciousnessBackend extends EventEmitter {
       this.emit('sleepError', { error: (error as Error).message });
     } finally {
       this.isSleeping = false;
+    }
+  }
+
+  /**
+   * Generate Qualia (Slow Track) using the lightweight SOMNIA LLM
+   */
+  private async generateSOMNIAQualia(): Promise<void> {
+    const somniaAgent = this.agents.get('somnia');
+    if (!somniaAgent) return;
+
+    try {
+      const state = this.somnia.getState();
+      const prompt = createSOMNIAQualiaPrompt({
+        lambda: state.somatic.lambda,
+        phi: state.somatic.phi,
+        theta: state.affective.theta,
+        xi: state.affective.xi
+      });
+
+      const result = await somniaAgent.execute(prompt, SOMNIA_QUALIA_SYSTEM_PROMPT);
+
+      if (!result.success || !result.content) {
+        throw new Error(result.error || 'No content in response');
+      }
+
+      const qualia = result.content.trim().replace(/^["']|["']$/g, '');
+      this.somnia.setQualia(qualia);
+
+      // Force-persist qualia update (important data, bypass sampling throttle)
+      this.databaseManager.saveSomniaState(this.somnia.getState());
+
+      log.info('SOMNIA', `🫀 Slow Track Qualia updated: "${qualia}"`);
+    } catch (error) {
+      log.error('SOMNIA', 'Failed to generate qualia', error);
     }
   }
 

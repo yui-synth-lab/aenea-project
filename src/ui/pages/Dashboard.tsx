@@ -634,6 +634,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
       </motion.div>
 
       <div className="dashboard-layout">
+        <div className="left-column">
         {/* Consciousness Control */}
         <motion.div
           className="dashboard-card consciousness-control"
@@ -893,6 +894,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
           </button>
         </div>
 
+        </div>{/* end left-column */}
+
+        <div className="right-column">
         {/* Current Thought */}
         <motion.div
           className="dashboard-card current-thought"
@@ -1016,6 +1020,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ systemStatus }) => {
             </p>
           </div>
         </div>
+        </div>{/* end right-column */}
       </div>
 
       <DialogueModal
