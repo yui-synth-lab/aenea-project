@@ -134,22 +134,24 @@ function convertNumberedListToJson(text: string): string | null {
  * Save LLM JSON output to file for debugging
  */
 function saveLlmOutput(originalText: string, context: string, success: boolean, error?: string): void {
+  // Only save failed parses when debug mode is explicitly enabled
+  if (process.env.DEBUG_JSON_PARSER !== 'true') return;
+  if (success) return;
+
   try {
     const outputDir = path.join(process.cwd(), 'data', 'llm-json-outputs');
 
-    // Create directory if it doesn't exist
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${timestamp}_${context.replace(/\s+/g, '_')}_${success ? 'success' : 'failed'}.txt`;
+    const filename = `${timestamp}_${context.replace(/\s+/g, '_')}_failed.txt`;
     const filepath = path.join(outputDir, filename);
 
     const content = `Context: ${context}
 Timestamp: ${new Date().toISOString()}
-Success: ${success}
-${error ? `Error: ${error}\n` : ''}
+Error: ${error || 'unknown'}
 --- Original LLM Output ---
 ${originalText}
 --- End ---
@@ -157,7 +159,6 @@ ${originalText}
 
     fs.writeFileSync(filepath, content, 'utf-8');
   } catch (err) {
-    // Silently fail - don't interrupt normal operation
     log.warn('JSON Parser', `Failed to save LLM output: ${(err as Error).message}`);
   }
 }
