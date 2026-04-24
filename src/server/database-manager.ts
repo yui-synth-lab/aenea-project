@@ -2113,6 +2113,34 @@ class DatabaseManager {
     }
   }
 
+  saveSomniaSaipEvent(eventData: {
+    eventType: string;
+    somniaState?: any;
+    aeneaDpd?: any;
+    influence?: any;
+    impactScore?: number;
+  }): void {
+    this.ensureConnection();
+    if (!this.isReady || !this.db) return;
+
+    try {
+      this.db.prepare(`
+        INSERT INTO somnia_saip_events
+        (timestamp, event_type, somnia_state_json, aenea_dpd_json, influence_json, impact_score)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        Date.now(),
+        eventData.eventType,
+        eventData.somniaState ? JSON.stringify(eventData.somniaState) : null,
+        eventData.aeneaDpd ? JSON.stringify(eventData.aeneaDpd) : null,
+        eventData.influence ? JSON.stringify(eventData.influence) : null,
+        eventData.impactScore ?? null
+      );
+    } catch (err) {
+      console.error('Error saving SOMNIA SAIP event:', err);
+    }
+  }
+
   getLatestSomniaState(): any {
     this.ensureConnection();
     if (!this.isReady || !this.db) {
