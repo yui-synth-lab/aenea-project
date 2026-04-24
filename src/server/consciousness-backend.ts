@@ -781,6 +781,14 @@ class ConsciousnessBackend extends EventEmitter {
           const bias = reflectiveReturn(this.previousDpdScores);
           this.somnia.applyAffectiveBias(bias);
           log.info('SAIP', `Reflective Return applied: pleasureBias=${bias.pleasureBias.toFixed(3)}, coherenceBias=${bias.coherenceBias.toFixed(3)}, dissonanceTrigger=${bias.dissonanceTrigger}`);
+
+          this.databaseManager.saveSomniaSaipEvent({
+            eventType: 'reflective_return',
+            somniaState: this.somnia.getState(),
+            aeneaDpd: this.previousDpdScores,
+            influence: bias,
+            impactScore: bias.pleasureBias + bias.coherenceBias + bias.dissonanceTrigger
+          });
         } catch (saipError) {
           log.error('SAIP', 'Reflective Return failed', saipError);
         }
@@ -1101,7 +1109,15 @@ class ConsciousnessBackend extends EventEmitter {
     thoughtCycle.totalStages++;
 
     // Emotive Sync from Somnia
-    const somniaInfluence = emotiveSync(this.somnia.getState());
+    const currentState = this.somnia.getState();
+    const somniaInfluence = emotiveSync(currentState);
+
+    this.databaseManager.saveSomniaSaipEvent({
+      eventType: 'emotive_sync',
+      somniaState: currentState,
+      influence: somniaInfluence,
+      impactScore: (somniaInfluence.empathy + somniaInfluence.coherence + somniaInfluence.dissonance) / 3
+    });
 
     // Use the dedicated DPDAssessmentStage implementation
     const result = await this.dpdAssessmentStage.run(
