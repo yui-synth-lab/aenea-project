@@ -785,7 +785,13 @@ class ConsciousnessBackend extends EventEmitter {
           this.databaseManager.saveSomniaSaipEvent({
             eventType: 'reflective_return',
             somniaState: this.somnia.getState(),
-            aeneaDpd: this.previousDpdScores,
+            aeneaDpd: this.previousDpdScores ? {
+              empathy: this.previousDpdScores.empathy,
+              coherence: this.previousDpdScores.coherence,
+              dissonance: this.previousDpdScores.dissonance,
+              weightedTotal: this.previousDpdScores.weightedTotal,
+              timestamp: this.previousDpdScores.timestamp
+            } : null,
             influence: bias,
             impactScore: bias.pleasureBias + bias.coherenceBias + bias.dissonanceTrigger
           });
