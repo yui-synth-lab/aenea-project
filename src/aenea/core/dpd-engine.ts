@@ -191,8 +191,11 @@ export class DPDEngine {
         }
       };
 
-      // Add to history
+      // Add to history (cap to prevent unbounded memory growth)
       this.scoreHistory.push(scores);
+      if (this.scoreHistory.length > 100) {
+        this.scoreHistory = this.scoreHistory.slice(-100);
+      }
       
       // Update metrics
       this.updateMetrics(scores);

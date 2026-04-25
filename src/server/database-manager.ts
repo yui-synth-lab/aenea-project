@@ -35,6 +35,7 @@ class DatabaseManager {
 
     try {
       this.db = new BetterSqlite3(this.dbPath);
+      (this.db as any).pragma('journal_mode = WAL');
       log.info('DatabaseManager', 'Database connection established');
       console.log(`[DEBUG] Database opened successfully at: ${this.dbPath}`);
       this.initializeDatabase();
