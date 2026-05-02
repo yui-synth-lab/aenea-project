@@ -1,10 +1,11 @@
 import { EventEmitter } from 'events';
-import { SomniaConfig, SomniaState, SomniaMode, ExternalStimulus, AffectiveBias, DPDInfluence, CognitiveMirrorState } from '../../types/somnia-types.js';
+import { SomniaConfig, SomniaState, SomniaMode, ExternalStimulus, AffectiveBias, DPDInfluence, CognitiveMirrorState, SomaticState } from '../../types/somnia-types.js';
 import { SomaticLayer } from './core/somatic-layer.js';
 import { AffectiveCore } from './core/affective-core.js';
 import { SomniaStateMachine } from './state/state-machine.js';
 import { emotiveSync } from '../integration/saip.js';
 import { DEFAULT_LOGIT_PARAMS, DEFAULT_ODE_PARAMS } from './core/temporal-anchoring.js';
+import { estimateValenceFromQualia } from './core/qualia-mapper.js';
 
 /**
  * SOMNIA Consciousness - Main Integration Class
@@ -54,9 +55,20 @@ export class SomniaConsciousness {
     this.affectiveCore.updateTemporalAnchoring(somatic);
     this.affectiveCore.updateCoherence(somatic);
 
-    // 4. Accumulate dissonance if lambda is negative
-    if (somatic.lambda < -0.5) {
-      this.affectiveCore.accumulateDissonance(0.1);
+    // 4. Accumulate dissonance based on multiple stress signals
+    const xiAccumulation = this.calculateXiAccumulation(somatic);
+    if (xiAccumulation > 0) {
+      this.affectiveCore.accumulateDissonance(xiAccumulation);
+    }
+
+    // 4.5. Apply qualia feedback to somatic layer (weak coupling)
+    if (this.qualiaText) {
+      const qualiaValence = estimateValenceFromQualia(this.qualiaText);
+      if (qualiaValence !== 0) {
+        const currentLambda = this.somaticLayer.getState().lambda;
+        const newLambda = currentLambda + (qualiaValence - currentLambda) * 0.1;
+        this.somaticLayer.setState({ lambda: Math.max(-1, Math.min(1, newLambda)) });
+      }
     }
 
     // 5. Check state transition
@@ -139,6 +151,38 @@ export class SomniaConsciousness {
       lastTransition: Date.now() - this.stateMachine.getModeDuration(),
       transitionCount: this.stateMachine.getTransitionCount()
     };
+  }
+
+  /**
+   * Calculate xi accumulation amount based on multiple stress signals.
+   *
+   * Triggers:
+   * 1. Lambda negativity: gradient-based when lambda is below baseline (0.1)
+   * 2. Hormonal stress: high cortisol relative to serotonin
+   * 3. Energy depletion: phi below 30 indicates sustained strain
+   */
+  private calculateXiAccumulation(somatic: SomaticState): number {
+    let amount = 0;
+
+    // Trigger 1: Lambda negativity (gradient, not hard threshold)
+    // λ が 0.1 以下なら蓄積。より負であればより多く蓄積 (max ~0.05/tick)
+    if (somatic.lambda < 0.1) {
+      const negativity = Math.max(0, 0.1 - somatic.lambda);
+      amount += negativity * 0.045;
+    }
+
+    // Trigger 2: Hormonal stress (cortisol high + serotonin low)
+    const stressIndex = somatic.mu.cortisol - somatic.mu.serotonin;
+    if (stressIndex > 0.1) {
+      amount += stressIndex * 0.03;
+    }
+
+    // Trigger 3: Energy depletion (sustained strain)
+    if (somatic.phi < 30) {
+      amount += (30 - somatic.phi) / 30 * 0.02;
+    }
+
+    return amount;
   }
 
   /**
