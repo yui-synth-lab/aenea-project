@@ -11,10 +11,11 @@ import { DialogueHandler } from '../dialogue-handler.js';
 import { DatabaseManager } from '../database-manager.js';
 import { createAIExecutor } from '../ai-executor.js';
 import { aeneaConfig } from '../../aenea/agents/aenea.js';
+import type ConsciousnessBackend from '../consciousness-backend.js';
 
 let dialogueHandler: DialogueHandler | null = null;
 
-export function initializeDialogueRoutes(db: DatabaseManager): void {
+export function initializeDialogueRoutes(db: DatabaseManager, consciousnessBackend?: ConsciousnessBackend): void {
   // Use custom LLM for dialogue (configurable via environment variables)
   // Defaults to Aenea agent configuration if not specified
   const dialogueProvider = process.env.DIALOGUE_PROVIDER || aeneaConfig.provider;
@@ -29,7 +30,7 @@ export function initializeDialogueRoutes(db: DatabaseManager): void {
   );
 
   console.log(`[Dialogue] Using LLM: provider=${dialogueProvider}, model=${dialogueModel}`);
-  dialogueHandler = new DialogueHandler(db, aiExecutor);
+  dialogueHandler = new DialogueHandler(db, aiExecutor, consciousnessBackend);
 }
 
 export function createDialogueRoutes(): Router {
