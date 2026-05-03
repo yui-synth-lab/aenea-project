@@ -7,6 +7,9 @@ import { DatabaseManager } from './database-manager.js';
 import { AIExecutor } from './ai-executor.js';
 import { aeneaConfig } from '../aenea/agents/aenea.js';
 import { log } from './logger.js';
+import type ConsciousnessBackend from './consciousness-backend.js';
+import { analyzeDialogueSentiment } from '../aenea/somnia/core/dialogue-sentiment.js';
+import type { ExternalStimulus } from '../types/somnia-types.js';
 
 // RAG integration for dialogue context and auto-ingestion
 import { isRAGEnabled, searchRAG, ingestDialogueToRAG } from '../rag/index.js';
@@ -19,6 +22,7 @@ interface ConsciousnessStateSnapshot {
   totalQuestions: number;
   totalThoughts: number;
   energy: number;
+  somniaQualia?: string;
 }
 
 interface DialogueMemory {
@@ -41,7 +45,8 @@ interface DialogueResponse {
 export class DialogueHandler {
   constructor(
     private db: DatabaseManager,
-    private aiExecutor?: AIExecutor
+    private aiExecutor?: AIExecutor,
+    private consciousnessBackend?: ConsciousnessBackend
   ) {}
 
   /**
@@ -72,6 +77,26 @@ export class DialogueHandler {
         }
       } catch (error) {
         log.warn('RAG', `Dialogue context retrieval failed: ${error}`);
+      }
+    }
+
+    // 1.7 SOMNIA: Apply affective stimulus from user message tone (fire-and-forget)
+    if (this.consciousnessBackend) {
+      const sentiment = analyzeDialogueSentiment(humanMessage);
+      if (sentiment.label !== 'neutral') {
+        const stimulus: ExternalStimulus = {
+          type: 'social',
+          valence: sentiment.valence,
+          arousal: sentiment.arousal,
+          significance: sentiment.significance,
+          context: sentiment.label,
+        };
+        try {
+          this.consciousnessBackend.applyDialogueSentiment(stimulus);
+          log.info('DialogueHandler', `Sentiment: ${sentiment.label} (valence=${sentiment.valence})`);
+        } catch (error) {
+          log.warn('DialogueHandler', `Failed to apply dialogue sentiment: ${error}`);
+        }
       }
     }
 
@@ -134,6 +159,8 @@ export class DialogueHandler {
       throw new Error('Consciousness state not found');
     }
 
+    const somniaQualia = this.consciousnessBackend?.getSomniaState().cognitive.qualia;
+
     return {
       coreBeliefs,
       dpdWeights,
@@ -141,7 +168,8 @@ export class DialogueHandler {
       systemClock: state.systemClock,
       totalQuestions: state.totalQuestions,
       totalThoughts: state.totalThoughts,
-      energy: state.energy
+      energy: state.energy,
+      somniaQualia,
     };
   }
 
@@ -162,6 +190,11 @@ export class DialogueHandler {
 
     // DPD weights
     const dpdText = `共感${(state.dpdWeights.empathy * 100).toFixed(0)}%、一貫性${(state.dpdWeights.coherence * 100).toFixed(0)}%、倫理的不協和${(state.dpdWeights.dissonance * 100).toFixed(0)}%`;
+
+    // SOMNIA qualia (optional — only injected when the Slow Track has generated it)
+    const qualiaSection = state.somniaQualia
+      ? `\n### 現在の身体感覚（内受容感覚）\n${state.somniaQualia}\n`
+      : '';
 
     // Recent dialogue memories
     const memoriesText = recentMemories

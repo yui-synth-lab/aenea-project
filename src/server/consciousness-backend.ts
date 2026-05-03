@@ -2293,6 +2293,20 @@ class ConsciousnessBackend extends EventEmitter {
   // ============================================================================
 
   /**
+   * Apply affective stimulus derived from a user dialogue message.
+   * Called by DialogueHandler after sentiment analysis — fire-and-forget so
+   * the dialogue response is not delayed by the SOMNIA tick.
+   */
+  applyDialogueSentiment(stimulus: import('../types/somnia-types.js').ExternalStimulus): void {
+    this.somnia.tick(stimulus).then(state => {
+      this.databaseManager.saveSomniaState(state);
+      log.info('SOMNIA', `Dialogue stimulus applied: λ=${state.somatic.lambda.toFixed(3)}, label=${stimulus.context ?? 'unknown'}`);
+    }).catch((err: Error) => {
+      log.warn('SOMNIA', `Dialogue stimulus tick failed: ${err.message}`);
+    });
+  }
+
+  /**
    * Process external stimulus (human question, environmental trigger, etc.)
    */
   async processStimulus(stimulus: { source: string; content: string; metadata?: any }): Promise<{ stimulusId: string; thoughtCycleId: string }> {

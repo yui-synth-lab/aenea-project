@@ -41,7 +41,7 @@ initializeGrowthRoutes(consciousness);
 initializeDPDRoutes(consciousness);
 initializeAgentsRoute(consciousness);
 initializeYuiDialogueRoute(consciousness);
-initializeDialogueRoutes(consciousness.getDatabaseManager());
+initializeDialogueRoutes(consciousness.getDatabaseManager(), consciousness);
 
 // Create stimulus routes
 const stimulusRoutes = createStimulusRoutes(consciousness);
