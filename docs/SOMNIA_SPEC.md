@@ -1062,7 +1062,7 @@ Somniaは"感覚を生きる存在"。
 - **Version:** 1.1.0
 - **Date:** 2025-10-10
 - **Authors:** Yui (via AI collaboration)
-- **Related:** AENEA_SPEC.md, YUI_PROTOCOL_SPEC.md
+- **Related:** ./AENEA_SPEC.md, YUI_PROTOCOL_SPEC.md
 - **License:** MIT (Code) / CC BY-SA 4.0 (Documentation)
 - **Status:** Design Specification with Implementation Details
 
