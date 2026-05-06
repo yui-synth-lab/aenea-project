@@ -739,9 +739,24 @@ class ConsciousnessBackend extends EventEmitter {
       }
 
       // Map InternalTrigger to ExternalStimulus
+      // Derive valence from emotional context if available, otherwise from category character
+      const categoryValence: Record<string, number> = {
+        creative: 0.4,
+        ethical: 0.2,
+        philosophical: 0.1,
+        epistemological: 0.1,
+        metacognitive: 0.1,
+        ontological: 0.0,
+        consciousness: 0.0,
+        temporal: -0.1,
+        existential: -0.2,
+        paradoxical: -0.3,
+      };
+      const derivedValence = trigger.context?.emotionalState?.valence
+        ?? categoryValence[trigger.category] ?? 0.0;
       const stimulus: import('../types/somnia-types.js').ExternalStimulus = {
         type: 'internal',
-        valence: 0, // neutral default
+        valence: derivedValence,
         arousal: trigger.category === 'philosophical' ? 0.8 : 0.5,
         significance: trigger.importance || 0.5,
         context: trigger.question
