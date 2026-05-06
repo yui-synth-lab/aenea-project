@@ -140,7 +140,7 @@ This theoretical framework has been implemented as **Aenea (エイネア)**, an 
 **Status:** ✅ Production-ready, actively running, database optimized
 
 For detailed technical documentation, see:
-- `/AENEA_SPEC.md` - Technical specification
+- `/docs/AENEA_SPEC.md` - Technical specification
 - `/CLAUDE.md` - Developer guide
 - `/docs/consciousness-pipeline.md` - Stage-by-stage processing
 - `/docs/database-schema.md` - Database structure
