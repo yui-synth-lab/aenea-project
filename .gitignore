@@ -56,3 +56,5 @@ knowledge/*
 
 # Database exports
 exports/
+
+.antigravitycli/*
