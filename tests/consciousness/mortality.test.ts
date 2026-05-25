@@ -95,6 +95,25 @@ describe('Mortality Module Tests', () => {
       manager.tick();
       expect(manager.getCurrentCycle()).toBe(100);
     });
+
+    test('should support disabling mortality entirely', () => {
+      process.env.AENEA_MORTALITY_ENABLED = 'false';
+      const manager = new LifespanManager({ lifespanMax: 100, currentCycle: 99 });
+      
+      expect(manager.isEnabled()).toBe(false);
+      expect(manager.isAlive()).toBe(true);
+      expect(manager.getVitality()).toBe(1.0);
+      expect(manager.getCurrentPhase()).toBe('youth');
+      expect(manager.getRemaining()).toBe(Infinity);
+      
+      manager.tick();
+      expect(manager.getCurrentCycle()).toBe(100);
+      expect(manager.isAlive()).toBe(true);
+      expect(manager.getVitality()).toBe(1.0);
+      expect(manager.getCurrentPhase()).toBe('youth');
+
+      delete process.env.AENEA_MORTALITY_ENABLED;
+    });
   });
 
   describe('AgingEngine', () => {
