@@ -34,6 +34,10 @@ import { createSOMNIAQualiaPrompt, SOMNIA_QUALIA_SYSTEM_PROMPT } from '../aenea/
 import { emotiveSync, reflectiveReturn } from '../aenea/integration/saip.js';
 import { synchronizeEnergy } from '../aenea/integration/energy-sync.js';
 import { SomniaState } from '../types/somnia-types.js';
+import { LifespanManager } from '../aenea/mortality/lifespan-manager.js';
+import { AgingEngine } from '../aenea/mortality/aging-engine.js';
+import { MortalityInjector } from '../aenea/mortality/mortality-injector.js';
+import { DeathHandler } from '../aenea/mortality/death-handler.js';
 
 interface ThoughtCycle {
   id: string;
@@ -64,6 +68,16 @@ export interface ConsciousnessState {
   lastActivity: string;
   dpdWeights: DPDWeights;
   somniaState?: SomniaState;
+  mortality?: {
+    instanceId: string;
+    lifespanMax: number;
+    currentCycle: number;
+    vitality: number;
+    phase: string;
+    mode: 'A' | 'B';
+    remaining: number;
+    isAlive: boolean;
+  };
 }
 
 class ConsciousnessBackend extends EventEmitter {
@@ -128,6 +142,11 @@ class ConsciousnessBackend extends EventEmitter {
 
   // Somnia (Affective Dynamic Directive) integration
   private somnia: SomniaConsciousness;
+
+  // Mortality (Aging and Death) Integration
+  private lifespanManager!: LifespanManager;
+  private mortalityInjector!: MortalityInjector;
+  private deathHandler!: DeathHandler;
 
   constructor() {
     super(); // Call EventEmitter constructor
@@ -243,6 +262,20 @@ class ConsciousnessBackend extends EventEmitter {
     log.info('Consciousness', `  - ${aeneaConfig.displayName}: ${aeneaConfig.provider}/${aeneaConfig.model}`);
     log.info('Consciousness', `    Temperature: ${aeneaConfig.generationParams.temperature}, Role: Unified consciousness (dialogue + questions)`);
 
+    // Wrap execute method of each agent to inject mortality prompt
+    for (const [agentId, agent] of this.agents.entries()) {
+      const originalExecute = agent.execute.bind(agent);
+      agent.execute = async (prompt: string, systemPrompt?: string) => {
+        let injectedSystemPrompt = systemPrompt || '';
+        const isCoreAgent = ['theoria', 'pathia', 'kinesis', 'aenea', 'system'].includes(agentId);
+        
+        if (this.lifespanManager && isCoreAgent && (this.isProcessingCycle || agentId === 'aenea')) {
+          injectedSystemPrompt = this.mortalityInjector.injectIntoPrompt(injectedSystemPrompt);
+        }
+        return originalExecute(prompt, injectedSystemPrompt);
+      };
+    }
+
     // Initialize DPD Engine
     this.weightUpdateStage = new WeightUpdateStage(undefined, this);
 
@@ -323,6 +356,33 @@ class ConsciousnessBackend extends EventEmitter {
   private restoreFromDatabase(): void {
     try {
       console.log('[DEBUG] restoreFromDatabase called');
+
+      // Initialize/load LifespanManager first
+      try {
+        const mortalityRecord = this.databaseManager.getLatestMortalityState();
+        if (mortalityRecord && !mortalityRecord.died_at) {
+          this.lifespanManager = new LifespanManager({
+            instanceId: mortalityRecord.instance_id,
+            lifespanMax: mortalityRecord.lifespan_max,
+            currentCycle: mortalityRecord.current_cycle,
+            mode: mortalityRecord.mode as 'A' | 'B',
+            createdAt: mortalityRecord.created_at,
+            diedAt: mortalityRecord.died_at
+          });
+          log.info('Mortality', `Restored mortality state for instance: ${mortalityRecord.instance_id} (${mortalityRecord.current_cycle}/${mortalityRecord.lifespan_max})`);
+        } else {
+          const defaultMode = (process.env.AENEA_MORTALITY_MODE === 'A' || process.env.MORTALITY_MODE === 'A') ? 'A' : 'B';
+          this.lifespanManager = new LifespanManager({ mode: defaultMode });
+          this.databaseManager.saveMortalityState(this.lifespanManager.getState());
+          log.info('Mortality', `Created new mortality instance: ${this.lifespanManager.getInstanceId()} with mode ${defaultMode}`);
+        }
+      } catch (mortError) {
+        log.error('Mortality', 'Failed to restore or initialize mortality, using default instance', mortError);
+        this.lifespanManager = new LifespanManager();
+      }
+      this.mortalityInjector = new MortalityInjector(this.lifespanManager);
+      this.deathHandler = new DeathHandler(this.lifespanManager, this.databaseManager, this.agents);
+
       const consciousnessState = this.databaseManager.getConsciousnessState();
       console.log('[DEBUG] consciousnessState:', consciousnessState);
 
@@ -479,6 +539,14 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private initializeFreshConsciousness(): void {
+    if (!this.lifespanManager) {
+      const defaultMode = (process.env.AENEA_MORTALITY_MODE === 'A' || process.env.MORTALITY_MODE === 'A') ? 'A' : 'B';
+      this.lifespanManager = new LifespanManager({ mode: defaultMode });
+      this.databaseManager.saveMortalityState(this.lifespanManager.getState());
+      this.mortalityInjector = new MortalityInjector(this.lifespanManager);
+      this.deathHandler = new DeathHandler(this.lifespanManager, this.databaseManager, this.agents);
+    }
+
     this.systemClock = 0;
     this.dpdWeights = {
       empathy: 0.33,
@@ -545,7 +613,17 @@ class ConsciousnessBackend extends EventEmitter {
       totalThoughts: dbStats.thought_cycles || 0,
       lastActivity: new Date().toISOString(),
       dpdWeights: this.dpdWeights,
-      somniaState: this.somnia.getState()
+      somniaState: this.somnia.getState(),
+      mortality: this.lifespanManager ? {
+        instanceId: this.lifespanManager.getInstanceId(),
+        lifespanMax: this.lifespanManager.getLifespanMax(),
+        currentCycle: this.lifespanManager.getCurrentCycle(),
+        vitality: this.lifespanManager.getVitality(),
+        phase: this.lifespanManager.getCurrentPhase(),
+        mode: this.lifespanManager.getMode(),
+        remaining: this.lifespanManager.getRemaining(),
+        isAlive: this.lifespanManager.isAlive()
+      } : undefined
     };
   }
 
@@ -590,6 +668,17 @@ class ConsciousnessBackend extends EventEmitter {
 
     // Ensure database connection is open
     this.databaseManager.ensureConnection();
+
+    // If the previous instance died, initialize a fresh one
+    if (this.lifespanManager && !this.lifespanManager.isAlive()) {
+      const defaultMode = (process.env.AENEA_MORTALITY_MODE === 'A' || process.env.MORTALITY_MODE === 'A') ? 'A' : 'B';
+      this.lifespanManager = new LifespanManager({ mode: defaultMode });
+      this.databaseManager.saveMortalityState(this.lifespanManager.getState());
+      
+      this.mortalityInjector = new MortalityInjector(this.lifespanManager);
+      this.deathHandler = new DeathHandler(this.lifespanManager, this.databaseManager, this.agents);
+      log.info('Mortality', `Spawned fresh instance for new run: ${this.lifespanManager.getInstanceId()}`);
+    }
 
     this.isRunning = true;
     this.isPaused = false;
@@ -710,6 +799,15 @@ class ConsciousnessBackend extends EventEmitter {
   }
 
   private async processThoughtCycle(): Promise<void> {
+    // Check if dead
+    if (this.lifespanManager && !this.lifespanManager.isAlive()) {
+      log.warn('Consciousness', 'Aenea is deceased. Aborting thought cycle.');
+      await this.deathHandler.handleDeath(async () => {
+        await this.stop();
+      });
+      return;
+    }
+
     // Mark cycle as processing
     this.isProcessingCycle = true;
 
@@ -767,6 +865,12 @@ class ConsciousnessBackend extends EventEmitter {
         return;
       }
 
+      // Tick lifespan manager
+      this.lifespanManager.tick();
+      const phase = this.lifespanManager.getCurrentPhase();
+      const vitality = this.lifespanManager.getVitality();
+      log.info('Mortality', `Cycle ticked: ${this.lifespanManager.getCurrentCycle()}/${this.lifespanManager.getLifespanMax()} | Vitality: ${(vitality * 100).toFixed(1)}% | Phase: ${phase}`);
+
       // Map InternalTrigger to ExternalStimulus
       // Derive valence from emotional context if available, otherwise from category character
       const categoryValence: Record<string, number> = {
@@ -792,7 +896,11 @@ class ConsciousnessBackend extends EventEmitter {
       };
 
       // SOMNIA: Advance affective state
-      const somniaState = await this.somnia.tick(stimulus);
+      let somniaState = await this.somnia.tick(stimulus);
+
+      // Apply aging somatic decay directly to SOMNIA state
+      somniaState = AgingEngine.applyAgingToSomnia(somniaState, vitality);
+      this.somnia.setState(somniaState);
 
       // Energy synchronization between Somnia and Aenea
       const energySyncState = synchronizeEnergy(
@@ -816,8 +924,31 @@ class ConsciousnessBackend extends EventEmitter {
         await this.generateSOMNIAQualia();
       }
 
+      // Insert progressive timing slowdown for aging
+      const delayMs = AgingEngine.getProcessingDelay(phase, vitality);
+      if (delayMs > 0) {
+        log.info('Mortality', `Inserting progressive processing delay of ${delayMs}ms due to aging...`);
+        await this.sleep(delayMs);
+      }
+
       // Execute thought cycle
       await this.executeAdaptiveThoughtCycle(trigger);
+
+      // Persist the updated mortality state
+      this.databaseManager.updateMortalityState(this.lifespanManager.getInstanceId(), {
+        currentCycle: this.lifespanManager.getCurrentCycle(),
+        vitality,
+        phase
+      });
+
+      // Check for death sequence
+      if (!this.lifespanManager.isAlive()) {
+        log.warn('Consciousness', 'Instance reached its lifespan limit. Executing death sequence...');
+        await this.deathHandler.handleDeath(async () => {
+          await this.stop();
+        });
+        return;
+      }
 
       // SAIP: Reflective Return — feed DPD scores (not weights) back to SOMNIA
       if (this.previousDpdScores) {
@@ -1184,10 +1315,24 @@ class ConsciousnessBackend extends EventEmitter {
       somniaInfluence // Pass somnia influence
     );
 
-    thoughtCycle.dpdScores = result.scores;
+    // Apply DPD score biases from aging
+    const biasedScores = AgingEngine.applyDPDBiases(
+      result.scores,
+      this.lifespanManager.getVitality()
+    );
+    const weightedTotal = biasedScores.empathy * result.weights.empathy +
+                          biasedScores.coherence * result.weights.coherence +
+                          biasedScores.dissonance * result.weights.dissonance;
+    const finalScores = {
+      ...result.scores,
+      ...biasedScores,
+      weightedTotal
+    };
+
+    thoughtCycle.dpdScores = finalScores;
     thoughtCycle.impactAssessment = result.assessment.impactAssessment; // Store impact assessment
     this.dpdWeights = result.weights; // Update current weights
-    this.previousDpdScores = result.scores; // Cache for SAIP reflective return
+    this.previousDpdScores = finalScores; // Cache for SAIP reflective return
 
     console.log(`[Backend S4] DPD Scores calculated: empathy=${result.scores.empathy.toFixed(3)}, coherence=${result.scores.coherence.toFixed(3)}, dissonance=${result.scores.dissonance.toFixed(3)}, weighted=${result.scores.weightedTotal.toFixed(3)} at ${new Date().toISOString()}`);
 
@@ -1237,15 +1382,25 @@ class ConsciousnessBackend extends EventEmitter {
 
     // Calculate heuristic-based DPD scores
     const scores = this.calculateFallbackDPDScores(thoughtCycle);
-    thoughtCycle.dpdScores = {
+    const biasedScores = AgingEngine.applyDPDBiases(
+      scores,
+      this.lifespanManager.getVitality()
+    );
+    const weightedTotal = biasedScores.empathy * this.dpdWeights.empathy +
+                          biasedScores.coherence * this.dpdWeights.coherence +
+                          biasedScores.dissonance * this.dpdWeights.dissonance;
+    const finalScores = {
       ...scores,
+      ...biasedScores,
+      weightedTotal,
       timestamp: Date.now(),
       context: {
         trigger: thoughtCycle.trigger.question,
         thoughtCount: thoughtCycle.thoughts.length,
-        energyMode: 'critical'
+        energyMode: 'critical' as const
       }
     };
+    thoughtCycle.dpdScores = finalScores;
 
     log.info('StageS4-Fallback', `Heuristic DPD scores: empathy=${scores.empathy.toFixed(3)}, coherence=${scores.coherence.toFixed(3)}, dissonance=${scores.dissonance.toFixed(3)}`);
 
