@@ -82,6 +82,9 @@ class ConsciousnessBackend extends EventEmitter {
   private databaseManager: DatabaseManager;
   private energyManager: EnergyManager;
   private lastSaveTime: number;
+  private consecutiveFailureCount: number = 0;
+  private static readonly MAX_CONSECUTIVE_FAILURES = 3;
+  private static readonly MIN_CYCLE_DURATION_MS = 30000; // Minimum 30 seconds per cycle
 
   // SOMNIA state-save sampling: persist every Nth somniaStateChanged event
   // (transitions and qualia updates bypass this counter and save immediately)
@@ -663,8 +666,13 @@ class ConsciousnessBackend extends EventEmitter {
         continue;
       }
 
+      const cycleStartTime = Date.now();
+
       try {
         await this.processThoughtCycle();
+        
+        // Reset failure count on successful cycle
+        this.consecutiveFailureCount = 0;
 
         // Check if automatic sleep should be triggered
         if (this.shouldEnterSleep() && !this.isSleeping) {
@@ -672,10 +680,31 @@ class ConsciousnessBackend extends EventEmitter {
           await this.enterSleepMode(false);
         }
 
-        await this.sleep(5000); // Wait 5 seconds between cycles
       } catch (error) {
         console.error('❌ Error in consciousness loop:', error);
+        this.consecutiveFailureCount++;
+        
+        // Circuit breaker: Enter dormancy if AI server is consistently failing
+        if (this.consecutiveFailureCount >= ConsciousnessBackend.MAX_CONSECUTIVE_FAILURES) {
+          log.error('CircuitBreaker', `🛑 AI server connection consistently failing (${this.consecutiveFailureCount} times). Entering protective dormancy.`);
+          this.isDormant = true;
+          this.emit('consciousnessDormant', {
+            reason: 'ai_connection_failure',
+            timestamp: Date.now()
+          });
+        }
+
         await this.sleep(10000); // Wait longer on error
+      }
+
+      // Safeguard: Ensure a minimum cycle duration to prevent rapid empty cycles
+      const elapsedTime = Date.now() - cycleStartTime;
+      if (elapsedTime < ConsciousnessBackend.MIN_CYCLE_DURATION_MS) {
+        const remainingSleep = ConsciousnessBackend.MIN_CYCLE_DURATION_MS - elapsedTime;
+        log.debug('Consciousness', `Cycle completed quickly (${elapsedTime}ms), sleeping for remaining ${remainingSleep}ms`);
+        await this.sleep(remainingSleep);
+      } else {
+        await this.sleep(5000); // Standard wait between cycles
       }
     }
   }
