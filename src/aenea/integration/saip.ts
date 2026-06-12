@@ -1,4 +1,5 @@
-import { SomniaState, AffectiveCoreState, SomaticState, DPDInfluence, AffectiveBias } from '../../types/somnia-types.js';
+import { SomniaState, AffectiveCoreState, SomaticState, AffectiveBias } from '../../types/somnia-types.js';
+import { DPDInfluence } from '../../types/dpd-types.js';
 
 /** Minimal DPD values needed for reflective return */
 interface DPDValues {

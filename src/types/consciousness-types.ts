@@ -6,7 +6,8 @@
  * consciousness evolution monitoring.
  */
 
-import { InternalTrigger, StructuredThought, MutualReflection, AuditorResult, GrowthMetrics, ThoughtCycleResult, EmotionalState, SystemState } from './aenea-types';
+import { InternalTrigger, StructuredThought, MutualReflection, AuditorResult, GrowthMetrics, ThoughtCycleResult } from './aenea-types';
+import { EmotionalState, SystemState } from './shared';
 import { DPDWeights, DPDAssessment, DPDScores } from './dpd-types';
 
 // ============================================================================
