@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import BetterSqlite3 from 'better-sqlite3';
 import { log } from '../platform/logger.js';
+import type { ThoughtStore, BeliefStore, IdeaStore, QuestionStore, SleepStore, ConsolidationJobStore, MortalityStore } from '../aenea/ports/stores.js';
 type Database = BetterSqlite3.Database;
 
 interface ConsciousnessState {
@@ -2411,6 +2412,13 @@ class DatabaseManager {
     }
   }
 }
+
+// Compile-time guarantee that DatabaseManager satisfies every domain store port.
+type _DatabaseManagerSatisfiesPorts =
+  DatabaseManager extends ThoughtStore & BeliefStore & IdeaStore & QuestionStore & SleepStore & ConsolidationJobStore & MortalityStore
+    ? true : never;
+const _portCheck: _DatabaseManagerSatisfiesPorts = true;
+void _portCheck;
 
 export { DatabaseManager };
 export default DatabaseManager;

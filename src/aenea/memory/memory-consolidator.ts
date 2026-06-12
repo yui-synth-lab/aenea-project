@@ -3,8 +3,8 @@
  * 記憶統合システム - 意識から核心的な信念を抽出・統合
  */
 
-import { AIExecutor } from '../../server/ai-executor.js';
-import { DatabaseManager } from '../../server/database-manager.js';
+import type { AIExecutorPort } from '../ports/ai-executor.js';
+import type { ThoughtStore, BeliefStore, ConsolidationJobStore } from '../ports/stores.js';
 import { log } from '../../platform/logger.js';
 import { tokenize as wakachigakiTokenize } from 'wakachigaki';
 import { parseJsonArray } from '../../utils/json-parser.js';
@@ -37,11 +37,11 @@ interface ConsolidationResult {
 }
 
 export class MemoryConsolidator {
-  private db: DatabaseManager;
-  private aiExecutor: AIExecutor | null;
+  private db: ThoughtStore & BeliefStore & ConsolidationJobStore;
+  private aiExecutor: AIExecutorPort | null;
   private isProcessing: boolean = false;
 
-  constructor(db: DatabaseManager, aiExecutor?: AIExecutor) {
+  constructor(db: ThoughtStore & BeliefStore & ConsolidationJobStore, aiExecutor?: AIExecutorPort) {
     this.db = db;
     this.aiExecutor = aiExecutor || null;
   }

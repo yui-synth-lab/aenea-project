@@ -5,8 +5,8 @@
 
 import { EventEmitter } from 'events';
 import { log } from '../../platform/logger.js';
-import { DatabaseManager } from '../../server/database-manager.js';
-import { AIExecutor } from '../../server/ai-executor.js';
+import type { ThoughtStore, BeliefStore, SleepStore } from '../ports/stores.js';
+import type { AIExecutorPort } from '../ports/ai-executor.js';
 import { EnergyManager } from '../../utils/energy-management.js';
 import { MemoryConsolidator } from '../memory/memory-consolidator.js';
 
@@ -29,18 +29,18 @@ export interface SleepResult {
 }
 
 export class SleepManager {
-  private databaseManager: DatabaseManager;
+  private databaseManager: ThoughtStore & BeliefStore & SleepStore;
   private energyManager: EnergyManager;
   private memoryConsolidator: MemoryConsolidator;
-  private systemAgent: AIExecutor | null;
+  private systemAgent: AIExecutorPort | null;
   private eventEmitter: EventEmitter;
   private systemClock: number;
 
   constructor(
-    databaseManager: DatabaseManager,
+    databaseManager: ThoughtStore & BeliefStore & SleepStore,
     energyManager: EnergyManager,
     memoryConsolidator: MemoryConsolidator,
-    systemAgent: AIExecutor | null,
+    systemAgent: AIExecutorPort | null,
     eventEmitter: EventEmitter,
     systemClock: number
   ) {

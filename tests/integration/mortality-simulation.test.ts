@@ -10,6 +10,15 @@ import { AgingEngine } from '../../src/aenea/mortality/aging-engine';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// yui-protocol/dist ships as native ESM; mock the dist modules so the
+// yui-protocol gateway's static re-export is neutralized under Jest.
+jest.mock('../../yui-protocol/dist/kernel/ai-executor-impl.js', () => ({
+  createAIExecutor: jest.fn()
+}));
+jest.mock('../../yui-protocol/dist/kernel/ai-executor.js', () => ({
+  AIExecutor: jest.fn()
+}));
+
 jest.mock('../../src/server/ai-executor', () => {
   return {
     createAIExecutor: jest.fn().mockImplementation((id, config) => ({
