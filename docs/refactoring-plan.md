@@ -4,6 +4,19 @@
 > 分析対象: `src/` 配下 全 93 ファイル(TS/TSX)+ `tests/`・`scripts/`・`package.json`
 > 方針: **分析と提案のみ。コード変更は本書に含まれない。**
 
+## 実施状況(2026-06-12 更新)
+
+| フェーズ | 状態 | コミット |
+|---|---|---|
+| Phase 1: デッドコード削除 + dependency-cruiser 導入 | ✅ 完了 | d31a443 |
+| Phase 2: 型循環の解消(`no-circular` を error 昇格) | ✅ 完了 | 04942da |
+| Phase 3a: logger を `src/platform/` へ移設 | ✅ 完了 | 5d2078a |
+| Phase 3: ポート&アダプタ導入(全レイヤールール error 昇格、違反 0) | ✅ 完了 | ed3423c |
+| Phase 4: DatabaseManager のリポジトリ分割 | ⬜ 未着手 | — |
+| Phase 5: ConsciousnessBackend の分解・睡眠実装一本化 | ⬜ 未着手 | — |
+
+実装メモ: ロガーはポート注入ではなくクロスカッティングな `src/platform/` 層への移設で解決(API 変更ゼロ)。ストア・ポート 7 種(`src/aenea/ports/stores.ts`)が Phase 4 の各リポジトリの契約として機能する。`DatabaseManager` のポート適合は同ファイル末尾のコンパイル時アサーションで機械検証される。
+
 ---
 
 ## 1. 現状の依存関係と構造的ボトルネック
