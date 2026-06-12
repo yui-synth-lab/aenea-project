@@ -20,7 +20,7 @@ jest.mock('../../src/rag/index', () => ({
   searchRAG: jest.fn(),
   ingestDialogueToRAG: jest.fn().mockResolvedValue({})
 }));
-jest.mock('../../src/server/logger', () => ({
+jest.mock('../../src/platform/logger', () => ({
   log: {
     info: jest.fn(),
     warn: jest.fn(),

@@ -5,7 +5,7 @@
 
 import { AIExecutor } from '../../server/ai-executor.js';
 import { DatabaseManager } from '../../server/database-manager.js';
-import { log } from '../../server/logger.js';
+import { log } from '../../platform/logger.js';
 import { tokenize as wakachigakiTokenize } from 'wakachigaki';
 import { parseJsonArray } from '../../utils/json-parser.js';
 

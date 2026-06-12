@@ -6,7 +6,7 @@
 import { DatabaseManager } from './database-manager.js';
 import { AIExecutor } from './ai-executor.js';
 import { aeneaConfig } from '../aenea/agents/aenea.js';
-import { log } from './logger.js';
+import { log } from '../platform/logger.js';
 import type ConsciousnessBackend from './consciousness-backend.js';
 import { analyzeDialogueSentiment } from '../aenea/somnia/core/dialogue-sentiment.js';
 import type { ExternalStimulus } from '../types/somnia-types.js';
