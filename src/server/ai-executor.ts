@@ -1,9 +1,9 @@
 /**
  * AI Executor - Use Yui Protocol Implementation
+ *
+ * Re-exported from the Yui Protocol gateway, which is the single boundary into
+ * yui-protocol/dist. Export names are preserved so existing importers are
+ * untouched.
  */
 
-// Re-export Yui Protocol's AIExecutor functionality
-// @ts-ignore
-export { createAIExecutor } from '../../yui-protocol/dist/kernel/ai-executor-impl.js';
-// @ts-ignore
-export { AIExecutor } from '../../yui-protocol/dist/kernel/ai-executor.js';
+export { createAIExecutor, AIExecutor } from '../integration/yui-protocol-gateway.js';

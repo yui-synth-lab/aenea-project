@@ -3,15 +3,15 @@
  */
 
 import { LifespanManager } from './lifespan-manager.js';
-import { DatabaseManager } from '../../server/database-manager.js';
-import { AIExecutor } from '../../server/ai-executor.js';
+import type { ThoughtStore, MortalityStore } from '../ports/stores.js';
+import type { AIExecutorPort } from '../ports/ai-executor.js';
 import { log } from '../../platform/logger.js';
 
 export class DeathHandler {
   constructor(
     private lifespan: LifespanManager,
-    private databaseManager: DatabaseManager,
-    private agents: Map<string, AIExecutor>
+    private databaseManager: ThoughtStore & MortalityStore,
+    private agents: Map<string, AIExecutorPort>
   ) {}
 
   /**

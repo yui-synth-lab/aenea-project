@@ -3,8 +3,8 @@
  * Each agent independently considers the trigger question
  */
 
-import { AIExecutor } from '../../server/ai-executor.js';
-import { DatabaseManager } from '../../server/database-manager.js';
+import type { AIExecutorPort } from '../ports/ai-executor.js';
+import type { ThoughtStore, BeliefStore, IdeaStore } from '../ports/stores.js';
 import { StructuredThought } from '../../types/aenea-types.js';
 import { log } from '../../platform/logger.js';
 import { theoriaConfig } from '../agents/theoria.js';
@@ -35,12 +35,12 @@ interface ThoughtCycle {
 }
 
 export default class IndividualThoughtStage {
-  private agents: Map<string, AIExecutor>;
-  private databaseManager: DatabaseManager;
+  private agents: Map<string, AIExecutorPort>;
+  private databaseManager: ThoughtStore & BeliefStore & IdeaStore;
   private eventEmitter?: any;
   private coreBeliefs: CoreBeliefs;
 
-  constructor(agents: Map<string, AIExecutor>, databaseManager: DatabaseManager, eventEmitter?: any) {
+  constructor(agents: Map<string, AIExecutorPort>, databaseManager: ThoughtStore & BeliefStore & IdeaStore, eventEmitter?: any) {
     this.agents = agents;
     this.databaseManager = databaseManager;
     this.eventEmitter = eventEmitter;
@@ -78,7 +78,7 @@ export default class IndividualThoughtStage {
     return thoughts;
   }
 
-  private async executeAgentThought(agent: AIExecutor, agentId: string, trigger: InternalTrigger, thoughtCycle: ThoughtCycle, somniaQualia?: string): Promise<StructuredThought | null> {
+  private async executeAgentThought(agent: AIExecutorPort, agentId: string, trigger: InternalTrigger, thoughtCycle: ThoughtCycle, somniaQualia?: string): Promise<StructuredThought | null> {
     try {
       // Get context from database
       const unresolvedIdeas = this.databaseManager.getUnresolvedIdeas(5);
