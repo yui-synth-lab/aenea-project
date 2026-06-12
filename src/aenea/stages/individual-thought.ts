@@ -6,7 +6,7 @@
 import { AIExecutor } from '../../server/ai-executor.js';
 import { DatabaseManager } from '../../server/database-manager.js';
 import { StructuredThought } from '../../types/aenea-types.js';
-import { log } from '../../server/logger.js';
+import { log } from '../../platform/logger.js';
 import { theoriaConfig } from '../agents/theoria.js';
 import { pathiaConfig } from '../agents/pathia.js';
 import { kinesisConfig } from '../agents/kinesis.js';

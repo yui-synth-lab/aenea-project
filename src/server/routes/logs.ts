@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { logger } from '../logger.js';
+import { logger } from '../../platform/logger.js';
 import ConsciousnessBackend from '../consciousness-backend.js';
 
 const router = Router();

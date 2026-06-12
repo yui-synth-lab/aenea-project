@@ -3,7 +3,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { log } from './logger.js';
+import { log } from '../platform/logger.js';
 import { DatabaseManager } from './database-manager.js';
 import { createAIExecutor, AIExecutor } from './ai-executor.js';
 import { getEnergyManager, EnergyManager } from '../utils/energy-management.js';

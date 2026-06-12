@@ -6,7 +6,7 @@
  */
 
 import { AIExecutor } from '../../server/ai-executor.js';
-import { log } from '../../server/logger.js';
+import { log } from '../../platform/logger.js';
 
 /**
  * Yui Agent Selection based on question category

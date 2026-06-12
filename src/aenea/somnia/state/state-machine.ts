@@ -1,5 +1,5 @@
 import { SomniaMode, SomniaState, AffectiveCoreState, SomaticState } from '../../../types/somnia-types.js';
-import { log } from '../../../server/logger.js';
+import { log } from '../../../platform/logger.js';
 
 /**
  * State patch returned by transition callbacks.

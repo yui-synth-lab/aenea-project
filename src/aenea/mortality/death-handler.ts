@@ -5,7 +5,7 @@
 import { LifespanManager } from './lifespan-manager.js';
 import { DatabaseManager } from '../../server/database-manager.js';
 import { AIExecutor } from '../../server/ai-executor.js';
-import { log } from '../../server/logger.js';
+import { log } from '../../platform/logger.js';
 
 export class DeathHandler {
   constructor(

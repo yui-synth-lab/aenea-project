@@ -4,7 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { log } from '../../server/logger.js';
+import { log } from '../../platform/logger.js';
 import { DatabaseManager } from '../../server/database-manager.js';
 import { AIExecutor } from '../../server/ai-executor.js';
 import { EnergyManager } from '../../utils/energy-management.js';

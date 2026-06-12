@@ -25,6 +25,14 @@ module.exports = {
       to: { path: '^src/server' },
     },
     {
+      name: 'platform-must-stay-leaf',
+      severity: 'error',
+      // src/platform is a cross-cutting leaf layer (logging); any layer may import it; it must import nothing from src/ outside platform.
+      comment: 'src/platform must not import from any src/ layer other than itself — it is a cross-cutting leaf.',
+      from: { path: '^src/platform' },
+      to: { path: '^src', pathNot: '^src/platform' },
+    },
+    {
       name: 'no-reach-into-yui-dist',
       severity: 'warn',
       comment: 'src/ should not reach into yui-protocol/dist directly — use the package exports.',
