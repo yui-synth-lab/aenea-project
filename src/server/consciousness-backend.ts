@@ -450,19 +450,13 @@ class ConsciousnessBackend extends EventEmitter {
   private loadQuestionHistoryIntoCategorizer(): void {
     try {
       // Load recent questions from database (last 100) to populate categorizer history
-      // Use direct SQL query to get questions ordered by timestamp
-      const db = (this.databaseManager as any).db;
-      if (!db) {
+      // ordered by timestamp DESC via the ThoughtRepository facade method.
+      if (!this.databaseManager.isConnected()) {
         log.warn('Consciousness', 'Database not ready for loading question history');
         return;
       }
 
-      const recentQuestions = db.prepare(`
-        SELECT id, question, category, importance, timestamp
-        FROM questions
-        ORDER BY timestamp DESC
-        LIMIT 100
-      `).all();
+      const recentQuestions = this.databaseManager.getRecentQuestionRows(100);
 
       if (recentQuestions && recentQuestions.length > 0) {
         log.info('Consciousness', `📚 Loading ${recentQuestions.length} questions into categorizer for diversity tracking...`);
