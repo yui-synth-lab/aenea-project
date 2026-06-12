@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
-import { SomniaConfig, SomniaState, SomniaMode, ExternalStimulus, AffectiveBias, DPDInfluence, CognitiveMirrorState, SomaticState } from '../../types/somnia-types.js';
+import { SomniaConfig, SomniaState, SomniaMode, ExternalStimulus, AffectiveBias, CognitiveMirrorState, SomaticState } from '../../types/somnia-types.js';
+import { DPDInfluence } from '../../types/dpd-types.js';
 import { SomaticLayer } from './core/somatic-layer.js';
 import { AffectiveCore } from './core/affective-core.js';
 import { SomniaStateMachine } from './state/state-machine.js';

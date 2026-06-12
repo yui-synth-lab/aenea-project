@@ -24,10 +24,10 @@ import {
   TriggerSource,
   TriggerContext,
   UnresolvedIdea,
-  LearnedPattern,
-  EmotionalState,
-  SystemState
+  LearnedPattern
 } from '../../types/aenea-types.js';
+
+import { EmotionalState, SystemState } from '../../types/shared.js';
 
 import {
   ConsciousnessConfig,

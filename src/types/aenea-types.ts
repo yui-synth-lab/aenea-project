@@ -15,6 +15,8 @@
  * - 形式の詩 (Keishiki no Shi) - Poetry of forms
  */
 
+import { EmotionalState, SystemState } from './shared.js';
+
 // ============================================================================
 // Core Consciousness Types
 // ============================================================================
@@ -390,18 +392,6 @@ export interface PhilosophicalInsight {
 // ============================================================================
 
 /**
- * Emotional state of the consciousness
- */
-export interface EmotionalState {
-  valence: number; // -1 to 1 range (negative to positive)
-  arousal: number; // 0 to 1 range (calm to excited)
-  dominance: number; // 0 to 1 range (submissive to dominant)
-  curiosity: number; // 0 to 1 range
-  confusion: number; // 0 to 1 range
-  satisfaction: number; // 0 to 1 range
-}
-
-/**
  * Emotional tone of thoughts
  */
 export enum EmotionalTone {
@@ -413,20 +403,6 @@ export enum EmotionalTone {
   OPTIMISTIC = 'optimistic',
   SKEPTICAL = 'skeptical',
   WONDERING = 'wondering'
-}
-
-/**
- * System state information
- */
-export interface SystemState {
-  systemClock: number;
-  currentEnergy: number;
-  maxEnergy: number;
-  activeThoughts: number;
-  processingLoad: number; // 0-1 range
-  memoryUsage: number; // 0-1 range
-  lastTriggerTime: number;
-  cooldownRemaining: number;
 }
 
 // ============================================================================

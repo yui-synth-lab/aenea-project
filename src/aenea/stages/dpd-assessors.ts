@@ -6,7 +6,7 @@
 import { StructuredThought, MutualReflection, AuditorResult } from '../../types/aenea-types.js';
 import { DPDEngine } from '../core/dpd-engine.js';
 import { DPDScores, DPDAssessment, DPDWeights } from '../../types/dpd-types.js';
-import { DPDInfluence } from '../../types/somnia-types.js';
+import { DPDInfluence } from '../../types/dpd-types.js';
 
 export class DPDAssessmentStage {
   private engine: DPDEngine;

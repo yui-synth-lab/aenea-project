@@ -3,8 +3,8 @@ module.exports = {
   forbidden: [
     {
       name: 'no-circular',
-      severity: 'warn',
-      comment: 'Circular dependencies detected in src/. Later phases will resolve these.',
+      severity: 'error',
+      comment: 'Circular dependencies were resolved in Phase 2 and must not be reintroduced.',
       from: { path: '^src' },
       to: {
         circular: true,
