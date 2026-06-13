@@ -9,6 +9,9 @@
  * `ConsciousnessState` lives here (rather than on the facade) so services can
  * reference it without creating a facade<->service import cycle; the facade
  * re-exports it to preserve its public surface.
+ *
+ * `ThoughtCycle` lives here so ThoughtPipeline can reference it without
+ * creating a facade<->service import cycle; the facade imports it from here.
  */
 
 import type { DatabaseManager } from '../database-manager.js';
@@ -18,10 +21,22 @@ import type { SomniaConsciousness } from '../../aenea/somnia/consciousness.js';
 import type { CoreBeliefs } from '../../aenea/memory/core-beliefs.js';
 import type { MemoryConsolidator } from '../../aenea/memory/memory-consolidator.js';
 import type { LifespanManager } from '../../aenea/mortality/lifespan-manager.js';
+import type { MortalityInjector } from '../../aenea/mortality/mortality-injector.js';
+import type { DeathHandler } from '../../aenea/mortality/death-handler.js';
 import type { YuiAgentsBridge } from '../../integration/yui-agents-bridge.js';
-import type { DPDWeights } from '../../types/dpd-types.js';
-import type { InternalTrigger } from '../../types/aenea-types.js';
+import type { DPDWeights, DPDScores, ImpactAssessment } from '../../types/dpd-types.js';
+import type { InternalTrigger, StructuredThought, MutualReflection, AuditorResult, SynthesisResult, DocumentationResult } from '../../types/aenea-types.js';
 import type { SomniaState } from '../../types/somnia-types.js';
+import type IndividualThoughtStage from '../../aenea/stages/individual-thought.js';
+import type MutualReflectionStage from '../../aenea/stages/mutual-reflection.js';
+import type AuditorStage from '../../aenea/stages/auditor.js';
+import type DPDAssessmentStage from '../../aenea/stages/dpd-assessors.js';
+import type CompilerStage from '../../aenea/stages/compiler.js';
+import type ScribeStage from '../../aenea/stages/scribe.js';
+import type WeightUpdateStage from '../../aenea/stages/weight-update.js';
+import type { ContentCleanupService } from '../content-cleanup-service.js';
+import type { QuestionCategorizer } from '../../utils/question-categorizer.js';
+import type { InternalTriggerGenerator } from '../../aenea/core/internal-trigger.js';
 
 export interface ConsciousnessState {
   systemClock: number;
@@ -46,6 +61,29 @@ export interface ConsciousnessState {
   };
 }
 
+/**
+ * ThoughtCycle is declared here (relocated from the facade) so that
+ * ThoughtPipeline can import it without creating a facade<->service cycle.
+ * The facade imports and re-uses it from here.
+ */
+export interface ThoughtCycle {
+  id: string;
+  timestamp: number;
+  trigger: InternalTrigger;
+  thoughts: StructuredThought[];
+  mutualReflections?: MutualReflection[];
+  auditorResult?: AuditorResult;
+  dpdScores?: DPDScores;
+  impactAssessment?: ImpactAssessment;
+  synthesis?: SynthesisResult;
+  documentation?: DocumentationResult;
+  dpdWeights?: DPDWeights;
+  status: 'processing' | 'completed' | 'failed';
+  duration?: number;
+  totalEnergy: number;
+  totalStages: number;
+}
+
 export interface ConsciousnessInternals {
   emit(event: string, ...args: any[]): boolean;
 
@@ -54,19 +92,33 @@ export interface ConsciousnessInternals {
   readonly isRunning: boolean;
   readonly isPaused: boolean;
   readonly isProcessingCycle: boolean;
-  readonly dpdWeights: DPDWeights;
+  dpdWeights: DPDWeights;
+  previousDpdScores: DPDScores | null;
+  systemClockMutable: number;
   lastConsolidationTime: number;
   pendingManualTrigger: InternalTrigger | null;
 
-  // Collaborators
+  // Collaborators (read-only)
   readonly databaseManager: DatabaseManager;
   readonly energyManager: EnergyManager;
   readonly somnia: SomniaConsciousness;
   readonly coreBeliefs: CoreBeliefs;
   readonly memoryConsolidator: MemoryConsolidator;
   readonly lifespanManager: LifespanManager;
+  readonly mortalityInjector: MortalityInjector;
+  readonly deathHandler: DeathHandler;
   readonly yuiAgentsBridge: YuiAgentsBridge;
   readonly agents: Map<string, AIExecutor>;
+  readonly individualThoughtStage: IndividualThoughtStage;
+  readonly mutualReflectionStage: MutualReflectionStage;
+  readonly auditorStage: AuditorStage;
+  readonly dpdAssessmentStage: DPDAssessmentStage;
+  readonly compilerStage: CompilerStage;
+  readonly scribeStage: ScribeStage;
+  readonly weightUpdateStage: WeightUpdateStage;
+  readonly contentCleanup: ContentCleanupService;
+  readonly questionCategorizer: QuestionCategorizer;
+  readonly triggerGenerator: InternalTriggerGenerator | null;
 
   // Shared helpers
   saveConsciousnessState(): void;
