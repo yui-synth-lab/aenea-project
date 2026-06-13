@@ -12,10 +12,13 @@
 | Phase 2: 型循環の解消(`no-circular` を error 昇格) | ✅ 完了 | 04942da |
 | Phase 3a: logger を `src/platform/` へ移設 | ✅ 完了 | 5d2078a |
 | Phase 3: ポート&アダプタ導入(全レイヤールール error 昇格、違反 0) | ✅ 完了 | ed3423c |
-| Phase 4: DatabaseManager のリポジトリ分割 | ⬜ 未着手 | — |
+| Phase 4a: 接続プロバイダ + 中核 4 リポジトリ抽出 | ✅ 完了 | e6e716e |
+| Phase 4b: 残り 6 リポジトリ抽出・facade 化完了 | ✅ 完了 | 746ba49 |
 | Phase 5: ConsciousnessBackend の分解・睡眠実装一本化 | ⬜ 未着手 | — |
 
 実装メモ: ロガーはポート注入ではなくクロスカッティングな `src/platform/` 層への移設で解決(API 変更ゼロ)。ストア・ポート 7 種(`src/aenea/ports/stores.ts`)が Phase 4 の各リポジトリの契約として機能する。`DatabaseManager` のポート適合は同ファイル末尾のコンパイル時アサーションで機械検証される。
+
+Phase 4 結果: `DatabaseManager` は 2,424 行 → 519 行の委譲 facade に縮小。`src/server/persistence/` に `ConnectionProvider`(接続ライフサイクル・全 DDL・migration を所有)と 11 リポジトリ(consciousness-state / thought / dpd / idea / belief / memory / sleep / dialogue / somnia / mortality)を配置。メソッド本体は機械的置換のみで verbatim 移設。リポジトリは DB ハンドルをキャプチャせず毎呼び出し `conn.db()` で解決するため close/reopen に安全。生 SQL バイパス 2 箇所(`consciousness-backend` の questions、`export-db` の thought_cycles)を専用リポジトリメソッドに置換。`recordBeliefEvolution` は BeliefRepository の private ヘルパーに降格。公開 API・初期化シーケンス・ポート整合性チェックは不変。
 
 ---
 
