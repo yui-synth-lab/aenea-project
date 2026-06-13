@@ -257,6 +257,30 @@ class ThoughtRepository {
   }
 
   /**
+   * Get recent thought cycles ordered by timestamp DESC.
+   *
+   * Replicates the raw SQL previously fired in scripts/export-db.ts via the
+   * `(db as any).db.prepare(...)` bypass. SQL, parameters, and returned row
+   * shape are replicated exactly.
+   */
+  getRecentThoughtCycles(limit: number = 500): any[] {
+    const db = this.conn.db();
+    if (!this.conn.ready || !db) {
+      return [];
+    }
+    try {
+      return db.prepare(`
+        SELECT * FROM thought_cycles
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(limit);
+    } catch (err) {
+      console.error('Error getting recent thought cycles:', err);
+      return [];
+    }
+  }
+
+  /**
    * Get thought cycles with high ethical dissonance
    */
   getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): any[] {

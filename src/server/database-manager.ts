@@ -12,6 +12,12 @@ import type { ConsciousnessState } from './persistence/consciousness-state-repos
 import { ThoughtRepository } from './persistence/thought-repository.js';
 import { DPDRepository } from './persistence/dpd-repository.js';
 import { IdeaRepository } from './persistence/idea-repository.js';
+import { BeliefRepository } from './persistence/belief-repository.js';
+import { MemoryRepository } from './persistence/memory-repository.js';
+import { SleepRepository } from './persistence/sleep-repository.js';
+import { DialogueRepository } from './persistence/dialogue-repository.js';
+import { SomniaRepository } from './persistence/somnia-repository.js';
+import { MortalityRepository } from './persistence/mortality-repository.js';
 type Database = BetterSqlite3.Database;
 
 class DatabaseManager {
@@ -20,6 +26,12 @@ class DatabaseManager {
   private thoughtRepo: ThoughtRepository;
   private dpdRepo: DPDRepository;
   private ideaRepo: IdeaRepository;
+  private beliefRepo: BeliefRepository;
+  private memoryRepo: MemoryRepository;
+  private sleepRepo: SleepRepository;
+  private dialogueRepo: DialogueRepository;
+  private somniaRepo: SomniaRepository;
+  private mortalityRepo: MortalityRepository;
 
   /**
    * Private handle getter so unmoved methods keep working verbatim against
@@ -42,6 +54,12 @@ class DatabaseManager {
     this.thoughtRepo = new ThoughtRepository(this.conn);
     this.dpdRepo = new DPDRepository(this.conn);
     this.ideaRepo = new IdeaRepository(this.conn);
+    this.beliefRepo = new BeliefRepository(this.conn);
+    this.memoryRepo = new MemoryRepository(this.conn);
+    this.sleepRepo = new SleepRepository(this.conn);
+    this.dialogueRepo = new DialogueRepository(this.conn);
+    this.somniaRepo = new SomniaRepository(this.conn);
+    this.mortalityRepo = new MortalityRepository(this.conn);
     this.open();
   }
 
@@ -123,6 +141,14 @@ class DatabaseManager {
     this.thoughtRepo.saveThoughtCycle(cycle);
   }
 
+  /**
+   * Get recent thought cycles ordered by timestamp DESC.
+   * (Delegated to ThoughtRepository.)
+   */
+  getRecentThoughtCycles(limit: number = 500): any[] {
+    return this.thoughtRepo.getRecentThoughtCycles(limit);
+  }
+
   // DPD weights management (delegated to DPDRepository)
   saveDPDWeights(weights: any): void {
     this.dpdRepo.saveDPDWeights(weights);
@@ -188,7 +214,11 @@ class DatabaseManager {
     this.conn.cleanup();
   }
 
-  // Get database statistics
+  /**
+   * Get database statistics.
+   * Cross-context read-only aggregate across ~18 tables, deliberately kept on
+   * the facade rather than spread across repositories.
+   */
   getStats(): any {
     this.ensureConnection();
     if (!this.isReady || !this.db) {
@@ -233,246 +263,52 @@ class DatabaseManager {
     this.conn.close();
   }
 
-  // Core Beliefs Management
+  // Core Beliefs Management (delegated to BeliefRepository)
   createCoreBelief(belief: any): number | null {
-    if (!this.isReady || !this.db) {
-      return null;
-    }
-
-    try {
-      const beliefContent = belief.belief_content;
-      const result = this.db.prepare(`
-        INSERT INTO core_beliefs
-        (belief_content, category, confidence, strength, source_thoughts,
-         first_formed, last_reinforced, reinforcement_count, contradiction_count, agent_affinity)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        beliefContent,
-        belief.category || 'general',
-        belief.confidence || 0.5,
-        belief.strength || 0.5,
-        JSON.stringify(belief.source_thoughts || []),
-        belief.first_formed || Date.now(),
-        belief.last_reinforced || Date.now(),
-        belief.reinforcement_count || 1,
-        belief.contradiction_count || 0,
-        JSON.stringify(belief.agent_affinity || {})
-      );
-
-      const beliefId = result.lastInsertRowid as number;
-
-      // Record belief formation event
-      this.recordBeliefEvolution(beliefId, 'formed', null, belief.confidence, null, 'Initial belief formation');
-
-      return beliefId;
-    } catch (err) {
-      console.error('Error creating core belief:', err);
-      return null;
-    }
+    return this.beliefRepo.createCoreBelief(belief);
   }
 
   deleteCoreBelief(beliefId: number): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      // Delete related belief_evolution records first (FOREIGN KEY constraint)
-      this.db.prepare('DELETE FROM belief_evolution WHERE belief_id = ?').run(beliefId);
-      // Then delete the core belief
-      this.db.prepare('DELETE FROM core_beliefs WHERE id = ?').run(beliefId);
-    } catch (err) {
-      console.error('Error deleting core belief:', err);
-      throw err; // Re-throw to let caller handle
-    }
+    this.beliefRepo.deleteCoreBelief(beliefId);
   }
 
   reinforceCoreBelief(beliefId: number, newSourceThoughts: string[]): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      // Get current belief
-      const current = this.db.prepare('SELECT * FROM core_beliefs WHERE id = ?').get(beliefId);
-      if (!current) return;
-
-      const oldConfidence = current.confidence;
-      const oldStrength = current.strength;
-
-      // Increase confidence and strength slightly
-      const newConfidence = Math.min(1.0, oldConfidence + 0.05);
-      const newStrength = Math.min(1.0, oldStrength + 0.03);
-
-      // Merge source thoughts
-      const existingSources = JSON.parse(current.source_thoughts || '[]');
-      const mergedSources = [...new Set([...existingSources, ...newSourceThoughts])];
-
-      // Update belief
-      this.db.prepare(`
-        UPDATE core_beliefs
-        SET confidence = ?, strength = ?, source_thoughts = ?,
-            last_reinforced = ?, reinforcement_count = reinforcement_count + 1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(newConfidence, newStrength, JSON.stringify(mergedSources), Date.now(), beliefId);
-
-      // Record reinforcement event
-      this.recordBeliefEvolution(
-        beliefId,
-        'reinforced',
-        oldConfidence,
-        newConfidence,
-        newSourceThoughts[0],
-        `Confidence: ${oldConfidence.toFixed(3)} → ${newConfidence.toFixed(3)}`
-      );
-
-    } catch (err) {
-      console.error('Error reinforcing belief:', err);
-    }
+    this.beliefRepo.reinforceCoreBelief(beliefId, newSourceThoughts);
   }
 
   getCoreBeliefs(limit: number = 100): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-
-    try {
-      const result = this.db.prepare(`
-        SELECT * FROM core_beliefs
-        ORDER BY reinforcement_count DESC, strength DESC, confidence DESC
-        LIMIT ?
-      `).all(limit);
-
-      return result.map((b: any) => ({
-        ...b,
-        source_thoughts: JSON.parse(b.source_thoughts || '[]'),
-        agent_affinity: JSON.parse(b.agent_affinity || '{}')
-      }));
-    } catch (err) {
-      console.error('Error getting core beliefs:', err);
-      return [];
-    }
+    return this.beliefRepo.getCoreBeliefs(limit);
   }
 
   getBeliefsByCategory(category: string, limit: number = 50): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-
-    try {
-      const result = this.db.prepare(`
-        SELECT * FROM core_beliefs
-        WHERE category = ?
-        ORDER BY reinforcement_count DESC, strength DESC, confidence DESC
-        LIMIT ?
-      `).all(category, limit);
-
-      return result.map((b: any) => ({
-        ...b,
-        source_thoughts: JSON.parse(b.source_thoughts || '[]'),
-        agent_affinity: JSON.parse(b.agent_affinity || '{}')
-      }));
-    } catch (err) {
-      console.error('Error getting beliefs by category:', err);
-      return [];
-    }
-  }
-
-  recordBeliefEvolution(
-    beliefId: number,
-    eventType: string,
-    oldConfidence: number | null,
-    newConfidence: number | null,
-    triggerThoughtId: string | null,
-    notes: string | null
-  ): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      this.db.prepare(`
-        INSERT INTO belief_evolution
-        (belief_id, timestamp, event_type, old_confidence, new_confidence, trigger_thought_id, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(beliefId, Date.now(), eventType, oldConfidence, newConfidence, triggerThoughtId, notes);
-    } catch (err) {
-      console.error('Error recording belief evolution:', err);
-    }
+    return this.beliefRepo.getBeliefsByCategory(category, limit);
   }
 
   updateBeliefAgentAffinity(beliefId: number, agentAffinity: any): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      this.db.prepare(`
-        UPDATE core_beliefs
-        SET agent_affinity = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(JSON.stringify(agentAffinity), beliefId);
-    } catch (err) {
-      console.error('Error updating belief agent affinity:', err);
-    }
+    this.beliefRepo.updateBeliefAgentAffinity(beliefId, agentAffinity);
   }
 
   /**
    * Increment contradiction count for a belief (data layer only)
    */
   incrementBeliefContradiction(beliefId: number, newConfidence: number, triggerThoughtId?: string): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      const current = this.db.prepare('SELECT * FROM core_beliefs WHERE id = ?').get(beliefId);
-      if (!current) return;
-
-      const oldConfidence = current.confidence;
-
-      // Update belief
-      this.db.prepare(`
-        UPDATE core_beliefs
-        SET contradiction_count = contradiction_count + 1,
-            confidence = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(newConfidence, beliefId);
-
-      // Record challenge event
-      this.recordBeliefEvolution(
-        beliefId,
-        'challenged',
-        oldConfidence,
-        newConfidence,
-        triggerThoughtId || null,
-        `Belief challenged (contradictions: ${current.contradiction_count + 1})`
-      );
-    } catch (err) {
-      console.error('Error incrementing belief contradiction:', err);
-    }
+    this.beliefRepo.incrementBeliefContradiction(beliefId, newConfidence, triggerThoughtId);
   }
 
-  // Consolidation job tracking
+  /**
+   * Get top core beliefs by reinforcement count
+   */
+  getTopCoreBeliefs(limit: number = 30): any[] {
+    return this.beliefRepo.getTopCoreBeliefs(limit);
+  }
+
+  getRecentBeliefEvolution(limit: number = 100): any[] {
+    return this.beliefRepo.getRecentBeliefEvolution(limit);
+  }
+
+  // Consolidation job tracking (delegated to BeliefRepository)
   recordConsolidationJob(jobType: string, status: string): number {
-    if (!this.isReady || !this.db) {
-      return -1;
-    }
-
-    try {
-      const result = this.db.prepare(`
-        INSERT INTO consolidation_jobs
-        (timestamp, job_type, status)
-        VALUES (?, ?, ?)
-      `).run(Date.now(), jobType, status);
-
-      return result.lastInsertRowid as number;
-    } catch (err) {
-      console.error('Error recording consolidation job:', err);
-      return -1;
-    }
+    return this.beliefRepo.recordConsolidationJob(jobType, status);
   }
 
   updateConsolidationJob(
@@ -484,129 +320,33 @@ class DatabaseManager {
     duration: number,
     errorMessage?: string
   ): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      this.db.prepare(`
-        UPDATE consolidation_jobs
-        SET status = ?, thoughts_processed = ?, beliefs_created = ?,
-            beliefs_updated = ?, duration_ms = ?, error_message = ?,
-            completed_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(status, thoughtsProcessed, beliefsCreated, beliefsUpdated, duration, errorMessage || null, jobId);
-    } catch (err) {
-      console.error('Error updating consolidation job:', err);
-    }
+    this.beliefRepo.updateConsolidationJob(jobId, status, thoughtsProcessed, beliefsCreated, beliefsUpdated, duration, errorMessage);
   }
 
-  // Memory patterns
+  getRecentConsolidationJobs(limit: number = 100): any[] {
+    return this.beliefRepo.getRecentConsolidationJobs(limit);
+  }
+
+  // Memory patterns (delegated to MemoryRepository)
   saveMemoryPattern(patternType: string, patternData: any, significance: number = 0.5): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      const dataJson = typeof patternData === 'string' ? patternData : JSON.stringify(patternData);
-      const now = Date.now();
-
-      // Check if pattern exists
-      const existing = this.db.prepare(`
-        SELECT id, frequency FROM memory_patterns
-        WHERE pattern_type = ? AND pattern_data = ?
-      `).get(patternType, dataJson);
-
-      if (existing) {
-        // Update frequency
-        this.db.prepare(`
-          UPDATE memory_patterns
-          SET frequency = frequency + 1, last_seen = ?, significance = ?
-          WHERE id = ?
-        `).run(now, significance, (existing as any).id);
-      } else {
-        // Insert new pattern
-        this.db.prepare(`
-          INSERT INTO memory_patterns
-          (pattern_type, pattern_data, frequency, last_seen, significance)
-          VALUES (?, ?, 1, ?, ?)
-        `).run(patternType, dataJson, now, significance);
-      }
-    } catch (err) {
-      console.error('Error saving memory pattern:', err);
-    }
+    this.memoryRepo.saveMemoryPattern(patternType, patternData, significance);
   }
 
   getMemoryPatterns(limit: number = 50): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-
-    try {
-      const results = this.db.prepare(`
-        SELECT * FROM memory_patterns
-        ORDER BY significance DESC, frequency DESC, last_seen DESC
-        LIMIT ?
-      `).all(limit);
-
-      return results.map((p: any) => ({
-        ...p,
-        pattern_data: this.tryParseJSON(p.pattern_data)
-      }));
-    } catch (err) {
-      console.error('Error getting memory patterns:', err);
-      return [];
-    }
+    return this.memoryRepo.getMemoryPatterns(limit);
   }
 
-  // Consciousness insights
+  // Consciousness insights (delegated to MemoryRepository)
   saveConsciousnessInsight(insightType: string, content: string, confidence: number = 0.5, relatedBeliefs: number[] = []): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      const now = Date.now();
-      const beliefsJson = JSON.stringify(relatedBeliefs);
-
-      this.db.prepare(`
-        INSERT INTO consciousness_insights
-        (timestamp, insight_type, insight_content, confidence, related_patterns)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(now, insightType, content, confidence, beliefsJson);
-    } catch (err) {
-      console.error('Error saving consciousness insight:', err);
-    }
+    this.memoryRepo.saveConsciousnessInsight(insightType, content, confidence, relatedBeliefs);
   }
 
   getConsciousnessInsights(limit: number = 50): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-
-    try {
-      const results = this.db.prepare(`
-        SELECT * FROM consciousness_insights
-        ORDER BY confidence DESC, timestamp DESC
-        LIMIT ?
-      `).all(limit);
-
-      return results.map((i: any) => ({
-        ...i,
-        related_patterns: JSON.parse(i.related_patterns || '[]')
-      }));
-    } catch (err) {
-      console.error('Error getting consciousness insights:', err);
-      return [];
-    }
+    return this.memoryRepo.getConsciousnessInsights(limit);
   }
 
-  private tryParseJSON(jsonString: string): any {
-    try {
-      return JSON.parse(jsonString);
-    } catch {
-      return jsonString;
-    }
+  getRecentForgettingEvents(limit: number = 100): any[] {
+    return this.memoryRepo.getRecentForgettingEvents(limit);
   }
 
   /**
@@ -619,7 +359,7 @@ class DatabaseManager {
   }
 
   // ============================================================================
-  // Dialogue System Methods
+  // Dialogue System Methods (delegated to DialogueRepository)
   // ============================================================================
 
   /**
@@ -638,88 +378,28 @@ class DatabaseManager {
     systemClock?: number;
     timestamp: number;
   }): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO dialogues (
-          id, human_message, aenea_response,
-          immediate_reaction, new_question, emotional_state,
-          empathy_shift, coherence_shift, dissonance_shift,
-          system_clock, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      stmt.run(
-        dialogue.id,
-        dialogue.humanMessage,
-        dialogue.aeneaResponse,
-        dialogue.immediateReaction || null,
-        dialogue.newQuestion || null,
-        dialogue.emotionalState || null,
-        dialogue.empathyShift || 0,
-        dialogue.coherenceShift || 0,
-        dialogue.dissonanceShift || 0,
-        dialogue.systemClock || null,
-        dialogue.timestamp
-      );
-    } catch (err) {
-      console.error('Error saving dialogue:', err);
-    }
+    this.dialogueRepo.saveDialogue(dialogue);
   }
 
   /**
    * Get dialogue by ID
    */
   getDialogue(id: string): any {
-    if (!this.isReady || !this.db) {
-      return null;
-    }
-    try {
-      const stmt = this.db.prepare('SELECT * FROM dialogues WHERE id = ?');
-      return stmt.get(id);
-    } catch (err) {
-      console.error('Error getting dialogue:', err);
-      return null;
-    }
+    return this.dialogueRepo.getDialogue(id);
   }
 
   /**
    * Get recent dialogues
    */
   getRecentDialogues(limit: number = 20, offset: number = 0): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-    try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM dialogues
-        ORDER BY timestamp DESC
-        LIMIT ? OFFSET ?
-      `);
-      return stmt.all(limit, offset);
-    } catch (err) {
-      console.error('Error getting recent dialogues:', err);
-      return [];
-    }
+    return this.dialogueRepo.getRecentDialogues(limit, offset);
   }
 
   /**
    * Count total dialogues
    */
   countDialogues(): number {
-    if (!this.isReady || !this.db) {
-      return 0;
-    }
-    try {
-      const result = this.db.prepare('SELECT COUNT(*) as count FROM dialogues').get() as any;
-      return result?.count || 0;
-    } catch (err) {
-      console.error('Error counting dialogues:', err);
-      return 0;
-    }
+    return this.dialogueRepo.countDialogues();
   }
 
   /**
@@ -733,69 +413,21 @@ class DatabaseManager {
     emotionalImpact?: number;
     timestamp: number;
   }): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO dialogue_memories (
-          dialogue_id, memory_summary, topics,
-          importance, emotional_impact, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?)
-      `);
-
-      stmt.run(
-        memory.dialogueId,
-        memory.memorySummary,
-        memory.topics || null,
-        memory.importance || 0.5,
-        memory.emotionalImpact || 0.5,
-        memory.timestamp
-      );
-    } catch (err) {
-      console.error('Error saving dialogue memory:', err);
-    }
+    this.dialogueRepo.saveDialogueMemory(memory);
   }
 
   /**
    * Get recent dialogue memories (for context in next conversation)
    */
   getRecentDialogueMemories(limit: number = 5): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-    try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM dialogue_memories
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `);
-      return stmt.all(limit);
-    } catch (err) {
-      console.error('Error getting recent dialogue memories:', err);
-      return [];
-    }
+    return this.dialogueRepo.getRecentDialogueMemories(limit);
   }
 
   /**
    * Get dialogue memories by importance
    */
   getImportantDialogueMemories(limit: number = 5): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-    try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM dialogue_memories
-        ORDER BY importance DESC, timestamp DESC
-        LIMIT ?
-      `);
-      return stmt.all(limit);
-    } catch (err) {
-      console.error('Error getting important dialogue memories:', err);
-      return [];
-    }
+    return this.dialogueRepo.getImportantDialogueMemories(limit);
   }
 
   // ============================================================================
@@ -827,26 +459,6 @@ class DatabaseManager {
   }
 
   /**
-   * Get top core beliefs by reinforcement count
-   */
-  getTopCoreBeliefs(limit: number = 30): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-    try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM core_beliefs
-        ORDER BY reinforcement_count DESC, confidence DESC
-        LIMIT ?
-      `);
-      return stmt.all(limit);
-    } catch (err) {
-      console.error('Error getting top core beliefs:', err);
-      return [];
-    }
-  }
-
-  /**
    * Get thought cycles with high ethical dissonance
    * (Delegated to ThoughtRepository.)
    */
@@ -856,24 +468,15 @@ class DatabaseManager {
 
   /**
    * Save dream pattern
+   * (Delegated to SleepRepository.)
    */
   saveDreamPattern(dream: { pattern: string; emotionalTone: string; sourceThoughtIds: string[] }): void {
-    if (!this.isReady || !this.db) {
-      return;
-    }
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO dream_patterns (pattern, emotional_tone, source_thought_ids, created_at)
-        VALUES (?, ?, ?, datetime('now'))
-      `);
-      stmt.run(dream.pattern, dream.emotionalTone, JSON.stringify(dream.sourceThoughtIds));
-    } catch (err) {
-      console.error('Error saving dream pattern:', err);
-    }
+    this.sleepRepo.saveDreamPattern(dream);
   }
 
   /**
    * Save sleep log
+   * (Delegated to SleepRepository.)
    */
   saveSleepLog(log: {
     timestamp: number;
@@ -885,29 +488,7 @@ class DatabaseManager {
     energyBefore: number;
     energyAfter: number;
   }): void {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return;
-    }
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO sleep_logs
-        (timestamp, system_clock, trigger_reason, phases, stats, duration, energy_before, energy_after, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `);
-      stmt.run(
-        log.timestamp,
-        log.systemClock,
-        log.triggerReason,
-        JSON.stringify(log.phases),
-        JSON.stringify(log.stats),
-        log.duration,
-        log.energyBefore,
-        log.energyAfter
-      );
-    } catch (err) {
-      console.error('Error saving sleep log:', err);
-    }
+    this.sleepRepo.saveSleepLog(log);
   }
 
   /**
@@ -920,106 +501,30 @@ class DatabaseManager {
 
   /**
    * Get recent sleep logs
+   * (Delegated to SleepRepository.)
    */
   getRecentSleepLogs(limit: number = 10): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-    try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM sleep_logs
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `);
-      return stmt.all(limit);
-    } catch (err) {
-      console.error('Error getting recent sleep logs:', err);
-      return [];
-    }
+    return this.sleepRepo.getRecentSleepLogs(limit);
   }
 
   /**
    * Get dream patterns
+   * (Delegated to SleepRepository.)
    */
   getDreamPatterns(limit: number = 20): any[] {
-    if (!this.isReady || !this.db) {
-      return [];
-    }
-    try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM dream_patterns
-        ORDER BY created_at DESC
-        LIMIT ?
-      `);
-      return stmt.all(limit);
-    } catch (err) {
-      console.error('Error getting dream patterns:', err);
-      return [];
-    }
+    return this.sleepRepo.getDreamPatterns(limit);
   }
 
   // ============================================================================
-  // SOMNIA Management
+  // SOMNIA Management (delegated to SomniaRepository)
   // ============================================================================
 
   saveSomniaState(state: any, cycleId?: string): void {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      this.db.prepare(`
-        INSERT INTO somnia_state
-        (timestamp, cycle_id, mode, lambda, phi, mu_serotonin, mu_dopamine, mu_cortisol, mu_oxytocin,
-         theta, psi, xi, add_pleasure, add_coherence, add_dissonance, add_temporal_flow, add_total, qualia)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        state.timestamp || Date.now(),
-        cycleId || null,
-        state.mode,
-        state.somatic?.lambda ?? 0,
-        state.somatic?.phi ?? 0,
-        state.somatic?.mu?.serotonin ?? 0,
-        state.somatic?.mu?.dopamine ?? 0,
-        state.somatic?.mu?.cortisol ?? 0,
-        state.somatic?.mu?.oxytocin ?? 0,
-        state.affective?.theta ?? 0,
-        state.affective?.psi ?? 0,
-        state.affective?.xi ?? 0,
-        state.add?.pleasure ?? null,
-        state.add?.coherence ?? null,
-        state.add?.dissonance ?? null,
-        state.add?.temporalFlow ?? null,
-        state.add?.total ?? null,
-        state.cognitive?.qualia ?? null
-      );
-    } catch (err) {
-      console.error('Error saving SOMNIA state:', err);
-    }
+    this.somniaRepo.saveSomniaState(state, cycleId);
   }
 
   saveSomniaTransition(from: string, to: string, triggerReason: string, duration: number): void {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return;
-    }
-
-    try {
-      this.db.prepare(`
-        INSERT INTO somnia_transitions
-        (timestamp, from_mode, to_mode, trigger_reason, duration_in_previous)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(
-        Date.now(),
-        from,
-        to,
-        triggerReason,
-        duration
-      );
-    } catch (err) {
-      console.error('Error saving SOMNIA transition:', err);
-    }
+    this.somniaRepo.saveSomniaTransition(from, to, triggerReason, duration);
   }
 
   saveSomniaSaipEvent(eventData: {
@@ -1029,150 +534,31 @@ class DatabaseManager {
     influence?: any;
     impactScore?: number;
   }): void {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) return;
-
-    try {
-      this.db.prepare(`
-        INSERT INTO somnia_saip_events
-        (timestamp, event_type, somnia_state_json, aenea_dpd_json, influence_json, impact_score)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(
-        Date.now(),
-        eventData.eventType,
-        eventData.somniaState ? JSON.stringify(eventData.somniaState) : null,
-        eventData.aeneaDpd ? JSON.stringify(eventData.aeneaDpd) : null,
-        eventData.influence ? JSON.stringify(eventData.influence) : null,
-        eventData.impactScore ?? null
-      );
-    } catch (err) {
-      console.error('Error saving SOMNIA SAIP event:', err);
-    }
+    this.somniaRepo.saveSomniaSaipEvent(eventData);
   }
 
   getLatestSomniaState(): any {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return null;
-    }
-
-    try {
-      return this.db.prepare(`
-        SELECT * FROM somnia_state
-        ORDER BY timestamp DESC
-        LIMIT 1
-      `).get();
-    } catch (err) {
-      console.error('Error getting latest SOMNIA state:', err);
-      return null;
-    }
+    return this.somniaRepo.getLatestSomniaState();
   }
 
   getRecentSomniaStates(limit: number = 100): any[] {
-    if (!this.isReady || !this.db) return [];
-    try {
-      return this.db.prepare(`
-        SELECT * FROM somnia_state
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `).all(limit);
-    } catch (err) {
-      console.error('Error getting recent SOMNIA states:', err);
-      return [];
-    }
+    return this.somniaRepo.getRecentSomniaStates(limit);
   }
 
   getRecentSomniaTransitions(limit: number = 100): any[] {
-    if (!this.isReady || !this.db) return [];
-    try {
-      return this.db.prepare(`
-        SELECT * FROM somnia_transitions
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `).all(limit);
-    } catch (err) {
-      console.error('Error getting recent SOMNIA transitions:', err);
-      return [];
-    }
+    return this.somniaRepo.getRecentSomniaTransitions(limit);
   }
 
   getRecentSomniaSaipEvents(limit: number = 100): any[] {
-    if (!this.isReady || !this.db) return [];
-    try {
-      return this.db.prepare(`
-        SELECT * FROM somnia_saip_events
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `).all(limit);
-    } catch (err) {
-      console.error('Error getting recent SOMNIA SAIP events:', err);
-      return [];
-    }
-  }
-
-  getRecentBeliefEvolution(limit: number = 100): any[] {
-    if (!this.isReady || !this.db) return [];
-    try {
-      return this.db.prepare(`
-        SELECT be.*, cb.belief_content
-        FROM belief_evolution be
-        JOIN core_beliefs cb ON be.belief_id = cb.id
-        ORDER BY be.timestamp DESC
-        LIMIT ?
-      `).all(limit);
-    } catch (err) {
-      console.error('Error getting recent belief evolution:', err);
-      return [];
-    }
-  }
-
-  getRecentConsolidationJobs(limit: number = 100): any[] {
-    if (!this.isReady || !this.db) return [];
-    try {
-      return this.db.prepare(`
-        SELECT * FROM consolidation_jobs
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `).all(limit);
-    } catch (err) {
-      console.error('Error getting recent consolidation jobs:', err);
-      return [];
-    }
-  }
-
-  getRecentForgettingEvents(limit: number = 100): any[] {
-    if (!this.isReady || !this.db) return [];
-    try {
-      return this.db.prepare(`
-        SELECT * FROM forgetting_events
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `).all(limit);
-    } catch (err) {
-      console.error('Error getting recent forgetting events:', err);
-      return [];
-    }
+    return this.somniaRepo.getRecentSomniaSaipEvents(limit);
   }
 
   // ============================================================================
-  // Mortality Management
+  // Mortality Management (delegated to MortalityRepository)
   // ============================================================================
 
   getLatestMortalityState(): any {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return null;
-    }
-    try {
-      return this.db.prepare(`
-        SELECT * FROM mortality_state
-        ORDER BY created_at DESC
-        LIMIT 1
-      `).get();
-    } catch (err) {
-      console.error('Error getting latest mortality state:', err);
-      return null;
-    }
+    return this.mortalityRepo.getLatestMortalityState();
   }
 
   saveMortalityState(state: {
@@ -1185,28 +571,7 @@ class DatabaseManager {
     createdAt: number;
     diedAt?: number | null;
   }): void {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return;
-    }
-    try {
-      this.db.prepare(`
-        INSERT INTO mortality_state
-        (instance_id, lifespan_max, current_cycle, vitality, phase, mode, created_at, died_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        state.instanceId,
-        state.lifespanMax,
-        state.currentCycle,
-        state.vitality,
-        state.phase,
-        state.mode,
-        state.createdAt,
-        state.diedAt || null
-      );
-    } catch (err) {
-      console.error('Error saving mortality state:', err);
-    }
+    this.mortalityRepo.saveMortalityState(state);
   }
 
   updateMortalityState(instanceId: string, updates: {
@@ -1216,30 +581,7 @@ class DatabaseManager {
     mode?: string;
     diedAt?: number | null;
   }): void {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return;
-    }
-    try {
-      const keys = Object.keys(updates);
-      if (keys.length === 0) return;
-
-      const setClause = keys.map(k => {
-        const sqlName = k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-        return `${sqlName} = ?`;
-      }).join(', ');
-
-      const values = keys.map(k => (updates as any)[k]);
-      values.push(instanceId);
-
-      this.db.prepare(`
-        UPDATE mortality_state
-        SET ${setClause}
-        WHERE instance_id = ?
-      `).run(...values);
-    } catch (err) {
-      console.error('Error updating mortality state:', err);
-    }
+    this.mortalityRepo.updateMortalityState(instanceId, updates);
   }
 
   saveLastWords(lastWords: {
@@ -1249,47 +591,11 @@ class DatabaseManager {
     agent: string;
     createdAt: number;
   }): void {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) {
-      return;
-    }
-    try {
-      this.db.prepare(`
-        INSERT INTO last_words
-        (instance_id, cycle, content, agent, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(
-        lastWords.instanceId,
-        lastWords.cycle,
-        lastWords.content,
-        lastWords.agent,
-        lastWords.createdAt
-      );
-    } catch (err) {
-      console.error('Error saving last words:', err);
-    }
+    this.mortalityRepo.saveLastWords(lastWords);
   }
 
   getLastWords(instanceId?: string): any[] {
-    this.ensureConnection();
-    if (!this.isReady || !this.db) return [];
-    try {
-      if (instanceId) {
-        return this.db.prepare(`
-          SELECT * FROM last_words
-          WHERE instance_id = ?
-          ORDER BY created_at DESC
-        `).all(instanceId);
-      } else {
-        return this.db.prepare(`
-          SELECT * FROM last_words
-          ORDER BY created_at DESC
-        `).all();
-      }
-    } catch (err) {
-      console.error('Error getting last words:', err);
-      return [];
-    }
+    return this.mortalityRepo.getLastWords(instanceId);
   }
 }
 
