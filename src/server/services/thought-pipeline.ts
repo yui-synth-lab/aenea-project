@@ -6,7 +6,7 @@
  * `this.<field>` -> `this.ctx.<accessor>`, `this.emit(...)` ->
  * `this.ctx.emit(...)`, and `this.saveConsciousnessState()` ->
  * `this.ctx.saveConsciousnessState()` substitutions were applied.
- * `this.systemClock++` is rewritten as `this.ctx.systemClockMutable++`.
+ * `this.systemClock++` is rewritten as `this.ctx.systemClock++`.
  */
 
 import { log } from '../../platform/logger.js';
@@ -116,9 +116,9 @@ export class ThoughtPipeline {
         // Continue execution even if this fails
       }
 
-      console.log(`[DEBUG] About to increment systemClock from ${this.ctx.systemClockMutable} to ${this.ctx.systemClockMutable + 1}`);
-      this.ctx.systemClockMutable++;
-      console.log(`[DEBUG] SystemClock incremented to: ${this.ctx.systemClockMutable}`);
+      console.log(`[DEBUG] About to increment systemClock from ${this.ctx.systemClock} to ${this.ctx.systemClock + 1}`);
+      this.ctx.systemClock++;
+      console.log(`[DEBUG] SystemClock incremented to: ${this.ctx.systemClock}`);
 
       thoughtCycle.status = 'completed';
       thoughtCycle.duration = Date.now() - thoughtCycle.timestamp;
@@ -168,7 +168,7 @@ export class ThoughtPipeline {
           version: this.ctx.dpdWeights.version
         },
         // System statistics
-        systemClock: this.ctx.systemClockMutable,
+        systemClock: this.ctx.systemClock,
         totalQuestions: dbStats.questions || 0,
         totalThoughts: dbStats.thought_cycles || 0,
         averageConfidence: (() => {
@@ -932,7 +932,7 @@ export class ThoughtPipeline {
    * Perform memory consolidation periodically
    */
   async performPeriodicConsolidation(): Promise<void> {
-    const cyclesSinceLastConsolidation = this.ctx.systemClockMutable - this.ctx.lastConsolidationTime;
+    const cyclesSinceLastConsolidation = this.ctx.systemClock - this.ctx.lastConsolidationTime;
 
     // Consolidate every 5 thought cycles
     if (cyclesSinceLastConsolidation >= 5) {
@@ -955,12 +955,12 @@ export class ThoughtPipeline {
           log.info('MemoryEvolution', `✅ Cleanup complete: ${cleanupResult.deleted} deleted, ${cleanupResult.kept} kept (${cleanupResult.strategy})`);
         }
 
-        this.ctx.lastConsolidationTime = this.ctx.systemClockMutable;
+        this.ctx.lastConsolidationTime = this.ctx.systemClock;
 
         // Emit consolidation event for UI
         this.ctx.emit('memoryConsolidated', {
           timestamp: Date.now(),
-          systemClock: this.ctx.systemClockMutable,
+          systemClock: this.ctx.systemClock,
           beliefsCreated: result.beliefs_created,
           beliefsUpdated: result.beliefs_updated,
           thoughtsProcessed: result.thoughts_processed,
