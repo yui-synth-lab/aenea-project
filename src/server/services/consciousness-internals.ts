@@ -88,13 +88,12 @@ export interface ConsciousnessInternals {
   emit(event: string, ...args: any[]): boolean;
 
   // Shared mutable state (live views onto the facade's fields)
-  readonly systemClock: number;
+  systemClock: number;
   readonly isRunning: boolean;
   readonly isPaused: boolean;
   readonly isProcessingCycle: boolean;
   dpdWeights: DPDWeights;
   previousDpdScores: DPDScores | null;
-  systemClockMutable: number;
   lastConsolidationTime: number;
   pendingManualTrigger: InternalTrigger | null;
 
