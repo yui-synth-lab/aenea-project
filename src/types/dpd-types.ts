@@ -1,14 +1,25 @@
 /**
  * Dynamic Prime Directive (DPD) Types
- * 
+ *
  * Type definitions for the Dynamic Prime Directive system,
  * which provides real-time weighted optimization across
  * Empathy, System Coherence, and Ethical Dissonance.
  */
 
+import { EmotionalState, SystemState } from './shared.js';
+
 // ============================================================================
 // DPD Core Types
 // ============================================================================
+
+/**
+ * DPD Influence from SOMNIA to AENEA
+ */
+export interface DPDInfluence {
+  empathy: number;     // Influence on DPD empathy score
+  coherence: number;   // Influence on DPD coherence score
+  dissonance: number;  // Influence on DPD dissonance score
+}
 
 /**
  * Dynamic Prime Directive weights
@@ -37,9 +48,6 @@ export interface DPDScores {
 /**
  * Context information for DPD scoring
  */
-import { EmotionalState, SystemState } from './aenea-types';
-import { ConsciousnessState } from './consciousness-types';
-
 export interface DPDContext {
   thoughtId?: string;
   agentId?: string;
@@ -49,7 +57,7 @@ export interface DPDContext {
   previousScores?: DPDScores[];
   emotionalState?: EmotionalState;
   systemState?: SystemState;
-  somniaInfluence?: import('./somnia-types.js').DPDInfluence;
+  somniaInfluence?: DPDInfluence;
   historicalPatterns?: DPDPattern[];
 }
 
@@ -379,18 +387,6 @@ export interface ProgressData {
 // ============================================================================
 // DPD Integration Types
 // ============================================================================
-
-/**
- * DPD integration with consciousness system
- */
-export interface DPDIntegration {
-  consciousnessState: ConsciousnessState;
-  currentWeights: DPDWeights;
-  recentScores: DPDScores[];
-  performanceMetrics: DPDMetrics;
-  evolutionData: DPDEvolution;
-  recommendations: DPDRecommendation[];
-}
 
 /**
  * DPD feedback loop configuration

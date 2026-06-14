@@ -55,15 +55,6 @@ export interface SemanticVector {
 }
 
 /**
- * DPD Influence from SOMNIA to AENEA
- */
-export interface DPDInfluence {
-  empathy: number;     // Influence on DPD empathy score
-  coherence: number;   // Influence on DPD coherence score
-  dissonance: number;  // Influence on DPD dissonance score
-}
-
-/**
  * Cognitive Mirror State - AENEA連携層の状態
  */
 export interface CognitiveMirrorState {
@@ -129,7 +120,7 @@ export interface ADDWeights {
 // SAIP (Somnia-AENEA Interface Protocol)
 // ============================================================================
 
-import { DPDScores } from './dpd-types.js';
+import { DPDScores, DPDInfluence } from './dpd-types.js';
 
 /**
  * Affective Bias from AENEA to SOMNIA

@@ -4,6 +4,27 @@
 > 分析対象: `src/` 配下 全 93 ファイル(TS/TSX)+ `tests/`・`scripts/`・`package.json`
 > 方針: **分析と提案のみ。コード変更は本書に含まれない。**
 
+## 実施状況(2026-06-12 更新)
+
+| フェーズ | 状態 | コミット |
+|---|---|---|
+| Phase 1: デッドコード削除 + dependency-cruiser 導入 | ✅ 完了 | d31a443 |
+| Phase 2: 型循環の解消(`no-circular` を error 昇格) | ✅ 完了 | 04942da |
+| Phase 3a: logger を `src/platform/` へ移設 | ✅ 完了 | 5d2078a |
+| Phase 3: ポート&アダプタ導入(全レイヤールール error 昇格、違反 0) | ✅ 完了 | ed3423c |
+| Phase 4a: 接続プロバイダ + 中核 4 リポジトリ抽出 | ✅ 完了 | e6e716e |
+| Phase 4b: 残り 6 リポジトリ抽出・facade 化完了 | ✅ 完了 | 746ba49 |
+| Phase 5a: Introspection + StimulusDialogue サービス抽出 | ✅ 完了 | 9a85152 |
+| Phase 5b: ThoughtPipeline サービス抽出(hot path) | ✅ 完了 | 2214c3a |
+| Phase 5c: SleepService 抽出・未使用 SleepManager 退役 | ✅ 完了 | 5bc1b56 |
+| Phase 5d: facade 最終化(systemClock アクセサ整理) | ✅ 完了 | (this) |
+
+実装メモ: ロガーはポート注入ではなくクロスカッティングな `src/platform/` 層への移設で解決(API 変更ゼロ)。ストア・ポート 7 種(`src/aenea/ports/stores.ts`)が Phase 4 の各リポジトリの契約として機能する。`DatabaseManager` のポート適合は同ファイル末尾のコンパイル時アサーションで機械検証される。
+
+Phase 4 結果: `DatabaseManager` は 2,424 行 → 519 行の委譲 facade に縮小。`src/server/persistence/` に `ConnectionProvider`(接続ライフサイクル・全 DDL・migration を所有)と 11 リポジトリ(consciousness-state / thought / dpd / idea / belief / memory / sleep / dialogue / somnia / mortality)を配置。メソッド本体は機械的置換のみで verbatim 移設。リポジトリは DB ハンドルをキャプチャせず毎呼び出し `conn.db()` で解決するため close/reopen に安全。生 SQL バイパス 2 箇所(`consciousness-backend` の questions、`export-db` の thought_cycles)を専用リポジトリメソッドに置換。`recordBeliefEvolution` は BeliefRepository の private ヘルパーに降格。公開 API・初期化シーケンス・ポート整合性チェックは不変。
+
+Phase 5 結果: `ConsciousnessBackend` は 2,590 行 → 約 1,290 行に縮小。`src/server/services/` に4サービス(IntrospectionService / StimulusDialogueService / ThoughtPipeline / SleepService)を抽出し、facade は EventEmitter・全状態の唯一の所有者・ライフサイクルオーケストレータとして残置。サービスは状態を持たず、facade がコンストラクタで構築する live-view アダプタ(`ConsciousnessInternals`)経由で共有状態にアクセス。メソッド本体は機械的置換のみで verbatim 移設し、公開メソッド・emit イベントは完全保持。睡眠は方針A(本番のインライン実装を正とし SleepService へ抽出、未配線の SleepManager とそのテストを退役)。孤立した category 系ヘルパー4個を削除。`ConsciousnessState` / `ThoughtCycle` 型は facade↔service 循環回避のため `consciousness-internals.ts` へ移設し facade から再エクスポート。設計判断: 別途 ConsciousnessLifecycle サービスは抽出せず — start/stop/loop/processThoughtCycle はサービス群を協調させるオーケストレーションであり facade に残すのが適切。残課題(別チップで記録): SleepManager の改善2点(緊張解決の保存・48h 予備プルーニング)を opt-in で移植、テスト suite 間の状態リーク由来のフレーキー解消。
+
 ---
 
 ## 1. 現状の依存関係と構造的ボトルネック

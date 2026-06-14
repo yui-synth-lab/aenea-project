@@ -12,6 +12,10 @@ describe('EnergyManager', () => {
     energyManager = getEnergyManager();
   });
 
+  afterAll(() => {
+    resetEnergyManager();
+  });
+
   describe('Initialization', () => {
     test('should initialize with default energy', () => {
       const state = energyManager.getEnergyState();

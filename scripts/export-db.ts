@@ -118,20 +118,8 @@ function collectData(db: DatabaseManager): ExportData {
   const memoryPatterns = db.getMemoryPatterns(200);
   const insights = db.getConsciousnessInsights(200);
 
-  // Get thought cycles (need raw query since no direct method exists)
-  let thoughtCycles: any[] = [];
-  try {
-    const rawDb = (db as any).db;
-    if (rawDb) {
-      thoughtCycles = rawDb.prepare(`
-        SELECT * FROM thought_cycles
-        ORDER BY timestamp DESC
-        LIMIT 500
-      `).all();
-    }
-  } catch (e) {
-    console.warn('⚠️ thought_cycles取得に失敗:', e);
-  }
+  // Get thought cycles via the ThoughtRepository facade method
+  const thoughtCycles = db.getRecentThoughtCycles(500);
 
   return {
     metadata: {

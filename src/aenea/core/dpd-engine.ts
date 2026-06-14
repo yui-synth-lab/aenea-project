@@ -31,7 +31,7 @@ import {
   ImpactAssessment
 } from '../../types/dpd-types.js';
 
-import { DPDInfluence } from '../../types/somnia-types.js';
+import { DPDInfluence } from '../../types/dpd-types.js';
 
 import {
   StructuredThought,
