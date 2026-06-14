@@ -3,7 +3,7 @@
  * Handles Japanese quotes, smart quotes, and other common JSON formatting issues
  */
 
-import { log } from '../server/logger.js';
+import { log } from '../platform/logger.js';
 import * as fs from 'fs';
 import * as path from 'path';
 

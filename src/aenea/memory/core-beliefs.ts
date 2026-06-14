@@ -3,7 +3,7 @@
  * 核心的信念マネージャー - エージェントプロンプトに文脈に応じた信念を提供
  */
 
-import { DatabaseManager } from '../../server/database-manager.js';
+import type { BeliefStore } from '../ports/stores.js';
 
 interface BeliefSummary {
   content: string;
@@ -19,11 +19,11 @@ interface BeliefContext {
 }
 
 export class CoreBeliefs {
-  private db: DatabaseManager;
+  private db: BeliefStore;
   private maxTokenBudget: number;
   private charPerToken: number = 4; // Approximate: 1 token ≈ 4 characters
 
-  constructor(db: DatabaseManager, maxTokenBudget: number = 500) {
+  constructor(db: BeliefStore, maxTokenBudget: number = 500) {
     this.db = db;
     this.maxTokenBudget = maxTokenBudget;
   }

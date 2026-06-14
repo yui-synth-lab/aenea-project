@@ -5,8 +5,9 @@
  * Yui Protocol agent (慧露・碧統・観至・陽雅・結心) to consult.
  */
 
-import { AIExecutor } from '../../server/ai-executor.js';
-import { log } from '../../server/logger.js';
+import type { AIExecutorPort } from '../ports/ai-executor.js';
+import { loadYuiAgentConfig } from '../../integration/yui-protocol-gateway.js';
+import { log } from '../../platform/logger.js';
 
 /**
  * Yui Agent Selection based on question category
@@ -186,60 +187,6 @@ export class YuiConsultation {
   }
 
   /**
-   * Import Yui Protocol agent configurations from yui-protocol package
-   */
-  private static async loadYuiAgent(agentId: string): Promise<any> {
-    try {
-      // Dynamically import the agent from yui-protocol
-      const agentMap: Record<string, string> = {
-        'eiro-001': 'agent-eiro',
-        'hekito-001': 'agent-hekito',
-        'kanshi-001': 'agent-kanshi',
-        'yoga-001': 'agent-yoga',
-        'yui-001': 'agent-yui'
-      };
-
-      const agentModule = agentMap[agentId];
-      if (!agentModule) {
-        log.warn('YuiConsultation', `Unknown agent ID: ${agentId}, using default`);
-        return null;
-      }
-
-      // Import agent configuration from yui-protocol (use dist for built files)
-      const module = await import(`../../../yui-protocol/dist/agents/${agentModule}.js`);
-
-      // Get the agent class (e.g., agent-eiro -> EiroAgent, with capitalized first letter)
-      const baseName = agentModule.replace('agent-', '');
-      const agentClassName = baseName.charAt(0).toUpperCase() + baseName.slice(1) + 'Agent';
-
-      log.info('YuiConsultation', `Loading agent class: ${agentClassName} from module: ${agentModule}`);
-      log.info('YuiConsultation', `Available exports: ${Object.keys(module).join(', ')}`);
-
-      const AgentClass = module[agentClassName];
-
-      if (!AgentClass) {
-        log.warn('YuiConsultation', `Agent class not found for ${agentModule}, tried: ${agentClassName}`);
-        return null;
-      }
-
-      // Create agent instance to access config
-      const agentInstance = new AgentClass();
-      const config = agentInstance.agent; // BaseAgent stores config in .agent property
-
-      if (!config) {
-        log.warn('YuiConsultation', `Config not accessible from agent instance: ${agentModule}`);
-        return null;
-      }
-
-      log.info('YuiConsultation', `Successfully loaded config for ${agentId}: ${config.name}`);
-      return config;
-    } catch (error) {
-      log.error('YuiConsultation', `Failed to load Yui agent ${agentId}`, error);
-      return null;
-    }
-  }
-
-  /**
    * Get agent personality configuration from Yui Protocol
    */
   static async getAgentPersonality(agentId: string): Promise<{
@@ -251,14 +198,14 @@ export class YuiConsultation {
     thinkingPatterns?: string;
     interactionPatterns?: string;
   }> {
-    const config = await this.loadYuiAgent(agentId);
+    const config = await loadYuiAgentConfig(agentId);
 
     if (config) {
       return {
         name: config.name,
         personality: config.personality,
         tone: config.tone,
-        style: config.communicationStyle || config.style,
+        style: (config.communicationStyle || config.style) as string,
         specificBehaviors: config.specificBehaviors,
         thinkingPatterns: config.thinkingPatterns,
         interactionPatterns: config.interactionPatterns
@@ -368,7 +315,7 @@ ${question}
    * Execute consultation with selected Yui agent
    */
   static async consultYuiAgent(
-    aiExecutor: AIExecutor,
+    aiExecutor: AIExecutorPort,
     agentId: string,
     question: string,
     category: string,

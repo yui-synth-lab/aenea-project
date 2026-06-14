@@ -24,10 +24,10 @@ import {
   TriggerSource,
   TriggerContext,
   UnresolvedIdea,
-  LearnedPattern,
-  EmotionalState,
-  SystemState
+  LearnedPattern
 } from '../../types/aenea-types.js';
+
+import { EmotionalState, SystemState } from '../../types/shared.js';
 
 import {
   ConsciousnessConfig,
@@ -37,15 +37,9 @@ import {
 // RAG integration for knowledge-grounded question generation
 import { isRAGEnabled, searchRAG } from '../../rag/index.js';
 
-import type { DatabaseManager } from '../../server/database-manager.js';
+import type { ThoughtStore, BeliefStore, IdeaStore, QuestionStore } from '../ports/stores.js';
+import type { AIExecutorPort } from '../ports/ai-executor.js';
 import type { QuestionCategorizer } from '../../utils/question-categorizer.js';
-
-/**
- * AI Agent interface for trigger generation
- */
-interface AIAgent {
-  execute(prompt: string, systemPrompt: string): Promise<{ success: boolean; content: string }>;
-}
 
 /**
  * Event emitter callback type
@@ -114,9 +108,9 @@ export class InternalTriggerGenerator {
   private adaptiveCooldownHistory: AdaptiveCooldownEntry[];
 
   // Dependency injection
-  private databaseManager: DatabaseManager;
+  private databaseManager: ThoughtStore & BeliefStore & IdeaStore & QuestionStore;
   private questionCategorizer: QuestionCategorizer;
-  private aiAgent: AIAgent | null;
+  private aiAgent: AIExecutorPort | null;
   private emitEvent: EventEmitter;
 
   // Manual trigger queue
@@ -124,9 +118,9 @@ export class InternalTriggerGenerator {
 
   constructor(
     config: ConsciousnessConfig,
-    databaseManager: DatabaseManager,
+    databaseManager: ThoughtStore & BeliefStore & IdeaStore & QuestionStore,
     questionCategorizer: QuestionCategorizer,
-    aiAgent: AIAgent | null = null,
+    aiAgent: AIExecutorPort | null = null,
     emitEvent: EventEmitter = () => {}
   ) {
     // Accept missing triggerGeneration by providing defaults for dev build

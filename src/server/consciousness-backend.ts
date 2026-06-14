@@ -3,7 +3,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { log } from './logger.js';
+import { log } from '../platform/logger.js';
 import { DatabaseManager } from './database-manager.js';
 import { createAIExecutor, AIExecutor } from './ai-executor.js';
 import { getEnergyManager, EnergyManager } from '../utils/energy-management.js';
@@ -14,8 +14,8 @@ import DPDAssessmentStage from '../aenea/stages/dpd-assessors.js';
 import CompilerStage from '../aenea/stages/compiler.js';
 import ScribeStage from '../aenea/stages/scribe.js';
 import WeightUpdateStage from '../aenea/stages/weight-update.js';
-import { StructuredThought, MutualReflection, AuditorResult, SynthesisResult, DocumentationResult, InternalTrigger } from '../types/aenea-types.js';
-import { DPDScores, DPDWeights, ImpactAssessment } from '../types/dpd-types.js';
+import { InternalTrigger } from '../types/aenea-types.js';
+import { DPDScores, DPDWeights } from '../types/dpd-types.js';
 import { MemoryConsolidator } from '../aenea/memory/memory-consolidator.js';
 import { CoreBeliefs } from '../aenea/memory/core-beliefs.js';
 import { theoriaConfig } from '../aenea/agents/theoria.js';
@@ -28,57 +28,24 @@ import { YuiAgentsBridge, createYuiAgentsBridge, InternalDialogueSession } from 
 import { ContentCleanupService } from './content-cleanup-service.js';
 import { QuestionCategorizer, createQuestionCategorizer } from '../utils/question-categorizer.js';
 import { InternalTriggerGenerator } from '../aenea/core/internal-trigger.js';
-import { parseJsonArray } from '../utils/json-parser.js';
 import { SomniaConsciousness } from '../aenea/somnia/consciousness.js';
-import { createSOMNIAQualiaPrompt, SOMNIA_QUALIA_SYSTEM_PROMPT } from '../aenea/templates/prompts.js';
-import { emotiveSync, reflectiveReturn } from '../aenea/integration/saip.js';
+import { reflectiveReturn } from '../aenea/integration/saip.js';
 import { synchronizeEnergy } from '../aenea/integration/energy-sync.js';
 import { SomniaState } from '../types/somnia-types.js';
 import { LifespanManager } from '../aenea/mortality/lifespan-manager.js';
 import { AgingEngine } from '../aenea/mortality/aging-engine.js';
 import { MortalityInjector } from '../aenea/mortality/mortality-injector.js';
 import { DeathHandler } from '../aenea/mortality/death-handler.js';
+import { IntrospectionService } from './services/introspection-service.js';
+import { StimulusDialogueService } from './services/stimulus-dialogue-service.js';
+import { ThoughtPipeline } from './services/thought-pipeline.js';
+import { SleepService } from './services/sleep-service.js';
+import type { ConsciousnessInternals, ConsciousnessState, ThoughtCycle } from './services/consciousness-internals.js';
 
-interface ThoughtCycle {
-  id: string;
-  timestamp: number;
-  trigger: InternalTrigger;
-  thoughts: StructuredThought[];
-  mutualReflections?: MutualReflection[];  // Array of reflections from S2
-  auditorResult?: AuditorResult;
-  dpdScores?: DPDScores;
-  impactAssessment?: ImpactAssessment;  // Impact assessment from S4
-  synthesis?: SynthesisResult;
-  documentation?: DocumentationResult;
-  dpdWeights?: DPDWeights;
-  status: 'processing' | 'completed' | 'failed';
-  duration?: number;
-  totalEnergy: number;
-  totalStages: number;
-}
+export type { ConsciousnessState } from './services/consciousness-internals.js';
 
-export interface ConsciousnessState {
-  systemClock: number;
-  energy: number;
-  isRunning: boolean;
-  isPaused: boolean;
-  isProcessingCycle?: boolean;
-  totalQuestions: number;
-  totalThoughts: number;
-  lastActivity: string;
-  dpdWeights: DPDWeights;
-  somniaState?: SomniaState;
-  mortality?: {
-    instanceId: string;
-    lifespanMax: number;
-    currentCycle: number;
-    vitality: number;
-    phase: string;
-    mode: 'A' | 'B';
-    remaining: number;
-    isAlive: boolean;
-  };
-}
+// ThoughtCycle is defined in ./services/consciousness-internals.ts and
+// imported above to avoid a facade<->service import cycle.
 
 class ConsciousnessBackend extends EventEmitter {
   private systemClock: number;
@@ -147,6 +114,13 @@ class ConsciousnessBackend extends EventEmitter {
   private lifespanManager!: LifespanManager;
   private mortalityInjector!: MortalityInjector;
   private deathHandler!: DeathHandler;
+
+  // Extracted services (Phase 5) + internal accessor adapter
+  private internals!: ConsciousnessInternals;
+  private introspectionService!: IntrospectionService;
+  private stimulusDialogueService!: StimulusDialogueService;
+  private thoughtPipeline!: ThoughtPipeline;
+  private sleepService!: SleepService;
 
   constructor() {
     super(); // Call EventEmitter constructor
@@ -345,6 +319,52 @@ class ConsciousnessBackend extends EventEmitter {
       lastActivity: new Date().toISOString()
     };
 
+    // Internal accessor adapter for extracted services (Phase 5).
+    // Exposes the facade's shared state/collaborators as live views so services
+    // remain stateless behavior modules. Not part of the external API.
+    const self = this;
+    this.internals = {
+      emit: (event: string, ...args: any[]) => self.emit(event, ...args),
+      get systemClock() { return self.systemClock; },
+      get isRunning() { return self.isRunning; },
+      get isPaused() { return self.isPaused; },
+      get isProcessingCycle() { return self.isProcessingCycle; },
+      get dpdWeights() { return self.dpdWeights; },
+      set dpdWeights(v) { self.dpdWeights = v; },
+      get previousDpdScores() { return self.previousDpdScores; },
+      set previousDpdScores(v) { self.previousDpdScores = v; },
+      set systemClock(v: number) { self.systemClock = v; },
+      get lastConsolidationTime() { return self.lastConsolidationTime; },
+      set lastConsolidationTime(v: number) { self.lastConsolidationTime = v; },
+      get pendingManualTrigger() { return self.pendingManualTrigger; },
+      set pendingManualTrigger(v: InternalTrigger | null) { self.pendingManualTrigger = v; },
+      get databaseManager() { return self.databaseManager; },
+      get energyManager() { return self.energyManager; },
+      get somnia() { return self.somnia; },
+      get coreBeliefs() { return self.coreBeliefs; },
+      get memoryConsolidator() { return self.memoryConsolidator; },
+      get lifespanManager() { return self.lifespanManager; },
+      get mortalityInjector() { return self.mortalityInjector; },
+      get deathHandler() { return self.deathHandler; },
+      get yuiAgentsBridge() { return self.yuiAgentsBridge; },
+      get agents() { return self.agents; },
+      get individualThoughtStage() { return self.individualThoughtStage; },
+      get mutualReflectionStage() { return self.mutualReflectionStage; },
+      get auditorStage() { return self.auditorStage; },
+      get dpdAssessmentStage() { return self.dpdAssessmentStage; },
+      get compilerStage() { return self.compilerStage; },
+      get scribeStage() { return self.scribeStage; },
+      get weightUpdateStage() { return self.weightUpdateStage; },
+      get contentCleanup() { return self.contentCleanup; },
+      get questionCategorizer() { return self.questionCategorizer; },
+      get triggerGenerator() { return self.triggerGenerator; },
+      saveConsciousnessState: () => self.saveConsciousnessState()
+    };
+    this.introspectionService = new IntrospectionService(this.internals);
+    this.stimulusDialogueService = new StimulusDialogueService(this.internals);
+    this.thoughtPipeline = new ThoughtPipeline(this.internals);
+    this.sleepService = new SleepService(this.internals);
+
     log.info('Consciousness', 'Backend initialized');
     log.info('Consciousness', 'Consciousness initialized but not started - use /api/consciousness/start to begin');
   }
@@ -450,19 +470,13 @@ class ConsciousnessBackend extends EventEmitter {
   private loadQuestionHistoryIntoCategorizer(): void {
     try {
       // Load recent questions from database (last 100) to populate categorizer history
-      // Use direct SQL query to get questions ordered by timestamp
-      const db = (this.databaseManager as any).db;
-      if (!db) {
+      // ordered by timestamp DESC via the ThoughtRepository facade method.
+      if (!this.databaseManager.isConnected()) {
         log.warn('Consciousness', 'Database not ready for loading question history');
         return;
       }
 
-      const recentQuestions = db.prepare(`
-        SELECT id, question, category, importance, timestamp
-        FROM questions
-        ORDER BY timestamp DESC
-        LIMIT 100
-      `).all();
+      const recentQuestions = this.databaseManager.getRecentQuestionRows(100);
 
       if (recentQuestions && recentQuestions.length > 0) {
         log.info('Consciousness', `📚 Loading ${recentQuestions.length} questions into categorizer for diversity tracking...`);
@@ -598,37 +612,11 @@ class ConsciousnessBackend extends EventEmitter {
   // ============================================================================
 
   getState(): ConsciousnessState {
-    const energyState = this.energyManager.getEnergyState();
-
-    // Get actual counts from database
-    const dbStats = this.databaseManager.getStats();
-
-    return {
-      systemClock: this.systemClock,
-      energy: energyState.available,
-      isRunning: this.isRunning,
-      isPaused: this.isPaused,
-      isProcessingCycle: this.isProcessingCycle,
-      totalQuestions: dbStats.questions || 0,
-      totalThoughts: dbStats.thought_cycles || 0,
-      lastActivity: new Date().toISOString(),
-      dpdWeights: this.dpdWeights,
-      somniaState: this.somnia.getState(),
-      mortality: this.lifespanManager ? {
-        instanceId: this.lifespanManager.getInstanceId(),
-        lifespanMax: this.lifespanManager.getLifespanMax(),
-        currentCycle: this.lifespanManager.getCurrentCycle(),
-        vitality: this.lifespanManager.getVitality(),
-        phase: this.lifespanManager.getCurrentPhase(),
-        mode: this.lifespanManager.getMode(),
-        remaining: this.lifespanManager.getRemaining(),
-        isAlive: this.lifespanManager.isAlive()
-      } : undefined
-    };
+    return this.introspectionService.getState();
   }
 
   getSomniaState(): SomniaState {
-    return this.somnia.getState();
+    return this.introspectionService.getSomniaState();
   }
 
   getDatabaseManager() {
@@ -860,7 +848,7 @@ class ConsciousnessBackend extends EventEmitter {
       log.info('EnergyWait', `Energy sufficient for thought cycle (${energyState.available.toFixed(1)}/${minimumEnergyRequired}), proceeding...`);
 
       // Generate internal trigger
-      const trigger = await this.generateInternalTrigger();
+      const trigger = await this.thoughtPipeline.generateInternalTrigger();
       if (!trigger) {
         return;
       }
@@ -921,7 +909,7 @@ class ConsciousnessBackend extends EventEmitter {
         // Run asynchronously so it doesn't block the thought cycle completely,
         // or await it if we want the current thought cycle to use it immediately.
         // For interoceptive feelings, blocking briefly is okay to provide context.
-        await this.generateSOMNIAQualia();
+        await this.thoughtPipeline.generateSOMNIAQualia();
       }
 
       // Insert progressive timing slowdown for aging
@@ -932,7 +920,7 @@ class ConsciousnessBackend extends EventEmitter {
       }
 
       // Execute thought cycle
-      await this.executeAdaptiveThoughtCycle(trigger);
+      await this.thoughtPipeline.executeAdaptiveThoughtCycle(trigger);
 
       // Persist the updated mortality state
       this.databaseManager.updateMortalityState(this.lifespanManager.getInstanceId(), {
@@ -983,959 +971,6 @@ class ConsciousnessBackend extends EventEmitter {
     }
   }
 
-  private async executeAdaptiveThoughtCycle(trigger: InternalTrigger): Promise<void> {
-    const thoughtCycle: ThoughtCycle = {
-      id: `cycle_${Date.now()}`,
-      timestamp: Date.now(),
-      trigger,
-      thoughts: [],
-      status: 'processing',
-      totalEnergy: 0,
-      totalStages: 0
-    };
-
-    // Adaptive execution based on energy availability
-    const energyState = this.energyManager.getEnergyState();
-    let executionMode = 'full';
-    let requiredEnergy = 3.3; // Critical mode minimum
-
-    if (energyState.available < 20) {
-      executionMode = 'critical'; // Only essential stages
-      requiredEnergy = 3.3; // S0(1.0) + S1(1.0) + S5(0.8) + S6(0.3) + U(0.2)
-    } else if (energyState.available < 50) {
-      executionMode = 'low'; // Reduced processing
-      requiredEnergy = 4.8; // Critical + S2(0.5) + S3(0.5) + S4(0.5)
-    } else {
-      executionMode = 'full';
-      requiredEnergy = 5.8; // All stages at full capacity
-    }
-
-    // Reserve energy for the entire thought cycle to prevent interruption
-    const energyReserved = this.energyManager.reserveEnergy(requiredEnergy, `thought_cycle_${thoughtCycle.id}`);
-
-    if (!energyReserved) {
-      log.warn('ThoughtCycle', `⚠️ Failed to reserve ${requiredEnergy} energy - aborting cycle`);
-      return;
-    }
-
-    log.info('ThoughtCycle', `${executionMode === 'full' ? 'Full' : executionMode === 'low' ? 'Low' : 'Critical'} energy mode: reserved ${requiredEnergy.toFixed(1)} energy for complete cycle`);
-
-    try {
-      // S0: Trigger Generation (already completed, consume energy)
-      // Emit stage start event
-      this.emit('stageChanged', {
-        stage: 'S0',
-        name: 'Internal Trigger Generation',
-        status: 'in_progress',
-        timestamp: Date.now()
-      });
-
-      const s0EnergyCost = 1.0;
-      await this.energyManager.consumeEnergy(s0EnergyCost, 'stage_S0');
-      thoughtCycle.totalEnergy += s0EnergyCost;
-      thoughtCycle.totalStages++;
-      log.info('StageS0', `Internal trigger generated: "${trigger.question.substring(0, 60)}..."`);
-
-      // Emit stage completion event
-      this.emit('stageCompleted', {
-        stage: 'S0',
-        name: 'Internal Trigger Generation',
-        status: 'completed',
-        timestamp: Date.now(),
-        question: trigger.question.substring(0, 100),
-        category: trigger.category
-      });
-
-      // Stage execution based on energy mode
-      await this.executeIndividualThought(thoughtCycle);
-
-      if (executionMode !== 'critical') {
-        await this.executeMutualReflection(thoughtCycle);
-        await this.executeAuditor(thoughtCycle);
-        await this.executeDPDAssessment(thoughtCycle);
-      } else {
-        // Critical mode: Use fast heuristic DPD scoring
-        await this.executeFallbackDPDAssessment(thoughtCycle);
-      }
-
-      await this.executeCompiler(thoughtCycle);
-      await this.executeScribe(thoughtCycle);
-      await this.executeWeightUpdate(thoughtCycle);
-
-      // Record significant thoughts (with content cleanup)
-      await this.recordSignificantThoughtsFromCycle(thoughtCycle);
-
-      // Extract unresolved ideas from this cycle
-      try {
-        this.extractUnresolvedIdeasFromCycle(thoughtCycle);
-        console.log(`[DEBUG] Successfully extracted unresolved ideas from cycle`);
-      } catch (error) {
-        console.error(`[DEBUG] Error extracting unresolved ideas:`, error);
-        // Continue execution even if this fails
-      }
-
-      console.log(`[DEBUG] About to increment systemClock from ${this.systemClock} to ${this.systemClock + 1}`);
-      this.systemClock++;
-      console.log(`[DEBUG] SystemClock incremented to: ${this.systemClock}`);
-
-      thoughtCycle.status = 'completed';
-      thoughtCycle.duration = Date.now() - thoughtCycle.timestamp;
-
-      // Release reserved energy and consume only what was actually used
-      // The individual stage executions have already consumed energy,
-      // so we just release the reservation
-      const releasedEnergy = this.energyManager.releaseReservedEnergy();
-      log.info('ThoughtCycle', `✅ Cycle completed - released ${releasedEnergy.toFixed(1)} reserved energy, actual consumption tracked per stage`);
-
-      // Save consciousness state
-      this.saveConsciousnessState();
-
-      // Save completed thought cycle to database
-      this.databaseManager.saveThoughtCycle(thoughtCycle);
-
-      // Periodic memory consolidation (every 5 cycles)
-      // Sleep Mode provides deeper consolidation and belief merging
-      await this.performPeriodicConsolidation();
-
-      // Emit completion event with minimal essential data (not full thoughtCycle)
-      const currentState = this.getState();
-      const statistics = this.getStatistics();
-      this.emit('thoughtCycleCompleted', {
-        id: thoughtCycle.id,
-        timestamp: thoughtCycle.timestamp,
-        status: thoughtCycle.status,
-        duration: thoughtCycle.duration,
-        totalEnergy: thoughtCycle.totalEnergy,
-        totalStages: thoughtCycle.totalStages,
-        // Minimal trigger info
-        trigger: {
-          question: thoughtCycle.trigger.question.substring(0, 100),
-          category: thoughtCycle.trigger.category
-        },
-        // DPD scores (numeric only)
-        dpdScores: thoughtCycle.dpdScores ? {
-          empathy: thoughtCycle.dpdScores.empathy.toFixed(3),
-          coherence: thoughtCycle.dpdScores.coherence.toFixed(3),
-          dissonance: thoughtCycle.dpdScores.dissonance.toFixed(3),
-          weightedTotal: thoughtCycle.dpdScores.weightedTotal.toFixed(3)
-        } : null,
-        // Current DPD weights
-        dpdWeights: {
-          empathy: this.dpdWeights.empathy.toFixed(3),
-          coherence: this.dpdWeights.coherence.toFixed(3),
-          dissonance: this.dpdWeights.dissonance.toFixed(3),
-          version: this.dpdWeights.version
-        },
-        // System statistics
-        systemClock: currentState.systemClock,
-        totalQuestions: statistics.totalQuestions,
-        totalThoughts: statistics.totalThoughts,
-        averageConfidence: statistics.averageConfidence,
-        energy: currentState.energy
-      });
-
-    } catch (error) {
-      // Release reserved energy even on failure
-      const releasedEnergy = this.energyManager.releaseReservedEnergy();
-      log.warn('ThoughtCycle', `❌ Cycle failed - released ${releasedEnergy.toFixed(1)} reserved energy`);
-
-      thoughtCycle.status = 'failed';
-      log.error('Consciousness', 'Thought cycle failed', error);
-      this.emit('thoughtCycleFailed', { id: thoughtCycle.id, error: (error as Error).message });
-    }
-  }
-
-  // ============================================================================
-  // Stage Execution Methods
-  // ============================================================================
-
-  private async executeIndividualThought(thoughtCycle: ThoughtCycle): Promise<void> {
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'S1',
-      name: 'Individual Thought',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 1.0;
-    await this.energyManager.consumeEnergy(energyCost, 'stage_S1');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    const somniaQualia = this.somnia.getState().cognitive.qualia;
-    const thoughts = await this.individualThoughtStage.run(thoughtCycle, somniaQualia);
-    thoughtCycle.thoughts = thoughts;
-
-    // Emit stage completion event
-    this.emit('stageCompleted', {
-      stage: 'S1',
-      name: 'Individual Thought',
-      status: 'completed',
-      timestamp: Date.now(),
-      thoughtCount: thoughts.length
-    });
-  }
-
-  private async executeMutualReflection(thoughtCycle: ThoughtCycle): Promise<void> {
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'S2',
-      name: 'Mutual Reflection',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 0.5;
-    await this.energyManager.consumeEnergy(energyCost, 'stage_S2');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    const reflections = await this.mutualReflectionStage.run(thoughtCycle.thoughts);
-
-    // Store reflections array for S5 Compiler to use
-    thoughtCycle.mutualReflections = reflections;
-
-    // Convert reflections to the expected format for event emission
-    const crossAgentFeedback = reflections.map(r => ({
-      fromAgent: r.reflectorId,
-      toAgent: r.targetThoughts[0],
-      content: r.insights.join(' '),
-      sentiment: 'constructive'
-    }));
-
-    const conflictPoints = reflections.flatMap(r => r.weaknesses || []);
-    const consensusPoints = reflections.flatMap(r => r.strengths || []);
-
-    log.info('StageS2', `Mutual Reflection completed with ${reflections.length} reflections`);
-
-    // Emit stage completion event for UI (minimal data)
-    const avgConfidence = reflections.length > 0
-      ? reflections.reduce((sum, r) => sum + r.confidence, 0) / reflections.length
-      : 0.5;
-
-    this.emit('stageCompleted', {
-      stage: 'S2',
-      name: 'Mutual Reflection',
-      status: 'completed',
-      timestamp: Date.now(),
-      feedbackCount: crossAgentFeedback.length,
-      conflictCount: conflictPoints.length,
-      consensusCount: consensusPoints.length,
-      // Only send preview of first 2 items, not all feedback
-      feedbackPreviews: crossAgentFeedback.slice(0, 2).map(feedback => ({
-        fromAgent: feedback.fromAgent,
-        toAgent: feedback.toAgent,
-        preview: feedback.content.substring(0, 80) + '...',
-        sentiment: feedback.sentiment
-      })),
-      conflictPreview: conflictPoints.length > 0 ? conflictPoints[0].substring(0, 80) + '...' : null,
-      consensusPreview: consensusPoints.length > 0 ? consensusPoints[0].substring(0, 80) + '...' : null
-    });
-  }
-
-  private async executeAuditor(thoughtCycle: ThoughtCycle): Promise<void> {
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'S3',
-      name: 'Auditor',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 0.5;
-    await this.energyManager.consumeEnergy(energyCost, 'stage_S3');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    const auditorResult = await this.auditorStage.run(
-      thoughtCycle.thoughts,
-      this.agents
-    );
-
-    thoughtCycle.auditorResult = auditorResult;
-
-    log.info('StageS3', 'Auditor completed');
-
-    // Emit stage completion event for UI (minimal data)
-    this.emit('stageCompleted', {
-      stage: 'S3',
-      name: 'Auditor',
-      status: 'completed',
-      timestamp: Date.now(),
-      safetyScore: auditorResult.safetyScore,
-      approved: auditorResult.approved,
-      warningCount: (auditorResult as any).warnings?.length || 0,
-      recommendationCount: auditorResult.recommendations?.length || 0,
-      // Only send preview of first item, not all warnings/recommendations
-      warningPreview: (auditorResult as any).warnings?.length > 0 ?
-        (auditorResult as any).warnings[0].substring(0, 80) + '...' : null,
-      recommendationPreview: auditorResult.recommendations?.length > 0 ?
-        auditorResult.recommendations[0].substring(0, 80) + '...' : null
-    });
-  }
-
-  private async executeDPDAssessment(thoughtCycle: ThoughtCycle): Promise<void> {
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'S4',
-      name: 'DPD Assessment',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 0.5;
-    await this.energyManager.consumeEnergy(energyCost, 'stage_S4');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    // Emotive Sync from Somnia
-    const currentState = this.somnia.getState();
-    const somniaInfluence = emotiveSync(currentState);
-
-    this.databaseManager.saveSomniaSaipEvent({
-      eventType: 'emotive_sync',
-      somniaState: currentState,
-      influence: somniaInfluence,
-      impactScore: (somniaInfluence.empathy + somniaInfluence.coherence + somniaInfluence.dissonance) / 3
-    });
-
-    // Use the dedicated DPDAssessmentStage implementation
-    const result = await this.dpdAssessmentStage.run(
-      thoughtCycle.thoughts,
-      thoughtCycle.mutualReflections || [],
-      thoughtCycle.auditorResult as any || {
-        risk: 'LOW' as any,
-        safetyScore: 0.8,
-        ethicsScore: 0.8,
-        concerns: [],
-        recommendations: []
-      },
-      thoughtCycle.trigger, // Pass trigger for impact assessment
-      somniaInfluence // Pass somnia influence
-    );
-
-    // Apply DPD score biases from aging
-    const biasedScores = AgingEngine.applyDPDBiases(
-      result.scores,
-      this.lifespanManager.getVitality()
-    );
-    const weightedTotal = biasedScores.empathy * result.weights.empathy +
-                          biasedScores.coherence * result.weights.coherence +
-                          biasedScores.dissonance * result.weights.dissonance;
-    const finalScores = {
-      ...result.scores,
-      ...biasedScores,
-      weightedTotal
-    };
-
-    thoughtCycle.dpdScores = finalScores;
-    thoughtCycle.impactAssessment = result.assessment.impactAssessment; // Store impact assessment
-    this.dpdWeights = result.weights; // Update current weights
-    this.previousDpdScores = finalScores; // Cache for SAIP reflective return
-
-    console.log(`[Backend S4] DPD Scores calculated: empathy=${result.scores.empathy.toFixed(3)}, coherence=${result.scores.coherence.toFixed(3)}, dissonance=${result.scores.dissonance.toFixed(3)}, weighted=${result.scores.weightedTotal.toFixed(3)} at ${new Date().toISOString()}`);
-
-    if (result.assessment.impactAssessment?.isParadigmShift) {
-      console.log(`[Backend S4] ⚡ PARADIGM SHIFT DETECTED: ${result.assessment.impactAssessment.reasoning}`);
-    }
-
-    log.info('StageS4', `DPD Assessment completed at ${new Date().toISOString()}`);
-
-    // Emit stage completion event for UI (with size limits to prevent JSON errors)
-    this.emit('stageCompleted', {
-      stage: 'S4',
-      name: 'DPD Assessment',
-      status: 'completed',
-      timestamp: Date.now(),
-      // Only include essential DPD scores (not the full assessment object)
-      empathy: result.scores.empathy.toFixed(3),
-      coherence: result.scores.coherence.toFixed(3),
-      dissonance: result.scores.dissonance.toFixed(3),
-      weightedTotal: result.scores.weightedTotal.toFixed(3),
-      currentWeights: {
-        empathy: this.dpdWeights.empathy.toFixed(3),
-        coherence: this.dpdWeights.coherence.toFixed(3),
-        dissonance: this.dpdWeights.dissonance.toFixed(3)
-      }
-    });
-  }
-
-  /**
-   * Fallback DPD Assessment for critical energy mode (heuristic-based, fast)
-   */
-  private async executeFallbackDPDAssessment(thoughtCycle: ThoughtCycle): Promise<void> {
-    console.log(`[Backend S4-Fallback] Starting fallback DPD scoring (critical mode) at ${new Date().toISOString()}`);
-
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'S4',
-      name: 'DPD Assessment (Heuristic)',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 0.1; // Much cheaper than AI-based assessment (0.5)
-    await this.energyManager.consumeEnergy(energyCost, 'stage_S4_fallback');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    // Calculate heuristic-based DPD scores
-    const scores = this.calculateFallbackDPDScores(thoughtCycle);
-    const biasedScores = AgingEngine.applyDPDBiases(
-      scores,
-      this.lifespanManager.getVitality()
-    );
-    const weightedTotal = biasedScores.empathy * this.dpdWeights.empathy +
-                          biasedScores.coherence * this.dpdWeights.coherence +
-                          biasedScores.dissonance * this.dpdWeights.dissonance;
-    const finalScores = {
-      ...scores,
-      ...biasedScores,
-      weightedTotal,
-      timestamp: Date.now(),
-      context: {
-        trigger: thoughtCycle.trigger.question,
-        thoughtCount: thoughtCycle.thoughts.length,
-        energyMode: 'critical' as const
-      }
-    };
-    thoughtCycle.dpdScores = finalScores;
-
-    log.info('StageS4-Fallback', `Heuristic DPD scores: empathy=${scores.empathy.toFixed(3)}, coherence=${scores.coherence.toFixed(3)}, dissonance=${scores.dissonance.toFixed(3)}`);
-
-    // Emit stage completion event
-    this.emit('stageCompleted', {
-      stage: 'S4',
-      name: 'DPD Assessment (Heuristic)',
-      status: 'completed',
-      timestamp: Date.now(),
-      empathy: scores.empathy.toFixed(3),
-      coherence: scores.coherence.toFixed(3),
-      dissonance: scores.dissonance.toFixed(3),
-      weightedTotal: scores.weightedTotal.toFixed(3),
-      currentWeights: {
-        empathy: this.dpdWeights.empathy.toFixed(3),
-        coherence: this.dpdWeights.coherence.toFixed(3),
-        dissonance: this.dpdWeights.dissonance.toFixed(3)
-      },
-      method: 'heuristic'
-    });
-  }
-
-  /**
-   * Calculate DPD scores using keyword-based heuristics (no AI)
-   */
-  private calculateFallbackDPDScores(thoughtCycle: ThoughtCycle): import('../types/dpd-types.js').DPDScores {
-    const thoughts = thoughtCycle.thoughts || [];
-
-    // Combine all thought content
-    const allContent = thoughts.map(t => t.content || '').join(' ').toLowerCase();
-
-    if (!allContent || allContent.length === 0) {
-      // Default scores if no content
-      return {
-        empathy: 0.5,
-        coherence: 0.5,
-        dissonance: 0.5,
-        weightedTotal: 0.5,
-        timestamp: Date.now(),
-        context: {
-          trigger: thoughtCycle.trigger.question,
-          thoughtCount: 0,
-          energyMode: 'critical'
-        }
-      };
-    }
-
-    // Empathy keywords (Japanese) - 共感、感情、他者理解
-    const empathyKeywords = [
-      '感じ', '感情', '共感', '理解', '他者', '繋がり', '心', '優しさ', '思いやり',
-      '感動', '愛', '絆', '寄り添', '受け入れ', '尊重', '関係', '人間', '対話'
-    ];
-
-    // Coherence keywords (Japanese) - 論理、一貫性、体系性
-    const coherenceKeywords = [
-      '論理', '一貫', '体系', '秩序', '統合', '構造', '整合', '合理',
-      'システム', '法則', '原理', '理性', '分析', '因果', '関連', '整理'
-    ];
-
-    // Dissonance keywords (Japanese) - 矛盾、葛藤、疑問
-    const dissonanceKeywords = [
-      '矛盾', '葛藤', '疑問', 'しかし', 'ただし', '対立', '問題', '不協和',
-      '悩み', '迷い', 'なぜ', '疑い', '違和感', '不安', 'ジレンマ', '対照'
-    ];
-
-    // Count keyword occurrences
-    const empathyCount = this.countKeywords(allContent, empathyKeywords);
-    const coherenceCount = this.countKeywords(allContent, coherenceKeywords);
-    const dissonanceCount = this.countKeywords(allContent, dissonanceKeywords);
-
-    // Normalize based on content length (keywords per 100 characters)
-    const contentLength = Math.max(100, allContent.length);
-    const normalizationFactor = contentLength / 100;
-
-    const empathyRaw = empathyCount / normalizationFactor;
-    const coherenceRaw = coherenceCount / normalizationFactor;
-    const dissonanceRaw = dissonanceCount / normalizationFactor;
-
-    // Apply sigmoid-like transformation to get 0-1 range
-    // f(x) = 1 / (1 + exp(-k*(x-threshold)))
-    // Adjusted for typical keyword counts
-    const sigmoid = (x: number, k: number = 2, threshold: number = 0.5) => {
-      return 1 / (1 + Math.exp(-k * (x - threshold)));
-    };
-
-    const empathyScore = sigmoid(empathyRaw, 1.5, 0.3);
-    const coherenceScore = sigmoid(coherenceRaw, 1.5, 0.3);
-    const dissonanceScore = sigmoid(dissonanceRaw, 1.5, 0.3);
-
-    // Calculate weighted total using current DPD weights
-    const weightedTotal = (
-      empathyScore * this.dpdWeights.empathy +
-      coherenceScore * this.dpdWeights.coherence +
-      dissonanceScore * this.dpdWeights.dissonance
-    );
-
-    log.debug('FallbackDPD', `Keyword counts: empathy=${empathyCount}, coherence=${coherenceCount}, dissonance=${dissonanceCount} (content length: ${contentLength})`);
-
-    return {
-      empathy: Math.max(0.1, Math.min(0.9, empathyScore)), // Clamp to 0.1-0.9
-      coherence: Math.max(0.1, Math.min(0.9, coherenceScore)),
-      dissonance: Math.max(0.1, Math.min(0.9, dissonanceScore)),
-      weightedTotal: Math.max(0.1, Math.min(0.9, weightedTotal)),
-      timestamp: Date.now(),
-      context: {
-        trigger: thoughtCycle.trigger.question,
-        thoughtCount: thoughtCycle.thoughts.length,
-        energyMode: 'critical'
-      }
-    };
-  }
-
-  /**
-   * Count keyword occurrences in text
-   */
-  private countKeywords(text: string, keywords: string[]): number {
-    return keywords.reduce((count, keyword) => {
-      const regex = new RegExp(keyword, 'g');
-      const matches = text.match(regex);
-      return count + (matches ? matches.length : 0);
-    }, 0);
-  }
-
-  private async executeCompiler(thoughtCycle: ThoughtCycle): Promise<void> {
-    console.log(`[Backend S5] Starting Compiler stage at ${new Date().toISOString()}`);
-
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'S5',
-      name: 'Compiler',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 0.8;
-    await this.energyManager.consumeEnergy(energyCost, 'stage_S5');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    const synthesis = await this.compilerStage.run(
-      thoughtCycle.thoughts,
-      thoughtCycle.mutualReflections || [],
-      thoughtCycle.auditorResult as any
-    );
-
-    thoughtCycle.synthesis = synthesis;
-
-    log.info('StageS5', `Compiler completed at ${new Date().toISOString()}`);
-
-    // Emit stage completion event for UI (minimal data)
-    this.emit('stageCompleted', {
-      stage: 'S5',
-      name: 'Compiler',
-      status: 'completed',
-      timestamp: Date.now(),
-      confidence: synthesis.confidence,
-      insightsCount: synthesis.keyInsights?.length || 0,
-      contradictionsCount: synthesis.contradictions?.length || 0,
-      unresolvedQuestionsCount: synthesis.unresolvedQuestions?.length || 0,
-      // Only send preview of integrated thought, not all insights
-      integratedThoughtPreview: (synthesis.integratedThought || '').substring(0, 100) + '...',
-      firstInsight: synthesis.keyInsights?.length > 0 ?
-        (typeof synthesis.keyInsights[0] === 'string' ?
-          synthesis.keyInsights[0].substring(0, 80) + '...' :
-          String(synthesis.keyInsights[0] || '')) : null
-    });
-  }
-
-  private async executeScribe(thoughtCycle: ThoughtCycle): Promise<void> {
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'S6',
-      name: 'Scribe',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 0.3;
-    await this.energyManager.consumeEnergy(energyCost, 'stage_S6');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    const documentation = await this.scribeStage.run(
-      thoughtCycle.synthesis as any,
-      thoughtCycle.dpdScores || null
-    );
-
-    thoughtCycle.documentation = documentation;
-
-    log.info('StageS6', 'Scribe completed');
-
-    // Emit stage completion event for UI (minimal data)
-    this.emit('stageCompleted', {
-      stage: 'S6',
-      name: 'Scribe',
-      status: 'completed',
-      timestamp: Date.now(),
-      narrativePreview: documentation.narrative.substring(0, 150) + '...',
-      questionsCount: documentation.futureQuestions.length,
-      philosophicalCount: documentation.philosophicalNotes.length,
-      emotionalCount: documentation.emotionalObservations.length,
-      growthCount: documentation.growthObservations.length,
-      // Only send first item from each category
-      firstPhilosophical: documentation.philosophicalNotes.length > 0 ?
-        documentation.philosophicalNotes[0].substring(0, 80) + '...' : null,
-      firstEmotional: documentation.emotionalObservations.length > 0 ?
-        documentation.emotionalObservations[0].substring(0, 80) + '...' : null,
-      firstGrowth: documentation.growthObservations.length > 0 ?
-        documentation.growthObservations[0].substring(0, 80) + '...' : null,
-      firstQuestion: documentation.futureQuestions.length > 0 ?
-        documentation.futureQuestions[0].substring(0, 100) + '...' : null
-    });
-  }
-
-  private async executeWeightUpdate(thoughtCycle: ThoughtCycle): Promise<void> {
-    // Emit stage start event
-    this.emit('stageChanged', {
-      stage: 'U',
-      name: 'Weight Update',
-      status: 'in_progress',
-      timestamp: Date.now()
-    });
-
-    const energyCost = 0.2;
-    await this.energyManager.consumeEnergy(energyCost, 'stage_U');
-    thoughtCycle.totalEnergy += energyCost;
-    thoughtCycle.totalStages++;
-
-    if (thoughtCycle.dpdScores) {
-      const updatedWeights = await this.weightUpdateStage.run(
-        thoughtCycle.dpdScores,
-        this.dpdWeights,
-        thoughtCycle.impactAssessment // Pass impact assessment for paradigm shift detection
-      );
-
-      this.dpdWeights = updatedWeights;
-      thoughtCycle.dpdWeights = { ...updatedWeights };
-
-      console.log(`DPD weights updated: empathy=${updatedWeights.empathy.toFixed(3)}, coherence=${updatedWeights.coherence.toFixed(3)}, dissonance=${updatedWeights.dissonance.toFixed(3)}`);
-
-      if (thoughtCycle.impactAssessment?.isParadigmShift) {
-        console.log(`[Backend U] ⚡ Paradigm shift perturbation applied to DPD weights`);
-      }
-
-      // Save DPD weights to database
-      this.databaseManager.saveDPDWeights(updatedWeights);
-
-      // Emit DPD update event (minimal data only)
-      this.emit('dpdUpdated', {
-        weights: {
-          empathy: updatedWeights.empathy,
-          coherence: updatedWeights.coherence,
-          dissonance: updatedWeights.dissonance,
-          version: updatedWeights.version
-        },
-        scores: thoughtCycle.dpdScores ? {
-          empathy: thoughtCycle.dpdScores.empathy,
-          coherence: thoughtCycle.dpdScores.coherence,
-          dissonance: thoughtCycle.dpdScores.dissonance,
-          weightedTotal: thoughtCycle.dpdScores.weightedTotal
-        } : null,
-        timestamp: Date.now()
-      });
-    }
-
-    log.info('StageU', 'Weight Update completed');
-
-    // Emit stage completion event
-    this.emit('stageCompleted', {
-      stage: 'U',
-      name: 'Weight Update',
-      status: 'completed',
-      timestamp: Date.now(),
-      weightsUpdated: !!thoughtCycle.dpdScores,
-      weights: this.dpdWeights,
-      version: this.dpdWeights.version,
-      empathyWeight: this.dpdWeights.empathy.toFixed(3),
-      coherenceWeight: this.dpdWeights.coherence.toFixed(3),
-      dissonanceWeight: this.dpdWeights.dissonance.toFixed(3)
-    });
-  }
-
-  // ============================================================================
-  // Memory and Learning
-  // ============================================================================
-
-  private async recordSignificantThoughtsFromCycle(thoughtCycle: ThoughtCycle): Promise<void> {
-    if (!thoughtCycle.thoughts) return;
-
-    log.info('Consciousness', `🔍 About to record significant thoughts from cycle. thoughtCycle.thoughts exists: ${!!thoughtCycle.thoughts}, length: ${thoughtCycle.thoughts.length}`);
-    log.info('Consciousness', `🔍 Checking ${thoughtCycle.thoughts.length} thoughts for significance (confidence > 0.6)`);
-
-    let significantCount = 0;
-
-    for (const [index, thought] of thoughtCycle.thoughts.entries()) {
-      log.info('Consciousness', `🔍 Thought ${index + 1}: agentId=${thought.agentId}, confidence=${thought.confidence}`);
-
-      if (thought.confidence > 0.6) {
-        log.info('Consciousness', `✅ Recording significant thought: confidence=${thought.confidence}`);
-
-        // Clean the content before saving
-        const cleanedContent = await this.contentCleanup.cleanThought(thought.content);
-
-        // Use the original question category from the trigger
-        const category = thoughtCycle.trigger?.category || 'philosophical';
-
-        this.databaseManager.recordSignificantThought({
-          id: thought.id,
-          content: cleanedContent,
-          confidence: thought.confidence,
-          significanceScore: thought.confidence,
-          agentId: thought.agentId,
-          category: category,
-          timestamp: thought.timestamp
-        });
-
-        significantCount++;
-      }
-    }
-
-    log.info('Consciousness', `💭 ${significantCount} significant thoughts recorded from current cycle`);
-    log.info('Consciousness', '🔍 Finished recording significant thoughts from cycle');
-  }
-
-  /**
-   * Validates if a text is a proper question
-   *
-   * Valid questions satisfy ONE of:
-   * 1. End with question mark (？ or ?)
-   * 2. Start with interrogative words (何、どう、なぜ、いつ、どこ、誰、どの、どれ、いかに)
-   *    - Even without question mark: "何が真実か", "どう生きるべきか"
-   *
-   * Rejected patterns:
-   * - Poetic descriptions: （指先で...）, 「静寂を破り...」
-   * - Assertions without interrogatives: 存在は記憶から生じる。
-   * - Too short (< 3 characters)
-   */
-  /**
-   * Strip Markdown decorations and split compound questions into individual ones.
-   * Handles two patterns found in LLM output:
-   *   - "** 問いA？ 問いB？"  → ["問いA？", "問いB？"]
-   *   - "1. 問いA？ 2. 問いB？" → ["問いA？", "問いB？"]
-   */
-  private sanitizeAndSplitQuestions(raw: string): string[] {
-    const cleaned = raw.replace(/\*\*/g, '').replace(/\*/g, '').trim();
-
-    // Numbered list: "1. ... 2. ..."
-    if (/\d+\.\s/.test(cleaned)) {
-      return cleaned
-        .split(/\d+\.\s+/)
-        .map(q => q.trim())
-        .filter(q => q.length >= 3);
-    }
-
-    // Multiple question marks — split at "？ " boundaries
-    const questionMarkCount = (cleaned.match(/？/g) || []).length;
-    if (questionMarkCount > 1) {
-      return cleaned
-        .split(/？\s+/)
-        .map((q, i, arr) => (i < arr.length - 1 ? q + '？' : q))
-        .map(q => q.trim())
-        .filter(q => q.length >= 3);
-    }
-
-    return [cleaned];
-  }
-
-  private isValidQuestion(text: string): boolean {
-    const trimmed = text.trim();
-
-    // Too short
-    if (trimmed.length < 3) return false;
-
-    // Reject poetic descriptions (parentheses at start)
-    if (trimmed.startsWith('（') || trimmed.startsWith('(')) return false;
-
-    // Reject quoted descriptions (often poetic)
-    if (trimmed.startsWith('「') && !trimmed.includes('？') && !trimmed.includes('?')) {
-      return false;
-    }
-
-    // Check for question mark ending (strongest signal)
-    if (trimmed.endsWith('？') || trimmed.endsWith('?')) return true;
-
-    // Check for interrogative word at start (Japanese)
-    const interrogatives = ['何', 'どう', 'なぜ', 'いつ', 'どこ', '誰', 'どの', 'どれ', 'いかに'];
-    const hasInterrogative = interrogatives.some(word => trimmed.startsWith(word));
-
-    if (hasInterrogative) {
-      // Valid question: "何が真実か", "どう生きるべきか"
-      return true;
-    }
-
-    // Reject assertions ending with period (no interrogative, no question mark)
-    if (trimmed.endsWith('。') || trimmed.endsWith('.') || trimmed.endsWith('」')) return false;
-
-    return false; // Default: not a valid question
-  }
-
-  private extractUnresolvedIdeasFromCycle(thoughtCycle: ThoughtCycle): void {
-    const unresolvedIdeas: any[] = [];
-
-    // Get existing significant thoughts to avoid logical inconsistency
-    const existingSignificantThoughts = this.databaseManager.getSignificantThoughts(100);
-    const significantQuestions = new Set(existingSignificantThoughts
-      .map(thought => thought.thought_content?.toLowerCase()?.trim())
-      .filter(content => content));
-
-    const addQuestions = (rawList: string[], idPrefix: string, importance: number, defaultCategory: string) => {
-      rawList.forEach((raw: string) => {
-        const candidates = this.sanitizeAndSplitQuestions(raw);
-        candidates.forEach(question => {
-          if (!this.isValidQuestion(question)) {
-            log.debug('Consciousness', `⚠️ Rejected non-question from ${idPrefix}: ${question.substring(0, 50)}`);
-            return;
-          }
-          if (significantQuestions.has(question.toLowerCase().trim())) {
-            log.debug('Consciousness', `⚙️ Skipping (already significant): ${question.substring(0, 50)}`);
-            return;
-          }
-          const category = this.questionCategorizer.categorizeQuestion(question).category || defaultCategory;
-          unresolvedIdeas.push({
-            id: `${idPrefix}_${Date.now()}_${Math.random()}`,
-            question,
-            category,
-            importance,
-            firstEncountered: Date.now()
-          });
-          log.debug('Consciousness', `📝 [${category}] ${question.substring(0, 60)}`);
-        });
-      });
-    };
-
-    if (thoughtCycle.synthesis?.unresolvedQuestions) {
-      addQuestions(thoughtCycle.synthesis.unresolvedQuestions, 'unresolved', 0.7, 'philosophical');
-    }
-
-    if (thoughtCycle.documentation?.futureQuestions) {
-      addQuestions(thoughtCycle.documentation.futureQuestions, 'future', 0.6, 'exploratory');
-    }
-
-    // Save to database (only non-duplicate questions that aren't already significant)
-    unresolvedIdeas.forEach(idea => {
-      this.databaseManager.addUnresolvedIdea(idea);
-    });
-
-    if (unresolvedIdeas.length > 0) {
-      log.info('Consciousness', `🧩 Added ${unresolvedIdeas.length} genuinely unresolved ideas to database`);
-    }
-  }
-
-  // ============================================================================
-  // Category Diversity Helpers
-  // ============================================================================
-
-  private getCategoryDistribution(): Record<string, number> {
-    const allQuestions = this.databaseManager.getAllQuestions();
-    const distribution: Record<string, number> = {};
-
-    for (const q of allQuestions) {
-      distribution[q.category] = (distribution[q.category] || 0) + 1;
-    }
-
-    return distribution;
-  }
-
-  private getRecentCategories(limit: number = 20): string[] {
-    const recentQuestions = this.databaseManager.getAllQuestions().slice(-limit);
-    return recentQuestions.map(q => q.category);
-  }
-
-  private getUnderrepresentedCategories(distribution: Record<string, number>): string[] {
-    const allCategories = ['existential', 'epistemological', 'consciousness', 'ethical', 'creative', 'metacognitive', 'temporal', 'paradoxical', 'ontological'];
-    const total = Object.values(distribution).reduce((sum, count) => sum + count, 0);
-    const avgPerCategory = total / allCategories.length;
-
-    // Categories with less than 70% of average usage
-    const underrepresented = allCategories.filter(cat => {
-      const count = distribution[cat] || 0;
-      return count < avgPerCategory * 0.7;
-    });
-
-    // Sort by usage (least used first)
-    return underrepresented.sort((a, b) => (distribution[a] || 0) - (distribution[b] || 0));
-  }
-
-  private getCategoriesToAvoid(recentCategories: string[], distribution: Record<string, number>): string[] {
-    const total = Object.values(distribution).reduce((sum, count) => sum + count, 0);
-    const avgPerCategory = total / 9; // 9 categories
-
-    // Count recent usage
-    const recentCounts: Record<string, number> = {};
-    for (const cat of recentCategories) {
-      recentCounts[cat] = (recentCounts[cat] || 0) + 1;
-    }
-
-    // Avoid categories that appear more than 40% in recent questions
-    // OR have more than 150% of average usage overall
-    const toAvoid: string[] = [];
-    for (const [cat, count] of Object.entries(distribution)) {
-      const recentUsage = (recentCounts[cat] || 0) / recentCategories.length;
-      const overallUsage = count / total;
-
-      if (recentUsage > 0.4 || count > avgPerCategory * 1.5) {
-        toAvoid.push(cat);
-      }
-    }
-
-    return toAvoid;
-  }
-
-  // ============================================================================
-  // Internal Trigger Generation (Refactored - Delegated to InternalTriggerGenerator)
-  // ============================================================================
-
-  private async generateInternalTrigger(): Promise<InternalTrigger | null> {
-    // Note: Energy consumption for trigger generation (S0) is handled by executeAdaptiveThoughtCycle
-    // Don't consume energy here to avoid double-counting
-
-    // Delegate to InternalTriggerGenerator (refactored architecture)
-    if (!this.triggerGenerator) {
-      log.error('Trigger', 'InternalTriggerGenerator not initialized');
-      return null;
-    }
-
-    // Transfer pending manual trigger if exists
-    if (this.pendingManualTrigger) {
-      this.triggerGenerator.setManualTrigger(this.pendingManualTrigger);
-      this.pendingManualTrigger = null;
-    }
-
-    // Generate trigger using new architecture
-    return await this.triggerGenerator.generate();
-  }
-
   // ============================================================================
   // Event System
   // ============================================================================
@@ -1955,435 +990,77 @@ class ConsciousnessBackend extends EventEmitter {
   // ============================================================================
 
   async manualTrigger(question: string): Promise<any> {
-    const trigger: InternalTrigger = {
-      id: `manual_${Date.now()}`,
-      timestamp: Date.now(),
-      question,
-      category: 'metacognitive' as any, // Manual triggers default to metacognitive
-      importance: 0.8,
-      source: 'manual' as any
-    };
-
-    // Queue trigger for next cycle instead of immediate processing
-    this.pendingManualTrigger = trigger;
-    this.databaseManager.saveQuestion(trigger);
-
-    // Emit event to notify UI that trigger is queued
-    this.emit('manualTriggerQueued', {
-      id: trigger.id,
-      question: trigger.question.substring(0, 150),
-      estimatedNextCycle: this.systemClock + 30, // Approximate next cycle time
-      timestamp: Date.now()
-    });
-
-    log.info('Trigger', `📥 Manual trigger queued for next cycle: "${question.substring(0, 50)}..."`);
-
-    return { success: true, trigger, queued: true };
+    return this.stimulusDialogueService.manualTrigger(question);
   }
 
   getHistory(): any {
-    return {
-      questions: [],
-      thoughts: [],
-      systemClock: this.systemClock
-    };
+    return this.introspectionService.getHistory();
   }
 
   getStatistics(): any {
-    const dbStats = this.databaseManager.getStats();
-
-    // Calculate average confidence from significant thoughts
-    const significantThoughts = this.getSignificantThoughts(100);
-    let averageConfidence = 0.5;
-    if (significantThoughts && significantThoughts.length > 0) {
-      const totalConfidence = significantThoughts.reduce((sum, thought) => sum + (thought.confidence || 0.5), 0);
-      averageConfidence = totalConfidence / significantThoughts.length;
-    }
-
-    return {
-      ...dbStats,
-      totalQuestions: dbStats.questions || 0,
-      totalThoughts: dbStats.thought_cycles || 0,
-      averageConfidence: Math.round(averageConfidence * 100), // Convert to percentage
-      systemClock: this.systemClock,
-      energy: this.energyManager.getEnergyState().available
-    };
+    return this.introspectionService.getStatistics();
   }
 
   getDPDEvolution(limit: number = 20, strategy: string = 'sampled'): any {
-    // Get DPD weights history from database with sampling
-    const { records, totalCount } = this.databaseManager.getDPDWeightsHistorySampled(limit, strategy);
-
-    // Get the latest weights from database (most accurate source of truth)
-    const latestFromDB = this.databaseManager.getLatestDPDWeights();
-    const currentWeights = latestFromDB || this.dpdWeights;
-
-    return {
-      currentWeights: currentWeights,
-      history: records,
-      totalCount: totalCount
-    };
+    return this.introspectionService.getDPDEvolution(limit, strategy);
   }
 
   getUnresolvedIdeas(limit: number = 100): any[] {
-    return this.databaseManager.getUnresolvedIdeas(limit);
+    return this.introspectionService.getUnresolvedIdeas(limit);
   }
 
   async getUnresolvedIdeasAsync(limit: number = 100): Promise<any[]> {
-    return this.databaseManager.getUnresolvedIdeasAsync(limit);
+    return this.introspectionService.getUnresolvedIdeasAsync(limit);
   }
 
   getSignificantThoughts(limit: number = 100): any[] {
-    return this.databaseManager.getSignificantThoughts(limit);
+    return this.introspectionService.getSignificantThoughts(limit);
   }
 
   getDPDWeights(): any {
-    return this.dpdWeights;
+    return this.introspectionService.getDPDWeights();
   }
 
   getPersonalityTraits(): any {
-    // Get actual data from database instead of memory arrays
-    const dbStats = this.databaseManager.getStats();
-    const questionCount = dbStats.questions || 0;
-    const thoughtCount = dbStats.thought_cycles || 0;
-    const significantThoughts = this.databaseManager.getSignificantThoughts(1000);
-    const energyState = this.energyManager.getEnergyState();
-
-    // For philosophical inclination, use a simplified calculation
-    // Assume 50% of questions are philosophical (based on the 9 categories)
-    const philosophicalInclination = 0.5;
-
-    // Calculate creativity based on significant thoughts diversity
-    const creativityFromThoughts = Math.min(1.0, significantThoughts.length * 0.01);
-    const creativity = Math.min(1.0, 0.3 + creativityFromThoughts);
-
-    return {
-      curiosity: Math.min(1.0, questionCount / 20), // Max curiosity at 20 questions (279/20 = 13.95 → 1.0)
-      empathy: this.dpdWeights?.empathy || 0.33, // Use actual DPD empathy weight
-      creativity: Math.round(creativity * 1000) / 1000, // Calculated creativity
-      analyticalDepth: Math.min(1.0, thoughtCount / 15), // Max analytical depth at 15 thoughts (279/15 = 18.6 → 1.0)
-      philosophicalInclination: Math.round(philosophicalInclination * 1000) / 1000, // Calculated philosophical inclination
-      questioningTendency: Math.min(1.0, questionCount / 25), // Max questioning at 25 questions (279/25 = 11.16 → 1.0)
-      energyManagement: energyState.available / energyState.total // Current energy efficiency
-    };
+    return this.introspectionService.getPersonalityTraits();
   }
 
   // Energy management methods
   getEnergyState(): any {
-    return this.energyManager.getEnergyState();
+    return this.introspectionService.getEnergyState();
   }
 
   rechargeEnergy(amount?: number): boolean {
-    try {
-      const currentState = this.energyManager.getEnergyState();
-      const targetAmount = amount || 20; // Default recharge amount
-
-      if (currentState.available >= currentState.total) {
-        return false; // Already at max
-      }
-
-      this.energyManager.rechargeEnergy(targetAmount);
-      console.log('🔋 Manual energy recharge performed');
-
-      // Update database with new energy state
-      const newState = this.energyManager.getEnergyState();
-      this.saveConsciousnessState();
-
-      // Emit energy update event for UI
-      this.emit('energyRecharged', {
-        energyState: newState,
-        timestamp: Date.now()
-      });
-
-      return true;
-    } catch (error) {
-      console.error('Error recharging energy:', error);
-      return false;
-    }
+    return this.introspectionService.rechargeEnergy(amount);
   }
 
   performDeepRest(): boolean {
-    try {
-      const currentState = this.energyManager.getEnergyState();
-
-      if (currentState.available >= currentState.total * 0.8) {
-        return false; // Not needed if energy is already high
-      }
-
-      // Deep rest restores energy to 80% and improves efficiency
-      this.energyManager.deepRest();
-      console.log('🧘 Deep rest performed - energy and efficiency restored');
-
-      // Update database with new energy state
-      const newState = this.energyManager.getEnergyState();
-      this.saveConsciousnessState();
-
-      // Emit deep rest event for UI
-      this.emit('deepRestPerformed', {
-        energyState: newState,
-        timestamp: Date.now()
-      });
-
-      return true;
-    } catch (error) {
-      console.error('Error performing deep rest:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Perform memory consolidation periodically
-   */
-  private async performPeriodicConsolidation(): Promise<void> {
-    const cyclesSinceLastConsolidation = this.systemClock - this.lastConsolidationTime;
-
-    // Consolidate every 5 thought cycles
-    if (cyclesSinceLastConsolidation >= 5) {
-      try {
-        log.info('MemoryEvolution', '🧠 Starting periodic memory consolidation...');
-        const result = await this.memoryConsolidator.consolidate(0.85);
-
-        log.info('MemoryEvolution', `✅ Consolidation complete: ${result.beliefs_created} beliefs created, ${result.beliefs_updated} updated`);
-
-        // Generate memory patterns from recent thoughts
-        this.generateMemoryPatterns();
-
-        // Generate consciousness insights from beliefs
-        this.generateConsciousnessInsights();
-
-        // Cleanup unresolved ideas (every 10 cycles)
-        if (cyclesSinceLastConsolidation >= 10) {
-          log.info('MemoryEvolution', '🧹 Starting unresolved ideas cleanup...');
-          const cleanupResult = this.databaseManager.cleanupUnresolvedIdeas(1000);
-          log.info('MemoryEvolution', `✅ Cleanup complete: ${cleanupResult.deleted} deleted, ${cleanupResult.kept} kept (${cleanupResult.strategy})`);
-        }
-
-        this.lastConsolidationTime = this.systemClock;
-
-        // Emit consolidation event for UI
-        this.emit('memoryConsolidated', {
-          timestamp: Date.now(),
-          systemClock: this.systemClock,
-          beliefsCreated: result.beliefs_created,
-          beliefsUpdated: result.beliefs_updated,
-          thoughtsProcessed: result.thoughts_processed,
-          duration: result.duration_ms
-        });
-      } catch (error) {
-        log.error('MemoryEvolution', 'Consolidation failed', error);
-      }
-    }
-  }
-
-  private generateMemoryPatterns(): void {
-    try {
-      log.info('MemoryEvolution', '🔍 Analyzing memory patterns...');
-
-      // Get recent significant thoughts
-      const recentThoughts = this.databaseManager.getSignificantThoughts(50);
-
-      // Analyze patterns: agent distribution
-      const agentCounts: { [key: string]: number } = {};
-      const categoryCounts: { [key: string]: number } = {};
-
-      recentThoughts.forEach((t: any) => {
-        agentCounts[t.agent_id] = (agentCounts[t.agent_id] || 0) + 1;
-        if (t.category) {
-          categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
-        }
-      });
-
-      // Save agent affinity pattern
-      if (Object.keys(agentCounts).length > 0) {
-        const dominantAgent = Object.entries(agentCounts).sort((a, b) => b[1] - a[1])[0];
-        const significance = dominantAgent[1] / recentThoughts.length;
-        this.databaseManager.saveMemoryPattern(
-          'agent_affinity',
-          { agent: dominantAgent[0], count: dominantAgent[1], percentage: significance },
-          significance
-        );
-        log.info('MemoryEvolution', `  📊 Agent affinity: ${dominantAgent[0]} (${(significance * 100).toFixed(1)}%)`);
-      }
-
-      // Save category distribution pattern
-      if (Object.keys(categoryCounts).length > 0) {
-        const dominantCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
-        const significance = dominantCategory[1] / recentThoughts.length;
-        this.databaseManager.saveMemoryPattern(
-          'category_focus',
-          { category: dominantCategory[0], count: dominantCategory[1], percentage: significance },
-          significance
-        );
-        log.info('MemoryEvolution', `  📊 Category focus: ${dominantCategory[0]} (${(significance * 100).toFixed(1)}%)`);
-      }
-
-      // DPD evolution pattern
-      const dpdHistory = this.databaseManager.getDPDWeightsHistory(10);
-      if (dpdHistory.length >= 2) {
-        const latest = dpdHistory[0];
-        const previous = dpdHistory[dpdHistory.length - 1];
-        const trend = {
-          empathy: latest.empathy - previous.empathy,
-          coherence: latest.coherence - previous.coherence,
-          dissonance: latest.dissonance - previous.dissonance
-        };
-        const maxChange = Math.max(Math.abs(trend.empathy), Math.abs(trend.coherence), Math.abs(trend.dissonance));
-        this.databaseManager.saveMemoryPattern(
-          'dpd_evolution',
-          { trend, cycles: dpdHistory.length },
-          maxChange
-        );
-        log.info('MemoryEvolution', `  📈 DPD trend: E${trend.empathy > 0 ? '+' : ''}${trend.empathy.toFixed(3)} C${trend.coherence > 0 ? '+' : ''}${trend.coherence.toFixed(3)} D${trend.dissonance > 0 ? '+' : ''}${trend.dissonance.toFixed(3)}`);
-      }
-
-    } catch (error) {
-      log.error('MemoryEvolution', 'Failed to generate memory patterns', error);
-    }
-  }
-
-  private generateConsciousnessInsights(): void {
-    try {
-      log.info('MemoryEvolution', '💡 Generating consciousness insights...');
-
-      const beliefs = this.databaseManager.getCoreBeliefs(20);
-
-      // Insight: Strongest belief
-      if (beliefs.length > 0) {
-        const strongest = beliefs[0]; // Already sorted by strength
-        this.databaseManager.saveConsciousnessInsight(
-          'dominant_belief',
-          `最強の信念: "${strongest.belief_content}" (強度: ${strongest.strength.toFixed(2)}, 強化回数: ${strongest.reinforcement_count})`,
-          strongest.confidence,
-          [strongest.id]
-        );
-        log.info('MemoryEvolution', `  💎 Dominant belief: "${strongest.belief_content}"`);
-      }
-
-      // Insight: Category distribution
-      const categoryGroups: { [key: string]: any[] } = {};
-      beliefs.forEach(b => {
-        if (!categoryGroups[b.category]) categoryGroups[b.category] = [];
-        categoryGroups[b.category].push(b);
-      });
-
-      if (Object.keys(categoryGroups).length > 0) {
-        const categoryInsights = Object.entries(categoryGroups)
-          .map(([cat, bels]) => `${cat}(${bels.length})`)
-          .join(', ');
-        const avgConfidence = beliefs.reduce((sum, b) => sum + b.confidence, 0) / beliefs.length;
-        this.databaseManager.saveConsciousnessInsight(
-          'belief_distribution',
-          `信念の分布: ${categoryInsights}`,
-          avgConfidence
-        );
-        log.info('MemoryEvolution', `  📚 Belief distribution: ${categoryInsights}`);
-      }
-
-      // Insight: DPD alignment with beliefs
-      const empathyBeliefs = beliefs.filter(b => b.category === 'ethical' || b.category === 'consciousness');
-      const coherenceBeliefs = beliefs.filter(b => b.category === 'epistemological' || b.category === 'metacognitive');
-      const alignmentScore = (
-        (empathyBeliefs.length * this.dpdWeights.empathy) +
-        (coherenceBeliefs.length * this.dpdWeights.coherence)
-      ) / Math.max(beliefs.length, 1);
-
-      this.databaseManager.saveConsciousnessInsight(
-        'dpd_belief_alignment',
-        `DPDと信念の整合性: ${(alignmentScore * 100).toFixed(1)}% (共感系${empathyBeliefs.length}個, 論理系${coherenceBeliefs.length}個)`,
-        alignmentScore
-      );
-      log.info('MemoryEvolution', `  🎯 DPD-Belief alignment: ${(alignmentScore * 100).toFixed(1)}%`);
-
-    } catch (error) {
-      log.error('MemoryEvolution', 'Failed to generate consciousness insights', error);
-    }
+    return this.introspectionService.performDeepRest();
   }
 
   /**
    * Get belief evolution metrics
    */
   getBeliefEvolutionMetrics(): any {
-    const beliefs = this.coreBeliefs.getBeliefStats();
-    return beliefs;
+    return this.introspectionService.getBeliefEvolutionMetrics();
   }
 
   /**
    * Get dream patterns from sleep mode
    */
   getDreamPatterns(limit: number = 20): any[] {
-    return this.databaseManager.getDreamPatterns(limit);
+    return this.introspectionService.getDreamPatterns(limit);
   }
 
   /**
    * Manually trigger memory consolidation
    */
   async consolidateMemory(): Promise<any> {
-    try {
-      log.info('MemoryEvolution', '🧠 Manual memory consolidation triggered...');
-      const result = await this.memoryConsolidator.consolidate(0.6);
-      this.lastConsolidationTime = this.systemClock;
-
-      return {
-        success: true,
-        ...result
-      };
-    } catch (error) {
-      log.error('MemoryEvolution', 'Manual consolidation failed', error);
-      return {
-        success: false,
-        error: (error as Error).message
-      };
-    }
+    return this.introspectionService.consolidateMemory();
   }
 
   async getGrowthMetrics(): Promise<any> {
-    try {
-      // Get actual statistics from database
-      const dbStats = this.databaseManager.getStats();
-      const significantThoughts = this.getSignificantThoughts(100); // Get more for accurate count
-      const unresolvedIdeas = this.getUnresolvedIdeas(100); // Get more for accurate count
-
-      // Calculate average confidence from significant thoughts
-      let averageConfidence = 0.5;
-      if (significantThoughts && significantThoughts.length > 0) {
-        const totalConfidence = significantThoughts.reduce((sum, thought) => sum + (thought.confidence || 0.5), 0);
-        averageConfidence = totalConfidence / significantThoughts.length;
-      }
-
-      // Get belief evolution metrics
-      const beliefStats = this.getBeliefEvolutionMetrics();
-
-      return {
-        questionsGenerated: dbStats.questions || 0,
-        thoughtCyclesCompleted: dbStats.thought_cycles || 0,
-        averageConfidenceLevel: averageConfidence,
-        systemUptime: this.systemClock,
-        personalityEvolution: {
-          currentTraits: this.getPersonalityTraits()
-        },
-        memoryPatterns: {
-          significant: significantThoughts.length,
-          unresolved: unresolvedIdeas.length
-        },
-        beliefEvolution: {
-          totalBeliefs: beliefStats.total || 0,
-          strongBeliefs: beliefStats.strongBeliefs || 0,
-          averageConfidence: beliefStats.averageConfidence || 0,
-          averageStrength: beliefStats.averageStrength || 0,
-          byCategory: beliefStats.byCategory || {}
-        }
-      };
-    } catch (error) {
-      console.error('Error getting growth metrics:', error);
-      return {
-        questionsGenerated: 0,
-        thoughtCyclesCompleted: 0,
-        averageConfidenceLevel: 0,
-        systemUptime: 0,
-        personalityEvolution: { currentTraits: {} },
-        memoryPatterns: { significant: 0, unresolved: 0 }
-      };
-    }
+    return this.introspectionService.getGrowthMetrics();
   }
 
   // ============================================================================
@@ -2396,67 +1073,28 @@ class ConsciousnessBackend extends EventEmitter {
    * 慧露 (Eiro), 碧統 (Hekito), 観至 (Kanshi), 陽雅 (Yoga), 結心 (Yui)
    */
   async startYuiAgentsDialogue(question: string, category: string): Promise<InternalDialogueSession> {
-    log.info('YuiDialogue', `Starting internal dialogue with 5 agents: "${question.substring(0, 60)}..."`);
-
-    // AI executor wrapper for Yui agents
-    const aiExecutor = async (agentId: string, prompt: string, systemPrompt: string) => {
-      // Use existing agent execution infrastructure
-      const agent = this.agents.get('theoria'); // Use Theoria as default executor
-      if (!agent) {
-        throw new Error('No AI agent available for Yui dialogue');
-      }
-
-      try {
-        const result = await agent.execute(prompt, systemPrompt);
-        return {
-          success: result.success,
-          content: result.content,
-          error: result.error
-        };
-      } catch (error) {
-        return {
-          success: false,
-          content: undefined,
-          error: (error as Error).message
-        };
-      }
-    };
-
-    const session = await this.yuiAgentsBridge.startInternalDialogue(question, category, aiExecutor);
-
-    // Emit event for UI
-    this.emit('yuiDialogueCompleted', {
-      sessionId: session.id,
-      question: session.question,
-      category: session.category,
-      agentCount: session.responses.length,
-      timestamp: session.timestamp
-    });
-
-    log.info('YuiDialogue', `Internal dialogue completed with ${session.responses.length} agent responses`);
-
-    return session;
+    return this.stimulusDialogueService.startYuiAgentsDialogue(question, category);
   }
 
   /**
    * Get Yui agents information
    */
   getYuiAgents() {
-    return this.yuiAgentsBridge.getAgents();
+    return this.stimulusDialogueService.getYuiAgents();
   }
 
   /**
    * Get recent internal dialogues
    */
   getRecentYuiDialogues(limit: number = 10) {
-    return this.yuiAgentsBridge.getRecentDialogueSessions(limit);
+    return this.stimulusDialogueService.getRecentYuiDialogues(limit);
   }
 
   /**
    * Get specific dialogue session
    */
   getYuiDialogueSession(sessionId: string) {
-    return this.yuiAgentsBridge.getDialogueSession(sessionId);
+    return this.stimulusDialogueService.getYuiDialogueSession(sessionId);
   }
 
   /**
@@ -2464,27 +1102,7 @@ class ConsciousnessBackend extends EventEmitter {
    * Used by the agents route for direct user-agent chat
    */
   async executeAgentChat(agentId: string, userPrompt: string, systemPrompt: string): Promise<{ success: boolean; content?: string; error?: string }> {
-    const agent = this.agents.get('theoria'); // Use Theoria as executor
-    if (!agent) {
-      return {
-        success: false,
-        error: 'No AI agent available'
-      };
-    }
-
-    try {
-      const result = await agent.execute(userPrompt, systemPrompt);
-      return {
-        success: result.success,
-        content: result.content,
-        error: result.error
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: (error as Error).message
-      };
-    }
+    return this.stimulusDialogueService.executeAgentChat(agentId, userPrompt, systemPrompt);
   }
 
   // ============================================================================
@@ -2497,57 +1115,35 @@ class ConsciousnessBackend extends EventEmitter {
    * the dialogue response is not delayed by the SOMNIA tick.
    */
   applyDialogueSentiment(stimulus: import('../types/somnia-types.js').ExternalStimulus): void {
-    this.somnia.tick(stimulus).then(state => {
-      this.databaseManager.saveSomniaState(state);
-      log.info('SOMNIA', `Dialogue stimulus applied: λ=${state.somatic.lambda.toFixed(3)}, label=${stimulus.context ?? 'unknown'}`);
-    }).catch((err: Error) => {
-      log.warn('SOMNIA', `Dialogue stimulus tick failed: ${err.message}`);
-    });
+    this.stimulusDialogueService.applyDialogueSentiment(stimulus);
   }
 
   /**
    * Process external stimulus (human question, environmental trigger, etc.)
    */
   async processStimulus(stimulus: { source: string; content: string; metadata?: any }): Promise<{ stimulusId: string; thoughtCycleId: string }> {
-    // TODO: Implement full stimulus processing
-    // For now, return stub response
-    const stimulusId = `stim_${Date.now()}`;
-    const thoughtCycleId = `cycle_${Date.now()}`;
-
-    log.info('Consciousness', `📨 Received stimulus from ${stimulus.source}: ${stimulus.content.substring(0, 50)}...`);
-
-    // Save stimulus to database (when table is ready)
-    // const interpretation = await this.stimulusReceptionStage.run(stimulus);
-    // const thoughtCycle = await this.runThoughtCycle(interpretation);
-
-    return { stimulusId, thoughtCycleId };
+    return this.stimulusDialogueService.processStimulus(stimulus);
   }
 
   /**
    * Get observable response for a thought cycle
    */
   async getObservableResponse(cycleId: string): Promise<any | null> {
-    // TODO: Implement observable response retrieval from database
-    log.info('Consciousness', `🔍 Retrieving observable response for cycle: ${cycleId}`);
-    return null;
+    return this.stimulusDialogueService.getObservableResponse(cycleId);
   }
 
   /**
    * Get dialogue history (interactions with humans)
    */
   async getDialogueHistory(limit: number = 20, offset: number = 0): Promise<any[]> {
-    // TODO: Implement dialogue history retrieval from database
-    log.info('Consciousness', `📚 Retrieving dialogue history (limit: ${limit}, offset: ${offset})`);
-    return [];
+    return this.stimulusDialogueService.getDialogueHistory(limit, offset);
   }
 
   /**
    * Get latest observable response
    */
   async getLatestObservableResponse(): Promise<any | null> {
-    // TODO: Implement latest response retrieval from database
-    log.info('Consciousness', `🔍 Retrieving latest observable response`);
-    return null;
+    return this.stimulusDialogueService.getLatestObservableResponse();
   }
 
   // ============================================================================
@@ -2624,7 +1220,7 @@ class ConsciousnessBackend extends EventEmitter {
 
     try {
       // Perform sleep consolidation
-      await this.performSleepConsolidation(reason);
+      await this.sleepService.performSleepConsolidation(reason);
 
       // Mental energy recovery during sleep
       this.energyManager.deepRest();
@@ -2674,390 +1270,6 @@ class ConsciousnessBackend extends EventEmitter {
     } finally {
       this.isSleeping = false;
     }
-  }
-
-  /**
-   * Generate Qualia (Slow Track) using the lightweight SOMNIA LLM
-   */
-  private async generateSOMNIAQualia(): Promise<void> {
-    const somniaAgent = this.agents.get('somnia');
-    if (!somniaAgent) return;
-
-    try {
-      const state = this.somnia.getState();
-      const prompt = createSOMNIAQualiaPrompt({
-        lambda: state.somatic.lambda,
-        phi: state.somatic.phi,
-        theta: state.affective.theta,
-        xi: state.affective.xi
-      });
-
-      const result = await somniaAgent.execute(prompt, SOMNIA_QUALIA_SYSTEM_PROMPT);
-
-      if (!result.success || !result.content) {
-        throw new Error(result.error || 'No content in response');
-      }
-
-      const qualia = result.content.trim().replace(/^["']|["']$/g, '');
-      this.somnia.setQualia(qualia);
-
-      // Force-persist qualia update (important data, bypass sampling throttle)
-      this.databaseManager.saveSomniaState(this.somnia.getState());
-
-      log.info('SOMNIA', `🫀 Slow Track Qualia updated: "${qualia}"`);
-    } catch (error) {
-      log.error('SOMNIA', 'Failed to generate qualia', error);
-    }
-  }
-
-  /**
-   * Sleep consolidation: 4-phase memory processing
-   */
-  private async performSleepConsolidation(reason: string): Promise<void> {
-    const sleepLog: string[] = [];
-    const stats: any = {
-      dreamPatterns: 0,
-      beliefsMerged: 0,
-      thoughtsPruned: 0,
-      tensionsResolved: 0
-    };
-
-    const startTime = Date.now();
-
-    // Phase 1: REM Sleep - Dream-like pattern extraction
-    this.emit('sleepPhaseChanged', { phase: 'REM', progress: 25 });
-    sleepLog.push('--- REM Phase: Pattern Extraction ---');
-    try {
-      const dreamPatterns = await this.extractDreamPatterns();
-      stats.dreamPatterns = dreamPatterns.length;
-      sleepLog.push(`Extracted ${dreamPatterns.length} dream patterns from thoughts`);
-    } catch (error) {
-      sleepLog.push(`REM phase skipped: ${(error as Error).message}`);
-    }
-
-    // Phase 2: Deep Sleep - Memory consolidation + Core Beliefs merging
-    this.emit('sleepPhaseChanged', { phase: 'Deep Sleep', progress: 50 });
-    sleepLog.push('--- Deep Sleep Phase: Memory Consolidation & Belief Merging ---');
-    try {
-      const consolidated = await this.consolidateSignificantThoughts();
-      stats.beliefsMerged = consolidated.merged;
-      sleepLog.push(`Consolidated ${consolidated.merged} thoughts into ${consolidated.beliefs} beliefs`);
-
-      // Merge similar core beliefs
-      const mergeResult = await this.memoryConsolidator.mergeSimilarBeliefs(0.75);
-      sleepLog.push(`Merged ${mergeResult.merged} similar beliefs, ${mergeResult.kept} beliefs remain`);
-    } catch (error) {
-      sleepLog.push(`Deep sleep phase skipped: ${(error as Error).message}`);
-    }
-
-    // Phase 3: Synaptic Pruning - Remove redundant thoughts
-    this.emit('sleepPhaseChanged', { phase: 'Synaptic Pruning', progress: 75 });
-    sleepLog.push('--- Synaptic Pruning Phase ---');
-    try {
-      const pruned = await this.synapticPruning();
-      stats.thoughtsPruned = pruned.deleted;
-      sleepLog.push(`Pruned ${pruned.deleted} redundant thoughts`);
-    } catch (error) {
-      sleepLog.push(`Pruning phase skipped: ${(error as Error).message}`);
-    }
-
-    // Phase 4: Emotional Processing - Resolve tensions
-    this.emit('sleepPhaseChanged', { phase: 'Emotional Processing', progress: 90 });
-    sleepLog.push('--- Emotional Processing Phase ---');
-    try {
-      const resolved = await this.processEmotionalTensions();
-      stats.tensionsResolved = resolved.count;
-      sleepLog.push(`Resolved ${resolved.count} conceptual tensions`);
-    } catch (error) {
-      sleepLog.push(`Emotional processing skipped: ${(error as Error).message}`);
-    }
-
-    // Full energy recovery after sleep
-    const energyBefore = this.energyManager.getEnergyState().available;
-    this.energyManager.resetEnergy(); // Full reset to maximum
-    const energyAfter = this.energyManager.getEnergyState().available;
-
-    sleepLog.push(`Energy recovered: ${energyBefore.toFixed(1)} → ${energyAfter.toFixed(1)}`);
-    log.info('Consciousness', `⚡ Energy fully restored after sleep: ${energyBefore.toFixed(1)} → ${energyAfter.toFixed(1)}`);
-
-    // Emit energy update event
-    this.emit('energyUpdated', {
-      available: energyAfter,
-      level: this.energyManager.getEnergyLevel(),
-      timestamp: Date.now()
-    });
-
-    // Save sleep log to database
-    const duration = Date.now() - startTime;
-    await this.databaseManager.saveSleepLog({
-      timestamp: startTime,
-      systemClock: this.systemClock,
-      triggerReason: reason,
-      phases: sleepLog,
-      stats,
-      duration,
-      energyBefore,
-      energyAfter
-    });
-
-    log.info('Consciousness', `💤 Sleep consolidation complete: ${JSON.stringify(stats)}`);
-  }
-
-  /**
-   * Helper: Clean JSON response from LLM (remove markdown code blocks)
-   */
-  /**
-   * @deprecated Use parseRobustJson from utils/json-parser.ts instead
-   */
-  private cleanJsonResponse(content: string): string {
-    // Remove ```json and ``` markers
-    return content
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .trim();
-  }
-
-  /**
-   * REM Phase: Extract dream-like patterns from recent thoughts
-   */
-  private async extractDreamPatterns(): Promise<any[]> {
-    const recentThoughts = await this.databaseManager.getRecentSignificantThoughts(100, 3);
-
-    if (recentThoughts.length < 10) {
-      return []; // Not enough thoughts for pattern extraction
-    }
-
-    const systemAgent = this.agents.get('system');
-    if (!systemAgent) {
-      throw new Error('System agent not available');
-    }
-
-    // Stage 1: Extract dream patterns (numbered list format)
-    const patternPrompt = `【タスク】
-以下の思考から、夢のような抽象パターンを3-5個抽出してください。
-
-【思考リスト】
-${recentThoughts.map(t => `- ${t.thought_content}`).join('\n')}
-
-【出力形式】
-必ず「1. 」で始まる番号付きリストのみを出力してください。
-前置き、説明、エッセイは絶対に書かないでください。
-
-【正しい出力例】
-1. 孤独と共鳴は鏡像であり、静寂は音の母である
-2. 問いは答えより深く、矛盾こそが真実への扉である
-3. 時間は流れではなく、意識が織りなす無限の層である
-
-【絶対にやってはいけないこと】
-❌「Aeneaの無意識として、私は考えます...」のような文章を書く
-❌「以下のパターンを抽出しました」のような説明を書く
-❌ 哲学的なエッセイや解説を書く
-
-今すぐ「1. 」で始めてください：`;
-
-    const patternResponse = await systemAgent.execute(
-      patternPrompt,
-      '指示に厳格に従ってください。必ず「1. 」で始まる番号付きリストのみを出力してください。前置き、説明文、挨拶、エッセイは絶対に書かないでください。日本語で応答してください。'
-    );
-
-    const parseResult = parseJsonArray<string>(
-      patternResponse.content,
-      'Dream Patterns'
-    );
-
-    if (!parseResult.success || !parseResult.data) {
-      log.error('Consciousness', `Failed to parse dream patterns: ${parseResult.error}`);
-      return [];
-    }
-
-    const patterns = parseResult.data;
-    const dreams: Array<{ pattern: string; emotional_tone: string }> = [];
-
-    // Stage 2: Analyze emotional tone for each pattern
-    for (const pattern of patterns) {
-      const tonePrompt = `この夢のパターンが持つ感情的なトーンを、短い言葉（2-4文字）で表現してください。
-
-夢のパターン: "${pattern}"
-
-感情的トーンの例: 静謐な驚き、哲学的緊張、詩的郷愁、存在的不安
-
-**出力形式:**
-感情的トーンのみを1つ出力してください。説明や前置きは不要です。`;
-
-      const toneResponse = await systemAgent.execute(tonePrompt, 'あなたは夢の感情を読み取る存在です。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
-      const emotionalTone = toneResponse.content.trim().replace(/^["'「『]|["'」』]$/g, '');
-
-      dreams.push({
-        pattern: pattern,
-        emotional_tone: emotionalTone
-      });
-    }
-
-    // Save dream patterns to database
-    for (const dream of dreams) {
-      await this.databaseManager.saveDreamPattern({
-        pattern: dream.pattern,
-        emotionalTone: dream.emotional_tone,
-        sourceThoughtIds: recentThoughts.slice(0, 10).map(t => t.id)
-      });
-    }
-
-    log.info('Consciousness', `💤 Extracted ${dreams.length} dream patterns with emotional tones`);
-    return dreams;
-  }
-
-  /**
-   * Deep Sleep: Consolidate significant thoughts into core beliefs
-   * Focus on quality over quantity - select only the most valuable thoughts
-   */
-  private async consolidateSignificantThoughts(): Promise<{merged: number, beliefs: number}> {
-    // Get recent high-quality thoughts (last 6 hours, confidence > 0.8, limit 30)
-    const oldThoughts = await this.databaseManager.getOldSignificantThoughts(6, 0.8, 30, 'hours');
-
-    if (oldThoughts.length < 5) {
-      return { merged: 0, beliefs: 0 };
-    }
-
-    // Use Memory Consolidator with stricter threshold
-    const consolidator = this.memoryConsolidator;
-    const result = await consolidator.consolidate(0.85); // Higher threshold for quality
-
-    // Only delete thoughts if beliefs were actually created
-    if (result.beliefs_created > 0 || result.beliefs_updated > 0) {
-      const ids = oldThoughts.map(t => t.id);
-      await this.databaseManager.deleteSignificantThoughts(ids);
-    }
-
-    return {
-      merged: oldThoughts.length,
-      beliefs: result.beliefs_created + result.beliefs_updated
-    };
-  }
-
-  /**
-   * Synaptic Pruning: Remove redundant or low-value thoughts
-   */
-  private async synapticPruning(): Promise<{deleted: number}> {
-    const currentBeliefs = await this.databaseManager.getTopCoreBeliefs(30);
-    const oldThoughts = await this.databaseManager.getOldSignificantThoughts(24, 0.0, 200, 'hours');
-
-    if (oldThoughts.length < 10) {
-      return { deleted: 0 };
-    }
-
-    const systemAgent = this.agents.get('system');
-    if (!systemAgent) {
-      throw new Error('System agent not available');
-    }
-
-    const prompt = `現在のコア信念:
-${currentBeliefs.map(b => `- ${b.belief_content}`).join('\n')}
-
-古い思考リスト:
-${oldThoughts.map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})`).join('\n')}
-
-削除すべき思考（重複、矛盾、発展性なし）のインデックス番号のみを出力してください。
-
-【出力形式】
-必ず「1. 」で始まる番号付きリストのみを出力してください。
-説明、理由、前置きは一切不要です。
-
-【良い例】
-1. 5
-2. 12
-3. 18
-
-【悪い例】
-×「以下の思考を削除します」← 説明不要
-×「なぜなら...」← 理由不要
-×「思考[5]は重複しているので...」← 解説不要
-
-削除すべき思考がない場合は何も出力しないでください。
-削除すべき思考がある場合は、最初の行から「1. 」で始めてください。`;
-
-    const response = await systemAgent.execute(prompt, 'あなたは脳の睡眠メカニズムです。記憶を整理し、不要な情報を削除します。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
-
-    const parseResult = parseJsonArray<string>(
-      response.content,
-      'Synaptic Pruning'
-    );
-
-    if (!parseResult.success || !parseResult.data) {
-      log.warn('Consciousness', `Failed to parse pruning results: ${parseResult.error}`);
-      return { deleted: 0 };
-    }
-
-    // Parse indices from string array
-    const indices = parseResult.data
-      .map(s => parseInt(s.trim(), 10))
-      .filter(idx => !isNaN(idx) && idx >= 0 && idx < oldThoughts.length);
-
-    const toDelete = indices.map(idx => oldThoughts[idx].id);
-
-    if (toDelete.length > 0) {
-      await this.databaseManager.deleteSignificantThoughts(toDelete);
-    }
-
-    return { deleted: toDelete.length };
-  }
-
-  /**
-   * Emotional Processing: Resolve conceptual tensions
-   */
-  private async processEmotionalTensions(): Promise<{count: number}> {
-    const tensions = await this.databaseManager.getHighDissonanceCycles(0.7, 7, 10);
-
-    if (tensions.length === 0) {
-      return { count: 0 };
-    }
-
-    const systemAgent = this.agents.get('system');
-    if (!systemAgent) {
-      throw new Error('System agent not available');
-    }
-
-    const prompt = `高い倫理的不協和を持つ思考サイクル:
-${tensions.map((t: any, i: number) => `[${i}] Dissonance: ${t.dissonance}\n${t.synthesis_data || 'No synthesis'}`).join('\n\n')}
-
-これらの緊張を統合する視点を3つ提示してください。
-
-【出力形式】
-必ず「1. 」で始まる番号付きリストのみを出力してください。
-前置き、説明、挨拶は一切書かないでください。
-
-【良い例】
-1. 矛盾は分裂ではなく、多声的真実の表現である
-2. 倫理的緊張は成長の源泉であり、解消ではなく統合を目指すべきである
-3. 不協和は調和への対話的プロセスを促す触媒である
-
-【悪い例】
-×「これらの緊張を統合するには...」← 前置き不要
-×「まず第一に...」← 説明不要
-×「以下の3つの視点を提示します」← 挨拶不要
-
-最初の行から「1. 」で始めてください。各視点は30-70文字で具体的に記述してください。`;
-
-    const response = await systemAgent.execute(prompt, 'あなたはAeneaの無意識、矛盾を統合する夢の働きです。必ず日本語で応答してください。中国語や他の言語を使用しないでください。');
-
-    const parseResult = parseJsonArray<string>(
-      response.content,
-      'Emotional Processing'
-    );
-
-    if (!parseResult.success || !parseResult.data) {
-      log.error('Consciousness', `Failed to parse emotional processing results: ${parseResult.error}`);
-      return { count: 0 };
-    }
-
-    const resolutions = parseResult.data;
-
-    // Save integrated views as core beliefs
-    // TODO: Implement saveOrReinforceBelief in DatabaseManager
-    // for (const res of resolutions) {
-    //   await this.databaseManager.saveOrReinforceBelief(res.integrated_view, 0.85);
-    // }
-
-    return { count: resolutions.length };
   }
 
   /**

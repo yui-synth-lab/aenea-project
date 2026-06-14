@@ -31,7 +31,8 @@
     "rag:ingest:self": "tsx scripts/ingest-knowledge.ts self",
     "rag:clear": "tsx scripts/ingest-knowledge.ts clear",
     "rag:stats": "tsx scripts/ingest-knowledge.ts stats",
-    "rag:health": "tsx scripts/ingest-knowledge.ts health"
+    "rag:health": "tsx scripts/ingest-knowledge.ts health",
+    "depcruise": "depcruise src --config .dependency-cruiser.cjs"
   },
   "keywords": [
     "ai",
@@ -80,6 +81,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "chromedriver": "^140.0.4",
     "concurrently": "^8.2.2",
+    "dependency-cruiser": "^17.4.3",
     "eventsource": "^4.0.0",
     "jest": "^29.0.0",
     "node-fetch": "^2.7.0",
