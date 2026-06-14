@@ -78,6 +78,20 @@ export class SleepService {
       sleepLog.push(`Emotional processing skipped: ${(error as Error).message}`);
     }
 
+    // Phase 5: Failsafe Pruning - age-based safety net against unbounded growth.
+    // Deletes any thoughts older than 48h regardless of confidence, catching
+    // whatever survived AI-driven synaptic pruning. Restored from the retired
+    // SleepManager's Phase 3b (48h threshold confirmed with maintainer).
+    this.ctx.emit('sleepPhaseChanged', { phase: 'Failsafe Pruning', progress: 95 });
+    sleepLog.push('--- Failsafe Pruning Phase ---');
+    try {
+      const agePruned = await this.pruneOldThoughts();
+      stats.thoughtsPruned += agePruned.deleted;
+      sleepLog.push(`Age-pruned ${agePruned.deleted} thoughts older than 48h`);
+    } catch (error) {
+      sleepLog.push(`Failsafe pruning skipped: ${(error as Error).message}`);
+    }
+
     // Full energy recovery after sleep
     const energyBefore = this.ctx.energyManager.getEnergyState().available;
     this.ctx.energyManager.resetEnergy(); // Full reset to maximum
@@ -308,6 +322,29 @@ ${oldThoughts.map((t, i) => `[${i}] ${t.thought_content} (conf: ${t.confidence})
   }
 
   /**
+   * Failsafe Pruning: age-based deletion of stale thoughts.
+   *
+   * Safety net against unbounded significant_thoughts growth — deletes every
+   * thought older than 48 hours regardless of confidence, independent of the
+   * AI's synaptic-pruning judgment. Restored from the retired SleepManager
+   * (Phase 3b); the 48h threshold was confirmed with the maintainer.
+   */
+  private async pruneOldThoughts(): Promise<{deleted: number}> {
+    const veryOldThoughts = await this.ctx.databaseManager.getOldSignificantThoughts(48, 0.0, 1000, 'hours');
+
+    if (veryOldThoughts.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const ids = veryOldThoughts.map((t: any) => t.id);
+    await this.ctx.databaseManager.deleteSignificantThoughts(ids);
+
+    log.info('Consciousness', `🗑️ Failsafe-deleted ${ids.length} thoughts older than 48 hours`);
+
+    return { deleted: ids.length };
+  }
+
+  /**
    * Emotional Processing: Resolve conceptual tensions
    */
   private async processEmotionalTensions(): Promise<{count: number}> {
@@ -357,11 +394,15 @@ ${tensions.map((t: any, i: number) => `[${i}] Dissonance: ${t.dissonance}\n${t.s
 
     const resolutions = parseResult.data;
 
-    // Save integrated views as core beliefs
-    // TODO: Implement saveOrReinforceBelief in DatabaseManager
-    // for (const res of resolutions) {
-    //   await this.ctx.databaseManager.saveOrReinforceBelief(res.integrated_view, 0.85);
-    // }
+    // Persist each integrated view as a consciousness insight. Additive only —
+    // this deletes nothing. Restored from the retired SleepManager's Phase 4,
+    // which saved tension resolutions via saveConsciousnessInsight at 0.7
+    // confidence (threshold confirmed with maintainer). Note: here `resolutions`
+    // is already a string[] of synthesis texts, whereas the old class parsed
+    // JSON objects and read `.synthesis` off each.
+    for (const synthesis of resolutions) {
+      this.ctx.databaseManager.saveConsciousnessInsight('tension_resolution', synthesis, 0.7, []);
+    }
 
     return { count: resolutions.length };
   }

@@ -7,6 +7,7 @@ import { DatabaseManager } from '../../src/server/database-manager';
 import { default as ConsciousnessBackend } from '../../src/server/consciousness-backend';
 import { LifespanManager } from '../../src/aenea/mortality/lifespan-manager';
 import { AgingEngine } from '../../src/aenea/mortality/aging-engine';
+import { resetEnergyManager } from '../../src/utils/energy-management';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -45,6 +46,9 @@ describe('Mortality & Death Integration', () => {
   let databaseManager: DatabaseManager;
   let testDbPath: string;
   let backend: any;
+  // The ConsciousnessBackend constructor opens a production DatabaseManager before
+  // we can swap it. We save it here so we can close it in afterEach.
+  let originalBackendDb: DatabaseManager | null = null;
 
   beforeEach(async () => {
     testDbPath = path.join(process.cwd(), 'test-data', `test_mortality_${Date.now()}.db`);
@@ -68,6 +72,8 @@ describe('Mortality & Death Integration', () => {
     // Construct ConsciousnessBackend
     // We instantiate it, but intercept database creation
     backend = new ConsciousnessBackend();
+    // Save the production DatabaseManager opened by the constructor, then replace.
+    originalBackendDb = (backend as any).databaseManager as DatabaseManager;
     // Inject the test database manager
     (backend as any).databaseManager = databaseManager;
     
@@ -110,9 +116,16 @@ describe('Mortality & Death Integration', () => {
     if (backend && (backend as any).isRunning) {
       (backend as any).isRunning = false;
     }
+    // Close the production DatabaseManager opened by ConsciousnessBackend().
+    if (originalBackendDb) {
+      try { originalBackendDb.cleanup(); } catch (_) {}
+      originalBackendDb = null;
+    }
     if (databaseManager) {
       databaseManager.cleanup();
     }
+    // Stop the EnergyManager setInterval created by ConsciousnessBackend().
+    resetEnergyManager();
     if (fs.existsSync(testDbPath)) {
       try {
         fs.unlinkSync(testDbPath);

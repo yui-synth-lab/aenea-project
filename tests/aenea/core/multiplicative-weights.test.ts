@@ -185,11 +185,20 @@ describe('MultiplicativeWeightsUpdater', () => {
         context: { thoughtId: 'test', agentId: 'test' }
       };
 
-      const weakResult = weakPerturbation.updateWeights(weights, scores);
-      const strongResult = strongPerturbation.updateWeights(weights, scores);
+      // Pin Math.random to 0 so both updaters perturb in the same direction.
+      // Strong's 4× larger magnitude survives normalisation → definitively larger
+      // updateMagnitude. Without pinning, Math.random ≈ 0.5 zeroes both
+      // perturbations and the assertion becomes a coin flip.
+      const spy = jest.spyOn(Math, 'random').mockReturnValue(0.0);
+      try {
+        const weakResult = weakPerturbation.updateWeights(weights, scores);
+        const strongResult = strongPerturbation.updateWeights(weights, scores);
 
-      // 強い摂動の方が変化量が大きい
-      expect(strongResult.updateMagnitude).toBeGreaterThan(weakResult.updateMagnitude);
+        // 強い摂動の方が変化量が大きい
+        expect(strongResult.updateMagnitude).toBeGreaterThan(weakResult.updateMagnitude);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
