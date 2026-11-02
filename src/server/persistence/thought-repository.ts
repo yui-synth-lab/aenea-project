@@ -8,12 +8,13 @@
  */
 
 import type { ConnectionProvider } from './connection.js';
+import type { HighDissonanceCycleRecord, QuestionRecordInput, SignificantThoughtRecord } from '../../aenea/ports/records.js';
 
 class ThoughtRepository {
   constructor(private conn: ConnectionProvider) {}
 
   // Question management
-  saveQuestion(question: any): void {
+  saveQuestion(question: QuestionRecordInput): void {
     this.conn.ensureConnection();
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
@@ -155,7 +156,7 @@ class ThoughtRepository {
     }
   }
 
-  getSignificantThoughts(limit: number = 100): any[] {
+  getSignificantThoughts(limit: number = 100): SignificantThoughtRecord[] {
     this.conn.ensureConnection();
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
@@ -176,7 +177,7 @@ class ThoughtRepository {
   /**
    * Get recent significant thoughts (for REM phase dream extraction)
    */
-  getRecentSignificantThoughts(limit: number = 100, daysAgo: number = 3): any[] {
+  getRecentSignificantThoughts(limit: number = 100, daysAgo: number = 3): SignificantThoughtRecord[] {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       return [];
@@ -200,7 +201,7 @@ class ThoughtRepository {
    * @param ageValue - Age value (number of days or hours)
    * @param ageUnit - 'days' or 'hours'
    */
-  getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit: 'days' | 'hours' = 'days'): any[] {
+  getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit: 'days' | 'hours' = 'days'): SignificantThoughtRecord[] {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       return [];
@@ -283,7 +284,7 @@ class ThoughtRepository {
   /**
    * Get thought cycles with high ethical dissonance
    */
-  getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): any[] {
+  getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): HighDissonanceCycleRecord[] {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       return [];

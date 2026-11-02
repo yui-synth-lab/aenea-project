@@ -20,6 +20,7 @@ import { SomniaRepository } from './persistence/somnia-repository.js';
 import { MortalityRepository } from './persistence/mortality-repository.js';
 import { XeniaRepository } from './persistence/xenia-repository.js';
 import type { XeniaInboxLetter, XeniaOutboxEntry } from './persistence/xenia-repository.js';
+import type { AgentAffinity, CoreBeliefRecord, HighDissonanceCycleRecord, NewCoreBelief, QuestionRecordInput, SignificantThoughtRecord, UnresolvedIdeaRecord } from '../aenea/ports/records.js';
 type Database = BetterSqlite3.Database;
 
 class DatabaseManager {
@@ -123,7 +124,7 @@ class DatabaseManager {
   }
 
   // Question management (delegated to ThoughtRepository)
-  saveQuestion(question: any): void {
+  saveQuestion(question: QuestionRecordInput): void {
     this.thoughtRepo.saveQuestion(question);
   }
 
@@ -163,7 +164,7 @@ class DatabaseManager {
     this.thoughtRepo.recordSignificantThought(thought);
   }
 
-  getSignificantThoughts(limit: number = 100): any[] {
+  getSignificantThoughts(limit: number = 100): SignificantThoughtRecord[] {
     return this.thoughtRepo.getSignificantThoughts(limit);
   }
 
@@ -172,7 +173,7 @@ class DatabaseManager {
     this.ideaRepo.addUnresolvedIdea(idea);
   }
 
-  getUnresolvedIdeas(limit: number = 100, includeXenia: boolean = false): any[] {
+  getUnresolvedIdeas(limit: number = 100, includeXenia: boolean = false): UnresolvedIdeaRecord[] {
     return this.ideaRepo.getUnresolvedIdeas(limit, includeXenia);
   }
 
@@ -297,7 +298,7 @@ class DatabaseManager {
   }
 
   // Core Beliefs Management (delegated to BeliefRepository)
-  createCoreBelief(belief: any): number | null {
+  createCoreBelief(belief: NewCoreBelief): number | null {
     return this.beliefRepo.createCoreBelief(belief);
   }
 
@@ -309,7 +310,7 @@ class DatabaseManager {
     this.beliefRepo.reinforceCoreBelief(beliefId, newSourceThoughts);
   }
 
-  getCoreBeliefs(limit: number = 100): any[] {
+  getCoreBeliefs(limit: number = 100): CoreBeliefRecord[] {
     return this.beliefRepo.getCoreBeliefs(limit);
   }
 
@@ -317,7 +318,7 @@ class DatabaseManager {
     return this.beliefRepo.getBeliefsByCategory(category, limit);
   }
 
-  updateBeliefAgentAffinity(beliefId: number, agentAffinity: any): void {
+  updateBeliefAgentAffinity(beliefId: number, agentAffinity: AgentAffinity): void {
     this.beliefRepo.updateBeliefAgentAffinity(beliefId, agentAffinity);
   }
 
@@ -331,7 +332,7 @@ class DatabaseManager {
   /**
    * Get top core beliefs by reinforcement count
    */
-  getTopCoreBeliefs(limit: number = 30): any[] {
+  getTopCoreBeliefs(limit: number = 30): CoreBeliefRecord[] {
     return this.beliefRepo.getTopCoreBeliefs(limit);
   }
 
@@ -471,7 +472,7 @@ class DatabaseManager {
    * Get recent significant thoughts (for REM phase dream extraction)
    * (Delegated to ThoughtRepository.)
    */
-  getRecentSignificantThoughts(limit: number = 100, daysAgo: number = 3): any[] {
+  getRecentSignificantThoughts(limit: number = 100, daysAgo: number = 3): SignificantThoughtRecord[] {
     return this.thoughtRepo.getRecentSignificantThoughts(limit, daysAgo);
   }
 
@@ -479,7 +480,7 @@ class DatabaseManager {
    * Get old significant thoughts for consolidation
    * (Delegated to ThoughtRepository.)
    */
-  getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit: 'days' | 'hours' = 'days'): any[] {
+  getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit: 'days' | 'hours' = 'days'): SignificantThoughtRecord[] {
     return this.thoughtRepo.getOldSignificantThoughts(ageValue, minConfidence, limit, ageUnit);
   }
 
@@ -495,7 +496,7 @@ class DatabaseManager {
    * Get thought cycles with high ethical dissonance
    * (Delegated to ThoughtRepository.)
    */
-  getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): any[] {
+  getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): HighDissonanceCycleRecord[] {
     return this.thoughtRepo.getHighDissonanceCycles(minDissonance, daysAgo, limit);
   }
 
