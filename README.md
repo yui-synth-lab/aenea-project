@@ -149,6 +149,24 @@ cp .env.example .env     # APIキーを設定
 pnpm run dev             # 開発サーバー起動
 ```
 
+### ローカル LLM: Strata
+[Strata](https://github.com/Niko1221/Strata) を使うと、Qwen / DeepSeek を手元のマシンで動かして Aenea の思考エンジンにできます（API キー不要）。
+
+```bash
+strata launch            # http://127.0.0.1:8080 で OpenAI 互換 API を起動
+```
+
+`.env` でプロバイダーに `strata` を指定します（全エージェント共通でも、エージェント単位でも可）。
+
+```bash
+AI_PROVIDER=strata              # または AGENT_THEORIA_PROVIDER=strata など
+STRATA_MODEL=strata             # 全 Strata エージェントのモデル名を固定
+# STRATA_BASE_URL=http://127.0.0.1:8080
+# STRATA_REASONING_EFFORT=low   # none | low | medium | high
+```
+
+その他の設定（`STRATA_API_KEY`, `STRATA_MAX_TOKENS`, `STRATA_TIMEOUT_MS`）は `.env.example` を参照してください。
+
 ---
 
 ## 📡 API & インテグレーション
