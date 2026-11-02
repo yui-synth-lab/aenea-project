@@ -113,7 +113,7 @@ export default class IndividualThoughtStage {
         context: {
           unresolvedContext: unresolvedIdeas.map(idea => idea.question).join('、'),
           significantContext: significantThoughts.map(thought => thought.thought_content?.slice(0, 200)).join('、'),
-          beliefsContext: coreBeliefs.map(belief => belief.belief_text).join('、'),
+          beliefsContext: coreBeliefs.map(belief => belief.belief_content).join('、'),
           ragKnowledge,
           somniaQualia
         }
