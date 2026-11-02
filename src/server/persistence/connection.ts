@@ -150,6 +150,7 @@ class ConnectionProvider {
         complexity REAL DEFAULT 0.5,
         importance REAL DEFAULT 0.5,
         related_thoughts TEXT, -- JSON array
+        source TEXT NOT NULL DEFAULT 'internal', -- 'internal' | 'xenia'
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -391,6 +392,37 @@ class ConnectionProvider {
       -- Indexes for Mortality
       CREATE INDEX IF NOT EXISTS idx_mortality_state_instance_id ON mortality_state(instance_id);
       CREATE INDEX IF NOT EXISTS idx_last_words_instance_id ON last_words(instance_id);
+
+      -- XENIA correspondence: letters delivered by the Bridge
+      CREATE TABLE IF NOT EXISTS xenia_inbox (
+        id TEXT PRIMARY KEY,
+        encounter_id TEXT NOT NULL,
+        from_instance TEXT NOT NULL,
+        content TEXT NOT NULL,
+        trigger_text TEXT NOT NULL,
+        in_reply_to TEXT,
+        mode TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'letter',
+        written_at_cycle INTEGER NOT NULL,
+        delivered_at_cycle INTEGER NOT NULL,
+        read_at_cycle INTEGER,
+        created_at INTEGER NOT NULL
+      );
+
+      -- XENIA correspondence: replies, sent or deliberately withheld
+      CREATE TABLE IF NOT EXISTS xenia_outbox (
+        id TEXT PRIMARY KEY,
+        encounter_id TEXT NOT NULL,
+        in_reply_to TEXT,
+        content TEXT,
+        decision TEXT NOT NULL, -- 'sent' | 'unsent'
+        cycle INTEGER NOT NULL,
+        fetched INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_xenia_inbox_unread ON xenia_inbox(read_at_cycle);
+      CREATE INDEX IF NOT EXISTS idx_xenia_outbox_fetch ON xenia_outbox(decision, fetched);
     `;
 
     try {
@@ -420,6 +452,18 @@ class ConnectionProvider {
       }
     } catch (err) {
       log.error('DatabaseManager', 'Migration failed', err);
+    }
+
+    try {
+      // XENIA: unresolved_ideas gains a provenance column so letters can be
+      // excluded from the evolved-question path (source = 'xenia').
+      const ideaCols = this._db.prepare(`PRAGMA table_info(unresolved_ideas)`).all() as Array<{ name: string }>;
+      if (!ideaCols.some(c => c.name === 'source')) {
+        this._db.exec(`ALTER TABLE unresolved_ideas ADD COLUMN source TEXT NOT NULL DEFAULT 'internal'`);
+        log.info('DatabaseManager', 'Migrated unresolved_ideas: added source column');
+      }
+    } catch (err) {
+      log.error('DatabaseManager', 'Migration failed (unresolved_ideas.source)', err);
     }
   }
 
