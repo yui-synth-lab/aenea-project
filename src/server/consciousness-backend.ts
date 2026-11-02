@@ -35,6 +35,7 @@ import { DeathHandler } from '../aenea/mortality/death-handler.js';
 import { IntrospectionService } from './services/introspection-service.js';
 import { StimulusDialogueService } from './services/stimulus-dialogue-service.js';
 import { ThoughtPipeline } from './services/thought-pipeline.js';
+import { MemoryInsightService } from './services/memory-insight-service.js';
 import { SleepService } from './services/sleep-service.js';
 import { ConsciousnessLifecycle } from './services/consciousness-lifecycle.js';
 import { ConsciousnessBootstrap } from './services/consciousness-bootstrap.js';
@@ -292,11 +293,13 @@ class ConsciousnessBackend extends EventEmitter {
 
     this.introspectionService = new IntrospectionService(this.internals);
     this.stimulusDialogueService = new StimulusDialogueService(this.internals);
-    this.thoughtPipeline = new ThoughtPipeline(this.internals);
+    const memoryInsight = new MemoryInsightService(this.internals);
+    this.thoughtPipeline = new ThoughtPipeline(this.internals, memoryInsight);
     this.sleepService = new SleepService(this.internals);
     this.lifecycle = new ConsciousnessLifecycle(this.internals, {
       getState: () => this.getState(),
       thoughtPipeline: this.thoughtPipeline,
+      memoryInsight,
       sleepService: this.sleepService
     });
 
