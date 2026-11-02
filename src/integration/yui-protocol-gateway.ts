@@ -8,14 +8,19 @@
  * Responsibilities:
  * - Dynamically load a Yui agent's personality config (used by yui-consultation).
  * - Re-export the AIExecutor surface so src/server/ai-executor.ts can forward it.
+ *   `provider: 'strata'` is served locally by StrataExecutor; every other
+ *   provider is delegated to yui-protocol unchanged.
  */
 
 import { log } from '../platform/logger.js';
+// @ts-ignore
+import { createAIExecutor as createYuiAIExecutor } from '../../yui-protocol/dist/kernel/ai-executor-impl.js';
+import { withStrataProvider } from './strata-executor.js';
 
 // Re-export Yui Protocol's AIExecutor functionality (mirrors the legacy
-// src/server/ai-executor.ts public surface so downstream importers are unchanged).
-// @ts-ignore
-export { createAIExecutor } from '../../yui-protocol/dist/kernel/ai-executor-impl.js';
+// src/server/ai-executor.ts public surface so downstream importers are unchanged),
+// extended with the Strata local LLM provider.
+export const createAIExecutor = withStrataProvider(createYuiAIExecutor);
 // @ts-ignore
 export { AIExecutor } from '../../yui-protocol/dist/kernel/ai-executor.js';
 
