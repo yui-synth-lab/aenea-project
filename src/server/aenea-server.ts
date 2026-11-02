@@ -23,6 +23,7 @@ import agentsRoutes, { initializeAgentsRoute } from './routes/agents.js';
 import yuiDialogueRoutes, { initializeYuiDialogueRoute } from './routes/yui-dialogue.js';
 import { createStimulusRoutes } from './routes/stimulus.js';
 import { createDialogueRoutes, initializeDialogueRoutes } from './routes/dialogue.js';
+import { createXeniaRoutes, initializeXeniaRoutes } from './routes/xenia.js';
 import { setupWebSocketHandlers } from './websocket-handler.js';
 
 const app = express();
@@ -42,12 +43,16 @@ initializeDPDRoutes(consciousness);
 initializeAgentsRoute(consciousness);
 initializeYuiDialogueRoute(consciousness);
 initializeDialogueRoutes(consciousness.getDatabaseManager(), consciousness);
+initializeXeniaRoutes(consciousness);
 
 // Create stimulus routes
 const stimulusRoutes = createStimulusRoutes(consciousness);
 
 // Create dialogue routes
 const dialogueRoutes = createDialogueRoutes();
+
+// Create xenia routes (Bridge-facing correspondence surface)
+const xeniaRoutes = createXeniaRoutes();
 
 // Middleware
 app.use(express.json());
@@ -76,6 +81,7 @@ app.use('/api/growth', growthRoutes);
 app.use('/api/agents', agentsRoutes);
 app.use('/api/yui', yuiDialogueRoutes);
 app.use('/api/dialogue', dialogueRoutes); // Simple dialogue system
+app.use('/api/xenia', xeniaRoutes); // XENIA correspondence (Bridge-facing)
 app.use('/api', stimulusRoutes); // Stimulus-Response System routes
 
 // ============================================================================

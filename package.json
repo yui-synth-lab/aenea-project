@@ -32,6 +32,7 @@
     "rag:clear": "tsx scripts/ingest-knowledge.ts clear",
     "rag:stats": "tsx scripts/ingest-knowledge.ts stats",
     "rag:health": "tsx scripts/ingest-knowledge.ts health",
+    "xenia:bridge": "tsx scripts/xenia-bridge.ts",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs"
   },
   "keywords": [
