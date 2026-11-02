@@ -253,7 +253,10 @@ describe('Mortality & Death Integration', () => {
       const newLifespan = (backend as any).lifespanManager;
       expect(newLifespan.getInstanceId()).not.toBe('short_life_instance');
       expect(newLifespan.getLifespanMax()).toBeGreaterThanOrEqual(10000);
-      expect(newLifespan.getCurrentCycle()).toBe(0);
+      // start() launches the loop asynchronously, so the fresh instance may
+      // already have ticked once by the time we look; it must not carry over
+      // the previous instance's cycle count (3).
+      expect(newLifespan.getCurrentCycle()).toBeLessThanOrEqual(1);
       expect(newLifespan.isAlive()).toBe(true);
     });
   });

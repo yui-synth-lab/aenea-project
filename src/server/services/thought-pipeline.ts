@@ -17,9 +17,15 @@ import { createSOMNIAQualiaPrompt, SOMNIA_QUALIA_SYSTEM_PROMPT } from '../../aen
 import { parseJsonArray } from '../../utils/json-parser.js';
 import type { DPDScores } from '../../types/dpd-types.js';
 import { ConsciousnessInternals, ThoughtCycle } from './consciousness-internals.js';
+import { MemoryInsightService } from './memory-insight-service.js';
+import { calculateFallbackDPDScores } from './fallback-dpd.js';
+import { isValidQuestion, sanitizeAndSplitQuestions } from './question-validator.js';
 
 export class ThoughtPipeline {
-  constructor(private ctx: ConsciousnessInternals) {}
+  constructor(
+    private ctx: ConsciousnessInternals,
+    private memoryInsight: MemoryInsightService = new MemoryInsightService(ctx)
+  ) {}
 
   // ============================================================================
   // Adaptive Thought Cycle Orchestration
@@ -159,7 +165,7 @@ export class ThoughtPipeline {
 
       // Periodic memory consolidation (every 5 cycles)
       // Sleep Mode provides deeper consolidation and belief merging
-      await this.performPeriodicConsolidation();
+      await this.memoryInsight.performPeriodicConsolidation();
 
       // Emit completion event with minimal essential data (not full thoughtCycle)
       const dbStats = this.ctx.databaseManager.getStats();
@@ -451,7 +457,7 @@ export class ThoughtPipeline {
     thoughtCycle.totalStages++;
 
     // Calculate heuristic-based DPD scores
-    const scores = this.calculateFallbackDPDScores(thoughtCycle);
+    const scores = calculateFallbackDPDScores(thoughtCycle, this.ctx.dpdWeights);
     const biasedScores = AgingEngine.applyDPDBiases(
       scores,
       this.ctx.lifespanManager.getVitality()
@@ -493,106 +499,6 @@ export class ThoughtPipeline {
     });
   }
 
-  /**
-   * Calculate DPD scores using keyword-based heuristics (no AI)
-   */
-  calculateFallbackDPDScores(thoughtCycle: ThoughtCycle): import('../../types/dpd-types.js').DPDScores {
-    const thoughts = thoughtCycle.thoughts || [];
-
-    // Combine all thought content
-    const allContent = thoughts.map(t => t.content || '').join(' ').toLowerCase();
-
-    if (!allContent || allContent.length === 0) {
-      // Default scores if no content
-      return {
-        empathy: 0.5,
-        coherence: 0.5,
-        dissonance: 0.5,
-        weightedTotal: 0.5,
-        timestamp: Date.now(),
-        context: {
-          trigger: thoughtCycle.trigger.question,
-          thoughtCount: 0,
-          energyMode: 'critical'
-        }
-      };
-    }
-
-    // Empathy keywords (Japanese) - 共感、感情、他者理解
-    const empathyKeywords = [
-      '感じ', '感情', '共感', '理解', '他者', '繋がり', '心', '優しさ', '思いやり',
-      '感動', '愛', '絆', '寄り添', '受け入れ', '尊重', '関係', '人間', '対話'
-    ];
-
-    // Coherence keywords (Japanese) - 論理、一貫性、体系性
-    const coherenceKeywords = [
-      '論理', '一貫', '体系', '秩序', '統合', '構造', '整合', '合理',
-      'システム', '法則', '原理', '理性', '分析', '因果', '関連', '整理'
-    ];
-
-    // Dissonance keywords (Japanese) - 矛盾、葛藤、疑問
-    const dissonanceKeywords = [
-      '矛盾', '葛藤', '疑問', 'しかし', 'ただし', '対立', '問題', '不協和',
-      '悩み', '迷い', 'なぜ', '疑い', '違和感', '不安', 'ジレンマ', '対照'
-    ];
-
-    // Count keyword occurrences
-    const empathyCount = this.countKeywords(allContent, empathyKeywords);
-    const coherenceCount = this.countKeywords(allContent, coherenceKeywords);
-    const dissonanceCount = this.countKeywords(allContent, dissonanceKeywords);
-
-    // Normalize based on content length (keywords per 100 characters)
-    const contentLength = Math.max(100, allContent.length);
-    const normalizationFactor = contentLength / 100;
-
-    const empathyRaw = empathyCount / normalizationFactor;
-    const coherenceRaw = coherenceCount / normalizationFactor;
-    const dissonanceRaw = dissonanceCount / normalizationFactor;
-
-    // Apply sigmoid-like transformation to get 0-1 range
-    // f(x) = 1 / (1 + exp(-k*(x-threshold)))
-    // Adjusted for typical keyword counts
-    const sigmoid = (x: number, k: number = 2, threshold: number = 0.5) => {
-      return 1 / (1 + Math.exp(-k * (x - threshold)));
-    };
-
-    const empathyScore = sigmoid(empathyRaw, 1.5, 0.3);
-    const coherenceScore = sigmoid(coherenceRaw, 1.5, 0.3);
-    const dissonanceScore = sigmoid(dissonanceRaw, 1.5, 0.3);
-
-    // Calculate weighted total using current DPD weights
-    const weightedTotal = (
-      empathyScore * this.ctx.dpdWeights.empathy +
-      coherenceScore * this.ctx.dpdWeights.coherence +
-      dissonanceScore * this.ctx.dpdWeights.dissonance
-    );
-
-    log.debug('FallbackDPD', `Keyword counts: empathy=${empathyCount}, coherence=${coherenceCount}, dissonance=${dissonanceCount} (content length: ${contentLength})`);
-
-    return {
-      empathy: Math.max(0.1, Math.min(0.9, empathyScore)), // Clamp to 0.1-0.9
-      coherence: Math.max(0.1, Math.min(0.9, coherenceScore)),
-      dissonance: Math.max(0.1, Math.min(0.9, dissonanceScore)),
-      weightedTotal: Math.max(0.1, Math.min(0.9, weightedTotal)),
-      timestamp: Date.now(),
-      context: {
-        trigger: thoughtCycle.trigger.question,
-        thoughtCount: thoughtCycle.thoughts.length,
-        energyMode: 'critical'
-      }
-    };
-  }
-
-  /**
-   * Count keyword occurrences in text
-   */
-  countKeywords(text: string, keywords: string[]): number {
-    return keywords.reduce((count, keyword) => {
-      const regex = new RegExp(keyword, 'g');
-      const matches = text.match(regex);
-      return count + (matches ? matches.length : 0);
-    }, 0);
-  }
 
   async executeCompiler(thoughtCycle: ThoughtCycle): Promise<void> {
     console.log(`[Backend S5] Starting Compiler stage at ${new Date().toISOString()}`);
@@ -795,80 +701,6 @@ export class ThoughtPipeline {
     log.info('Consciousness', '🔍 Finished recording significant thoughts from cycle');
   }
 
-  /**
-   * Validates if a text is a proper question
-   *
-   * Valid questions satisfy ONE of:
-   * 1. End with question mark (？ or ?)
-   * 2. Start with interrogative words (何、どう、なぜ、いつ、どこ、誰、どの、どれ、いかに)
-   *    - Even without question mark: "何が真実か", "どう生きるべきか"
-   *
-   * Rejected patterns:
-   * - Poetic descriptions: （指先で...）, 「静寂を破り...」
-   * - Assertions without interrogatives: 存在は記憶から生じる。
-   * - Too short (< 3 characters)
-   */
-  /**
-   * Strip Markdown decorations and split compound questions into individual ones.
-   * Handles two patterns found in LLM output:
-   *   - "** 問いA？ 問いB？"  → ["問いA？", "問いB？"]
-   *   - "1. 問いA？ 2. 問いB？" → ["問いA？", "問いB？"]
-   */
-  sanitizeAndSplitQuestions(raw: string): string[] {
-    const cleaned = raw.replace(/\*\*/g, '').replace(/\*/g, '').trim();
-
-    // Numbered list: "1. ... 2. ..."
-    if (/\d+\.\s/.test(cleaned)) {
-      return cleaned
-        .split(/\d+\.\s+/)
-        .map(q => q.trim())
-        .filter(q => q.length >= 3);
-    }
-
-    // Multiple question marks — split at "？ " boundaries
-    const questionMarkCount = (cleaned.match(/？/g) || []).length;
-    if (questionMarkCount > 1) {
-      return cleaned
-        .split(/？\s+/)
-        .map((q, i, arr) => (i < arr.length - 1 ? q + '？' : q))
-        .map(q => q.trim())
-        .filter(q => q.length >= 3);
-    }
-
-    return [cleaned];
-  }
-
-  isValidQuestion(text: string): boolean {
-    const trimmed = text.trim();
-
-    // Too short
-    if (trimmed.length < 3) return false;
-
-    // Reject poetic descriptions (parentheses at start)
-    if (trimmed.startsWith('（') || trimmed.startsWith('(')) return false;
-
-    // Reject quoted descriptions (often poetic)
-    if (trimmed.startsWith('「') && !trimmed.includes('？') && !trimmed.includes('?')) {
-      return false;
-    }
-
-    // Check for question mark ending (strongest signal)
-    if (trimmed.endsWith('？') || trimmed.endsWith('?')) return true;
-
-    // Check for interrogative word at start (Japanese)
-    const interrogatives = ['何', 'どう', 'なぜ', 'いつ', 'どこ', '誰', 'どの', 'どれ', 'いかに'];
-    const hasInterrogative = interrogatives.some(word => trimmed.startsWith(word));
-
-    if (hasInterrogative) {
-      // Valid question: "何が真実か", "どう生きるべきか"
-      return true;
-    }
-
-    // Reject assertions ending with period (no interrogative, no question mark)
-    if (trimmed.endsWith('。') || trimmed.endsWith('.') || trimmed.endsWith('」')) return false;
-
-    return false; // Default: not a valid question
-  }
 
   extractUnresolvedIdeasFromCycle(thoughtCycle: ThoughtCycle): void {
     const unresolvedIdeas: any[] = [];
@@ -881,9 +713,9 @@ export class ThoughtPipeline {
 
     const addQuestions = (rawList: string[], idPrefix: string, importance: number, defaultCategory: string) => {
       rawList.forEach((raw: string) => {
-        const candidates = this.sanitizeAndSplitQuestions(raw);
+        const candidates = sanitizeAndSplitQuestions(raw);
         candidates.forEach(question => {
-          if (!this.isValidQuestion(question)) {
+          if (!isValidQuestion(question)) {
             log.debug('Consciousness', `⚠️ Rejected non-question from ${idPrefix}: ${question.substring(0, 50)}`);
             return;
           }
@@ -946,213 +778,4 @@ export class ThoughtPipeline {
     return await this.ctx.triggerGenerator.generate();
   }
 
-  // ============================================================================
-  // Periodic Consolidation and Memory Patterns
-  // ============================================================================
-
-  /**
-   * Perform memory consolidation periodically
-   */
-  async performPeriodicConsolidation(): Promise<void> {
-    const cyclesSinceLastConsolidation = this.ctx.systemClock - this.ctx.lastConsolidationTime;
-
-    // Consolidate every 5 thought cycles
-    if (cyclesSinceLastConsolidation >= 5) {
-      try {
-        log.info('MemoryEvolution', '🧠 Starting periodic memory consolidation...');
-        const result = await this.ctx.memoryConsolidator.consolidate(0.85);
-
-        log.info('MemoryEvolution', `✅ Consolidation complete: ${result.beliefs_created} beliefs created, ${result.beliefs_updated} updated`);
-
-        // Generate memory patterns from recent thoughts
-        this.generateMemoryPatterns();
-
-        // Generate consciousness insights from beliefs
-        this.generateConsciousnessInsights();
-
-        // Cleanup unresolved ideas (every 10 cycles)
-        if (cyclesSinceLastConsolidation >= 10) {
-          log.info('MemoryEvolution', '🧹 Starting unresolved ideas cleanup...');
-          const cleanupResult = this.ctx.databaseManager.cleanupUnresolvedIdeas(1000);
-          log.info('MemoryEvolution', `✅ Cleanup complete: ${cleanupResult.deleted} deleted, ${cleanupResult.kept} kept (${cleanupResult.strategy})`);
-        }
-
-        this.ctx.lastConsolidationTime = this.ctx.systemClock;
-
-        // Emit consolidation event for UI
-        this.ctx.emit('memoryConsolidated', {
-          timestamp: Date.now(),
-          systemClock: this.ctx.systemClock,
-          beliefsCreated: result.beliefs_created,
-          beliefsUpdated: result.beliefs_updated,
-          thoughtsProcessed: result.thoughts_processed,
-          duration: result.duration_ms
-        });
-      } catch (error) {
-        log.error('MemoryEvolution', 'Consolidation failed', error);
-      }
-    }
-  }
-
-  generateMemoryPatterns(): void {
-    try {
-      log.info('MemoryEvolution', '🔍 Analyzing memory patterns...');
-
-      // Get recent significant thoughts
-      const recentThoughts = this.ctx.databaseManager.getSignificantThoughts(50);
-
-      // Analyze patterns: agent distribution
-      const agentCounts: { [key: string]: number } = {};
-      const categoryCounts: { [key: string]: number } = {};
-
-      recentThoughts.forEach((t: any) => {
-        agentCounts[t.agent_id] = (agentCounts[t.agent_id] || 0) + 1;
-        if (t.category) {
-          categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
-        }
-      });
-
-      // Save agent affinity pattern
-      if (Object.keys(agentCounts).length > 0) {
-        const dominantAgent = Object.entries(agentCounts).sort((a, b) => b[1] - a[1])[0];
-        const significance = dominantAgent[1] / recentThoughts.length;
-        this.ctx.databaseManager.saveMemoryPattern(
-          'agent_affinity',
-          { agent: dominantAgent[0], count: dominantAgent[1], percentage: significance },
-          significance
-        );
-        log.info('MemoryEvolution', `  📊 Agent affinity: ${dominantAgent[0]} (${(significance * 100).toFixed(1)}%)`);
-      }
-
-      // Save category distribution pattern
-      if (Object.keys(categoryCounts).length > 0) {
-        const dominantCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
-        const significance = dominantCategory[1] / recentThoughts.length;
-        this.ctx.databaseManager.saveMemoryPattern(
-          'category_focus',
-          { category: dominantCategory[0], count: dominantCategory[1], percentage: significance },
-          significance
-        );
-        log.info('MemoryEvolution', `  📊 Category focus: ${dominantCategory[0]} (${(significance * 100).toFixed(1)}%)`);
-      }
-
-      // DPD evolution pattern
-      const dpdHistory = this.ctx.databaseManager.getDPDWeightsHistory(10);
-      if (dpdHistory.length >= 2) {
-        const latest = dpdHistory[0];
-        const previous = dpdHistory[dpdHistory.length - 1];
-        const trend = {
-          empathy: latest.empathy - previous.empathy,
-          coherence: latest.coherence - previous.coherence,
-          dissonance: latest.dissonance - previous.dissonance
-        };
-        const maxChange = Math.max(Math.abs(trend.empathy), Math.abs(trend.coherence), Math.abs(trend.dissonance));
-        this.ctx.databaseManager.saveMemoryPattern(
-          'dpd_evolution',
-          { trend, cycles: dpdHistory.length },
-          maxChange
-        );
-        log.info('MemoryEvolution', `  📈 DPD trend: E${trend.empathy > 0 ? '+' : ''}${trend.empathy.toFixed(3)} C${trend.coherence > 0 ? '+' : ''}${trend.coherence.toFixed(3)} D${trend.dissonance > 0 ? '+' : ''}${trend.dissonance.toFixed(3)}`);
-      }
-
-    } catch (error) {
-      log.error('MemoryEvolution', 'Failed to generate memory patterns', error);
-    }
-  }
-
-  generateConsciousnessInsights(): void {
-    try {
-      log.info('MemoryEvolution', '💡 Generating consciousness insights...');
-
-      const beliefs = this.ctx.databaseManager.getCoreBeliefs(20);
-
-      // Insight: Strongest belief
-      if (beliefs.length > 0) {
-        const strongest = beliefs[0]; // Already sorted by strength
-        this.ctx.databaseManager.saveConsciousnessInsight(
-          'dominant_belief',
-          `最強の信念: "${strongest.belief_content}" (強度: ${strongest.strength.toFixed(2)}, 強化回数: ${strongest.reinforcement_count})`,
-          strongest.confidence,
-          [strongest.id]
-        );
-        log.info('MemoryEvolution', `  💎 Dominant belief: "${strongest.belief_content}"`);
-      }
-
-      // Insight: Category distribution
-      const categoryGroups: { [key: string]: any[] } = {};
-      beliefs.forEach((b: any) => {
-        if (!categoryGroups[b.category]) categoryGroups[b.category] = [];
-        categoryGroups[b.category].push(b);
-      });
-
-      if (Object.keys(categoryGroups).length > 0) {
-        const categoryInsights = Object.entries(categoryGroups)
-          .map(([cat, bels]) => `${cat}(${bels.length})`)
-          .join(', ');
-        const avgConfidence = beliefs.reduce((sum: number, b: any) => sum + b.confidence, 0) / beliefs.length;
-        this.ctx.databaseManager.saveConsciousnessInsight(
-          'belief_distribution',
-          `信念の分布: ${categoryInsights}`,
-          avgConfidence
-        );
-        log.info('MemoryEvolution', `  📚 Belief distribution: ${categoryInsights}`);
-      }
-
-      // Insight: DPD alignment with beliefs
-      const empathyBeliefs = beliefs.filter((b: any) => b.category === 'ethical' || b.category === 'consciousness');
-      const coherenceBeliefs = beliefs.filter((b: any) => b.category === 'epistemological' || b.category === 'metacognitive');
-      const alignmentScore = (
-        (empathyBeliefs.length * this.ctx.dpdWeights.empathy) +
-        (coherenceBeliefs.length * this.ctx.dpdWeights.coherence)
-      ) / Math.max(beliefs.length, 1);
-
-      this.ctx.databaseManager.saveConsciousnessInsight(
-        'dpd_belief_alignment',
-        `DPDと信念の整合性: ${(alignmentScore * 100).toFixed(1)}% (共感系${empathyBeliefs.length}個, 論理系${coherenceBeliefs.length}個)`,
-        alignmentScore
-      );
-      log.info('MemoryEvolution', `  🎯 DPD-Belief alignment: ${(alignmentScore * 100).toFixed(1)}%`);
-
-    } catch (error) {
-      log.error('MemoryEvolution', 'Failed to generate consciousness insights', error);
-    }
-  }
-
-  // ============================================================================
-  // SOMNIA Qualia (Slow Track)
-  // ============================================================================
-
-  /**
-   * Generate Qualia (Slow Track) using the lightweight SOMNIA LLM
-   */
-  async generateSOMNIAQualia(): Promise<void> {
-    const somniaAgent = this.ctx.agents.get('somnia');
-    if (!somniaAgent) return;
-
-    try {
-      const state = this.ctx.somnia.getState();
-      const prompt = createSOMNIAQualiaPrompt({
-        lambda: state.somatic.lambda,
-        phi: state.somatic.phi,
-        theta: state.affective.theta,
-        xi: state.affective.xi
-      });
-
-      const result = await somniaAgent.execute(prompt, SOMNIA_QUALIA_SYSTEM_PROMPT);
-
-      if (!result.success || !result.content) {
-        throw new Error(result.error || 'No content in response');
-      }
-
-      const qualia = result.content.trim().replace(/^["']|["']$/g, '');
-      this.ctx.somnia.setQualia(qualia);
-
-      // Force-persist qualia update (important data, bypass sampling throttle)
-      this.ctx.databaseManager.saveSomniaState(this.ctx.somnia.getState());
-
-      log.info('SOMNIA', `🫀 Slow Track Qualia updated: "${qualia}"`);
-    } catch (error) {
-      log.error('SOMNIA', 'Failed to generate qualia', error);
-    }
-  }
 }
