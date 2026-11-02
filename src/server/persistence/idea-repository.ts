@@ -9,6 +9,7 @@
 
 import type { ConnectionProvider } from './connection.js';
 import { log } from '../../platform/logger.js';
+import type { UnresolvedIdeaRecord } from '../../aenea/ports/records.js';
 
 class IdeaRepository {
   constructor(private conn: ConnectionProvider) {}
@@ -84,7 +85,7 @@ class IdeaRepository {
    * database-selection path opts in via includeXenia, where letters compete
    * verbatim under normal importance weighting (XENIA_SPEC v0.1, 5.1).
    */
-  getUnresolvedIdeas(limit: number = 100, includeXenia: boolean = false): any[] {
+  getUnresolvedIdeas(limit: number = 100, includeXenia: boolean = false): UnresolvedIdeaRecord[] {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       console.debug('Database not ready for getUnresolvedIdeas');

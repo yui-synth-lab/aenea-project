@@ -8,12 +8,13 @@
  */
 
 import type { ConnectionProvider } from './connection.js';
+import type { AgentAffinity, CoreBeliefRecord, NewCoreBelief } from '../../aenea/ports/records.js';
 
 class BeliefRepository {
   constructor(private conn: ConnectionProvider) {}
 
   // Core Beliefs Management
-  createCoreBelief(belief: any): number | null {
+  createCoreBelief(belief: NewCoreBelief): number | null {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       return null;
@@ -42,7 +43,7 @@ class BeliefRepository {
       const beliefId = result.lastInsertRowid as number;
 
       // Record belief formation event
-      this.recordBeliefEvolution(beliefId, 'formed', null, belief.confidence, null, 'Initial belief formation');
+      this.recordBeliefEvolution(beliefId, 'formed', null, belief.confidence ?? null, null, 'Initial belief formation');
 
       return beliefId;
     } catch (err) {
@@ -114,7 +115,7 @@ class BeliefRepository {
     }
   }
 
-  getCoreBeliefs(limit: number = 100): any[] {
+  getCoreBeliefs(limit: number = 100): CoreBeliefRecord[] {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       return [];
@@ -193,7 +194,7 @@ class BeliefRepository {
     }
   }
 
-  updateBeliefAgentAffinity(beliefId: number, agentAffinity: any): void {
+  updateBeliefAgentAffinity(beliefId: number, agentAffinity: AgentAffinity): void {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       return;
@@ -251,7 +252,7 @@ class BeliefRepository {
   /**
    * Get top core beliefs by reinforcement count
    */
-  getTopCoreBeliefs(limit: number = 30): any[] {
+  getTopCoreBeliefs(limit: number = 30): CoreBeliefRecord[] {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       return [];
