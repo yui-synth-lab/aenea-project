@@ -15,31 +15,42 @@
  * keeping DatabaseManager structurally assignable to each port.
  */
 
+import type {
+  AgentAffinity,
+  CoreBeliefRecord,
+  HighDissonanceCycleRecord,
+  NewCoreBelief,
+  QuestionRecordInput,
+  SignificantThoughtRecord,
+  SleepLogStats,
+  UnresolvedIdeaRecord
+} from './records.js';
+
 export interface ThoughtStore {
-  getSignificantThoughts(limit?: number): any[];
-  getRecentSignificantThoughts(limit?: number, daysAgo?: number): any[];
-  getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit?: 'days' | 'hours'): any[];
+  getSignificantThoughts(limit?: number): SignificantThoughtRecord[];
+  getRecentSignificantThoughts(limit?: number, daysAgo?: number): SignificantThoughtRecord[];
+  getOldSignificantThoughts(ageValue: number, minConfidence: number, limit: number, ageUnit?: 'days' | 'hours'): SignificantThoughtRecord[];
   deleteSignificantThoughts(ids: string[]): void;
-  getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): any[];
+  getHighDissonanceCycles(minDissonance: number, daysAgo: number, limit: number): HighDissonanceCycleRecord[];
 }
 
 export interface BeliefStore {
-  getCoreBeliefs(limit?: number): any[];
-  getTopCoreBeliefs(limit?: number): any[];
-  createCoreBelief(belief: any): number | null;
+  getCoreBeliefs(limit?: number): CoreBeliefRecord[];
+  getTopCoreBeliefs(limit?: number): CoreBeliefRecord[];
+  createCoreBelief(belief: NewCoreBelief): number | null;
   reinforceCoreBelief(beliefId: number, newSourceThoughts: string[]): void;
   incrementBeliefContradiction(beliefId: number, newConfidence: number, triggerThoughtId?: string): void;
   deleteCoreBelief(beliefId: number): void;
-  updateBeliefAgentAffinity(beliefId: number, agentAffinity: any): void;
+  updateBeliefAgentAffinity(beliefId: number, agentAffinity: AgentAffinity): void;
 }
 
 export interface IdeaStore {
-  getUnresolvedIdeas(limit?: number, includeXenia?: boolean): any[];
+  getUnresolvedIdeas(limit?: number, includeXenia?: boolean): UnresolvedIdeaRecord[];
   updateUnresolvedIdeaConsideration(ideaId: number | string): void;
 }
 
 export interface QuestionStore {
-  saveQuestion(question: any): void;
+  saveQuestion(question: QuestionRecordInput): void;
 }
 
 export interface SleepStore {
@@ -48,7 +59,7 @@ export interface SleepStore {
     systemClock: number;
     triggerReason: string;
     phases: string[];
-    stats: any;
+    stats: SleepLogStats;
     duration: number;
     energyBefore: number;
     energyAfter: number;
