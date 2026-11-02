@@ -53,4 +53,4 @@ jobs:
         run: pnpm exec tsc -p tsconfig.json --noEmit
 
       - name: Test
-        run: pnpm test -- --ci
+        run: pnpm test --ci
