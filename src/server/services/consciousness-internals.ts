@@ -91,9 +91,9 @@ export interface ConsciousnessInternals {
 
   // Shared mutable state (live views onto the facade's fields)
   systemClock: number;
-  readonly isRunning: boolean;
-  readonly isPaused: boolean;
-  readonly isProcessingCycle: boolean;
+  isRunning: boolean;
+  isPaused: boolean;
+  isProcessingCycle: boolean;
   dpdWeights: DPDWeights;
   previousDpdScores: DPDScores | null;
   lastConsolidationTime: number;
@@ -125,4 +125,9 @@ export interface ConsciousnessInternals {
 
   // Shared helpers
   saveConsciousnessState(): void;
+
+  /** Adopt a lifespan and rebuild the injector and death handler around it. */
+  installMortality(lifespan: LifespanManager): void;
+  /** Persist and adopt a brand-new lifespan (mode from AENEA_MORTALITY_MODE). */
+  spawnFreshMortality(): void;
 }
