@@ -68,9 +68,9 @@ function createLifecycle(ctxOverrides: Record<string, any> = {}) {
     getState: jest.fn().mockReturnValue({ systemClock: 1 }),
     thoughtPipeline: {
       generateInternalTrigger: jest.fn().mockResolvedValue(null),
-      generateSOMNIAQualia: jest.fn().mockResolvedValue(undefined),
       executeAdaptiveThoughtCycle: jest.fn().mockResolvedValue(undefined)
     },
+    memoryInsight: { generateSOMNIAQualia: jest.fn().mockResolvedValue(undefined) },
     sleepService: { performSleepConsolidation: jest.fn().mockResolvedValue(undefined) }
   };
   const lifecycle = new ConsciousnessLifecycle(harness.ctx, deps as any);

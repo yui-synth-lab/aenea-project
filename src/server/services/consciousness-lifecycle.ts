@@ -15,12 +15,14 @@ import { synchronizeEnergy } from '../../aenea/integration/energy-sync.js';
 import type { ExternalStimulus } from '../../types/somnia-types.js';
 import type { ConsciousnessInternals, ConsciousnessState } from './consciousness-internals.js';
 import type { ThoughtPipeline } from './thought-pipeline.js';
+import type { MemoryInsightService } from './memory-insight-service.js';
 import type { SleepService } from './sleep-service.js';
 
 /** Narrow slice of the services the lifecycle drives. */
 export interface LifecycleDeps {
   getState(): ConsciousnessState;
-  thoughtPipeline: Pick<ThoughtPipeline, 'generateInternalTrigger' | 'generateSOMNIAQualia' | 'executeAdaptiveThoughtCycle'>;
+  thoughtPipeline: Pick<ThoughtPipeline, 'generateInternalTrigger' | 'executeAdaptiveThoughtCycle'>;
+  memoryInsight: Pick<MemoryInsightService, 'generateSOMNIAQualia'>;
   sleepService: Pick<SleepService, 'performSleepConsolidation'>;
 }
 
@@ -299,7 +301,7 @@ export class ConsciousnessLifecycle {
         // Run asynchronously so it doesn't block the thought cycle completely,
         // or await it if we want the current thought cycle to use it immediately.
         // For interoceptive feelings, blocking briefly is okay to provide context.
-        await this.deps.thoughtPipeline.generateSOMNIAQualia();
+        await this.deps.memoryInsight.generateSOMNIAQualia();
       }
 
       // Insert progressive timing slowdown for aging
