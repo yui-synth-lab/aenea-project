@@ -34,7 +34,7 @@ export interface BeliefStore {
 }
 
 export interface IdeaStore {
-  getUnresolvedIdeas(limit?: number): any[];
+  getUnresolvedIdeas(limit?: number, includeXenia?: boolean): any[];
   updateUnresolvedIdeaConsideration(ideaId: number | string): void;
 }
 

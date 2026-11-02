@@ -18,6 +18,8 @@ import { SleepRepository } from './persistence/sleep-repository.js';
 import { DialogueRepository } from './persistence/dialogue-repository.js';
 import { SomniaRepository } from './persistence/somnia-repository.js';
 import { MortalityRepository } from './persistence/mortality-repository.js';
+import { XeniaRepository } from './persistence/xenia-repository.js';
+import type { XeniaInboxLetter, XeniaOutboxEntry } from './persistence/xenia-repository.js';
 type Database = BetterSqlite3.Database;
 
 class DatabaseManager {
@@ -32,6 +34,7 @@ class DatabaseManager {
   private dialogueRepo: DialogueRepository;
   private somniaRepo: SomniaRepository;
   private mortalityRepo: MortalityRepository;
+  private xeniaRepo: XeniaRepository;
 
   /**
    * Private handle getter so unmoved methods keep working verbatim against
@@ -60,6 +63,7 @@ class DatabaseManager {
     this.dialogueRepo = new DialogueRepository(this.conn);
     this.somniaRepo = new SomniaRepository(this.conn);
     this.mortalityRepo = new MortalityRepository(this.conn);
+    this.xeniaRepo = new XeniaRepository(this.conn);
     this.open();
   }
 
@@ -168,8 +172,37 @@ class DatabaseManager {
     this.ideaRepo.addUnresolvedIdea(idea);
   }
 
-  getUnresolvedIdeas(limit: number = 100): any[] {
-    return this.ideaRepo.getUnresolvedIdeas(limit);
+  getUnresolvedIdeas(limit: number = 100, includeXenia: boolean = false): any[] {
+    return this.ideaRepo.getUnresolvedIdeas(limit, includeXenia);
+  }
+
+  // XENIA correspondence (delegated to XeniaRepository)
+  saveXeniaInboxLetter(letter: XeniaInboxLetter): void {
+    this.xeniaRepo.saveInboxLetter(letter);
+  }
+
+  findUnreadXeniaLetterByTrigger(question: string): XeniaInboxLetter | null {
+    return this.xeniaRepo.findUnreadByTriggerText(question);
+  }
+
+  markXeniaLetterRead(letterId: string, cycle: number): void {
+    this.xeniaRepo.markLetterRead(letterId, cycle);
+  }
+
+  saveXeniaOutboxEntry(entry: XeniaOutboxEntry): void {
+    this.xeniaRepo.saveOutboxEntry(entry);
+  }
+
+  getUnfetchedXeniaOutbox(): XeniaOutboxEntry[] {
+    return this.xeniaRepo.getUnfetchedOutbox();
+  }
+
+  markXeniaOutboxFetched(ids: string[]): void {
+    this.xeniaRepo.markOutboxFetched(ids);
+  }
+
+  getXeniaStats(): { delivered: number; read: number; unread: number; sent: number; unsent: number } {
+    return this.xeniaRepo.getStats();
   }
 
   // Async version for compatibility (delegated to IdeaRepository)

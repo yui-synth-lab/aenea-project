@@ -55,8 +55,8 @@ class IdeaRepository {
     // Add new unresolved idea (store normalized question)
     const insertQuery = `
       INSERT INTO unresolved_ideas
-      (id, question, category, first_encountered, last_revisited, revisit_count, complexity, importance, related_thoughts)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, question, category, first_encountered, last_revisited, revisit_count, complexity, importance, related_thoughts, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     try {
@@ -69,7 +69,8 @@ class IdeaRepository {
         idea.revisitCount || 0,
         idea.complexity || 0.5,
         idea.importance || 0.5,
-        JSON.stringify(idea.relatedThoughts || [])
+        JSON.stringify(idea.relatedThoughts || []),
+        idea.source || 'internal'
       );
       console.debug(`Added new unresolved idea: ${normalizedQuestion}`);
     } catch (err) {
@@ -77,7 +78,13 @@ class IdeaRepository {
     }
   }
 
-  getUnresolvedIdeas(limit: number = 100): any[] {
+  /**
+   * XENIA: letters (source = 'xenia') are excluded by default so they never
+   * feed the evolved-question path or general consumers. Only the S0
+   * database-selection path opts in via includeXenia, where letters compete
+   * verbatim under normal importance weighting (XENIA_SPEC v0.1, 5.1).
+   */
+  getUnresolvedIdeas(limit: number = 100, includeXenia: boolean = false): any[] {
     const db = this.conn.db();
     if (!this.conn.ready || !db) {
       console.debug('Database not ready for getUnresolvedIdeas');
@@ -89,6 +96,7 @@ class IdeaRepository {
     try {
       const rows = db.prepare(`
         SELECT * FROM unresolved_ideas
+        ${includeXenia ? '' : `WHERE source != 'xenia'`}
         ORDER BY importance DESC, last_revisited ASC
         LIMIT ?
       `).all(limit) as any[];
