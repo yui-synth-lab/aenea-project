@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # src/ imports yui-protocol/dist, so the submodule must be present.
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Architecture rules first: cheap, and needs no yui-protocol build.
+      # Enforces no-circular, aenea -> server, utils -> server and
+      # the yui-protocol/dist gateway boundary (.dependency-cruiser.cjs).
+      - name: Check architecture rules (dependency-cruiser)
+        run: pnpm run depcruise
+
+      # The submodule is owned upstream and its pnpm-lock.yaml lags its package.json
+      # (dependency-cruiser is missing), so a frozen install fails here.
+      - name: Install yui-protocol dependencies
+        working-directory: yui-protocol
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build yui-protocol
+        run: pnpm run build:yui
+
+      - name: Type-check
+        run: pnpm exec tsc -p tsconfig.json --noEmit
+
+      - name: Test
+        run: pnpm test --ci
