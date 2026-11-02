@@ -106,14 +106,19 @@ export class XeniaInbox {
     return { ...letter, readAtCycle: currentCycle };
   }
 
+  /**
+   * The trigger text must equal what S0 later reads back from the idea pool.
+   * IdeaRepository stores questions JS-trimmed, while the SQL match only trims
+   * spaces, so a letter ending in a newline would never be matched as read.
+   */
   private buildTriggerText(payload: XeniaDeliveryPayload): string {
     // The notice is its own message; no "a letter has arrived" header.
     if (payload.kind === 'notice') {
-      return payload.content;
+      return payload.content.trim();
     }
     if (payload.mode === 'A') {
-      return `${MODE_A_HEADER}\n${payload.content}`;
+      return `${MODE_A_HEADER}\n${payload.content}`.trim();
     }
-    return payload.content;
+    return payload.content.trim();
   }
 }
