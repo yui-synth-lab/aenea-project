@@ -212,13 +212,13 @@ describe('Mortality & Death Integration', () => {
       (backend as any).isRunning = true;
 
       // Cycle 1: Tick to 1
-      await (backend as any).processThoughtCycle();
+      await (backend as any).lifecycle.processThoughtCycle();
       expect(lifespan.getCurrentCycle()).toBe(1);
       expect(lifespan.getCurrentPhase()).toBe('youth'); // 1/3 = 33%
       expect(lifespan.isAlive()).toBe(true);
 
       // Cycle 2: Tick to 2
-      await (backend as any).processThoughtCycle();
+      await (backend as any).lifecycle.processThoughtCycle();
       expect(lifespan.getCurrentCycle()).toBe(2);
       expect(lifespan.getCurrentPhase()).toBe('maturity'); // 2/3 = 66%
       expect(lifespan.isAlive()).toBe(true);
@@ -229,7 +229,7 @@ describe('Mortality & Death Integration', () => {
       expect(dbRecord.died_at).toBeNull();
 
       // Cycle 3: Tick to 3 -> Mortality phase & Death sequence execution
-      await (backend as any).processThoughtCycle();
+      await (backend as any).lifecycle.processThoughtCycle();
 
       // The loop should now have run the death handler and stopped!
       expect((backend as any).isRunning).toBe(false);
