@@ -978,8 +978,10 @@ ${context.ragContext ? `\n【知識ベースからの関連記録】\n${context.
       console.log(`📚 Database selection with category diversity:`);
       console.log(`   Recommended category: ${recommendedCategory}`);
 
-      // Get unresolved ideas from database
-      const allUnresolvedIdeas = this.databaseManager.getUnresolvedIdeas(100);
+      // Get unresolved ideas from database.
+      // XENIA letters (source = 'xenia') are only visible on this verbatim
+      // selection path; the evolved-question path above never sees them.
+      const allUnresolvedIdeas = this.databaseManager.getUnresolvedIdeas(100, true);
 
       if (allUnresolvedIdeas.length === 0) {
         console.warn('No unresolved ideas in database - database might need seeding');
@@ -1017,13 +1019,14 @@ ${context.ragContext ? `\n【知識ベースからの関連記録】\n${context.
       // Update consideration count
       this.databaseManager.updateUnresolvedIdeaConsideration(selectedIdea.id);
 
+      const triggerSource = selectedIdea.source === 'xenia' ? 'xenia' : 'database_unresolved';
       const trigger: InternalTrigger = {
         id: `db_${selectedIdea.category}_${Date.now()}`,
         timestamp: Date.now(),
         question: selectedIdea.question,
         category: selectedIdea.category,
         importance: selectedIdea.importance || 0.5,
-        source: 'database_unresolved' as any
+        source: triggerSource as any
       };
 
       // Record question in categorizer for diversity tracking
@@ -1049,7 +1052,7 @@ ${context.ragContext ? `\n【知識ベースからの関連記録】\n${context.
         question: trigger.question.substring(0, 500),
         category: trigger.category,
         importance: trigger.importance,
-        source: 'database_unresolved',
+        source: triggerSource,
         timestamp: Date.now()
       });
 

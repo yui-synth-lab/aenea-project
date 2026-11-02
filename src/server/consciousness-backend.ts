@@ -33,6 +33,8 @@ import { reflectiveReturn } from '../aenea/integration/saip.js';
 import { synchronizeEnergy } from '../aenea/integration/energy-sync.js';
 import { SomniaState } from '../types/somnia-types.js';
 import { LifespanManager } from '../aenea/mortality/lifespan-manager.js';
+import { XeniaInbox, type XeniaDeliveryPayload } from '../aenea/xenia/xenia-inbox.js';
+import { ReplyComposer } from '../aenea/xenia/reply-composer.js';
 import { AgingEngine } from '../aenea/mortality/aging-engine.js';
 import { MortalityInjector } from '../aenea/mortality/mortality-injector.js';
 import { DeathHandler } from '../aenea/mortality/death-handler.js';
@@ -114,6 +116,11 @@ class ConsciousnessBackend extends EventEmitter {
   private lifespanManager!: LifespanManager;
   private mortalityInjector!: MortalityInjector;
   private deathHandler!: DeathHandler;
+
+  // XENIA (Inter-instance correspondence) Integration - opt-in, off by default
+  private xeniaEnabled = false;
+  private xeniaInbox: XeniaInbox | null = null;
+  private xeniaComposer: ReplyComposer | null = null;
 
   // Extracted services (Phase 5) + internal accessor adapter
   private internals!: ConsciousnessInternals;
@@ -319,6 +326,16 @@ class ConsciousnessBackend extends EventEmitter {
       lastActivity: new Date().toISOString()
     };
 
+    // XENIA (Correspondence) Integration - only active when explicitly enabled.
+    // When disabled, xeniaInbox/xeniaComposer stay null and nothing changes.
+    this.xeniaEnabled = process.env.AENEA_XENIA_ENABLED === 'true';
+    if (this.xeniaEnabled) {
+      const maxLetterLength = parseInt(process.env.XENIA_MAX_LETTER_LENGTH || '800', 10);
+      this.xeniaInbox = new XeniaInbox(this.databaseManager);
+      this.xeniaComposer = new ReplyComposer(this.databaseManager, maxLetterLength);
+      log.info('Xenia', `XENIA enabled (instance: ${process.env.XENIA_INSTANCE_NAME || 'unnamed'}, max letter ${maxLetterLength} chars)`);
+    }
+
     // Internal accessor adapter for extracted services (Phase 5).
     // Exposes the facade's shared state/collaborators as live views so services
     // remain stateless behavior modules. Not part of the external API.
@@ -346,6 +363,8 @@ class ConsciousnessBackend extends EventEmitter {
       get lifespanManager() { return self.lifespanManager; },
       get mortalityInjector() { return self.mortalityInjector; },
       get deathHandler() { return self.deathHandler; },
+      get xeniaInbox() { return self.xeniaInbox; },
+      get xeniaComposer() { return self.xeniaComposer; },
       get yuiAgentsBridge() { return self.yuiAgentsBridge; },
       get agents() { return self.agents; },
       get individualThoughtStage() { return self.individualThoughtStage; },
@@ -367,6 +386,32 @@ class ConsciousnessBackend extends EventEmitter {
 
     log.info('Consciousness', 'Backend initialized');
     log.info('Consciousness', 'Consciousness initialized but not started - use /api/consciousness/start to begin');
+  }
+
+  // ============================================================================
+  // XENIA Correspondence (Bridge-facing surface, used by routes/xenia.ts)
+  // ============================================================================
+
+  xeniaStatus(): { enabled: boolean; instanceName: string; systemClock: number; isRunning: boolean } {
+    return {
+      enabled: this.xeniaEnabled,
+      instanceName: process.env.XENIA_INSTANCE_NAME || 'unnamed',
+      systemClock: this.systemClock,
+      isRunning: this.isRunning
+    };
+  }
+
+  xeniaDeliver(payload: XeniaDeliveryPayload): { deliveredAtCycle: number } {
+    if (!this.xeniaInbox) {
+      throw new Error('XENIA is disabled on this instance');
+    }
+    return this.xeniaInbox.deliver(payload, this.systemClock);
+  }
+
+  xeniaCollectOutbox(): Array<{ id: string; content: string; inReplyTo: string | null; cycle: number }> {
+    const entries = this.databaseManager.getUnfetchedXeniaOutbox();
+    this.databaseManager.markXeniaOutboxFetched(entries.map(e => e.id));
+    return entries.map(e => ({ id: e.id, content: e.content, inReplyTo: e.inReplyTo, cycle: e.cycle }));
   }
 
   // ============================================================================

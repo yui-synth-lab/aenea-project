@@ -62,6 +62,13 @@ export class ThoughtPipeline {
 
     log.info('ThoughtCycle', `${executionMode === 'full' ? 'Full' : executionMode === 'low' ? 'Low' : 'Critical'} energy mode: reserved ${requiredEnergy.toFixed(1)} energy for complete cycle`);
 
+    // XENIA: if this trigger is an unread letter, mark it read now and keep
+    // a handle so the reply composer can run after S6 (XENIA_SPEC v0.1, 5.2).
+    // No-op when XENIA is disabled (xeniaInbox is null).
+    const xeniaLetter = this.ctx.xeniaInbox
+      ? this.ctx.xeniaInbox.matchAndMarkRead(trigger.question, this.ctx.systemClock)
+      : null;
+
     try {
       // S0: Trigger Generation (already completed, consume energy)
       // Emit stage start event
@@ -103,6 +110,21 @@ export class ThoughtPipeline {
       await this.executeCompiler(thoughtCycle);
       await this.executeScribe(thoughtCycle);
       await this.executeWeightUpdate(thoughtCycle);
+
+      // XENIA: optional reply step, letter cycles only. Silence is a valid
+      // outcome and is recorded either way by the composer.
+      if (xeniaLetter && this.ctx.xeniaComposer) {
+        try {
+          const executor = this.ctx.agents.get('theoria');
+          if (executor) {
+            await this.ctx.energyManager.consumeEnergy(0.3, 'stage_xenia_reply');
+            thoughtCycle.totalEnergy += 0.3;
+            await this.ctx.xeniaComposer.compose(xeniaLetter, thoughtCycle, executor);
+          }
+        } catch (xeniaErr) {
+          log.warn('Xenia', `Reply step failed: ${(xeniaErr as Error).message}`);
+        }
+      }
 
       // Record significant thoughts (with content cleanup)
       await this.recordSignificantThoughtsFromCycle(thoughtCycle);

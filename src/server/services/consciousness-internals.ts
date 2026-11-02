@@ -23,6 +23,8 @@ import type { MemoryConsolidator } from '../../aenea/memory/memory-consolidator.
 import type { LifespanManager } from '../../aenea/mortality/lifespan-manager.js';
 import type { MortalityInjector } from '../../aenea/mortality/mortality-injector.js';
 import type { DeathHandler } from '../../aenea/mortality/death-handler.js';
+import type { XeniaInbox } from '../../aenea/xenia/xenia-inbox.js';
+import type { ReplyComposer } from '../../aenea/xenia/reply-composer.js';
 import type { YuiAgentsBridge } from '../../integration/yui-agents-bridge.js';
 import type { DPDWeights, DPDScores, ImpactAssessment } from '../../types/dpd-types.js';
 import type { InternalTrigger, StructuredThought, MutualReflection, AuditorResult, SynthesisResult, DocumentationResult } from '../../types/aenea-types.js';
@@ -106,6 +108,8 @@ export interface ConsciousnessInternals {
   readonly lifespanManager: LifespanManager;
   readonly mortalityInjector: MortalityInjector;
   readonly deathHandler: DeathHandler;
+  readonly xeniaInbox: XeniaInbox | null;
+  readonly xeniaComposer: ReplyComposer | null;
   readonly yuiAgentsBridge: YuiAgentsBridge;
   readonly agents: Map<string, AIExecutor>;
   readonly individualThoughtStage: IndividualThoughtStage;
