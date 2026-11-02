@@ -40,9 +40,11 @@ jobs:
       - name: Check architecture rules (dependency-cruiser)
         run: pnpm run depcruise
 
+      # The submodule is owned upstream and its pnpm-lock.yaml lags its package.json
+      # (dependency-cruiser is missing), so a frozen install fails here.
       - name: Install yui-protocol dependencies
         working-directory: yui-protocol
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build yui-protocol
         run: pnpm run build:yui
